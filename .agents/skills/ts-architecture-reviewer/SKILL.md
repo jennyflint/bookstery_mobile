@@ -28,7 +28,7 @@ When reviewing code, systematically check each of the following:
    - Ensure components are stored in the correct directory (`ui/`, `layout/`, `reader/`, `library/`).
 
 4. **Book Format Processing**:
-   - Ensure all PDF, EPUB, FB2 parsing logic is isolated in `app/services/format/`.
+   - Ensure all PDF, EPUB, FB2 parsing logic is isolated in `app/services/engine/`.
    - Verify reader components interact through the unified `IBookParser` / `IBookDocument` interface.
 
 5. **Internationalization (i18n)**:

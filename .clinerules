@@ -22,8 +22,8 @@
    - Pure TypeScript business logic, external API clients, and JSON serializers go into `app/services/`.
 
 4. **Book Format Processing (PDF, EPUB, FB2)**:
-   - All format parsing, rendering, and TOC extraction must reside in `app/services/format/`.
-   - Provide a unified adapter in `app/services/format/index.ts` conforming to `IBookParser` from `app/types/format.ts`.
+   - All format parsing, rendering, and TOC extraction must reside in `app/services/engine/`.
+   - Provide a unified adapter in `app/services/engine/index.ts` conforming to `IBookParser` from `app/types/format.ts`.
    - UI reader components must be completely agnostic of the underlying format.
 
 5. **Internationalization (i18n)**:

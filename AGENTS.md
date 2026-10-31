@@ -20,8 +20,8 @@ Stack: Nuxt 4 (`app/` dir), Vue 3 (`<script setup lang="ts">`), TypeScript, Tail
    - Pure TS business logic, API clients, and JSON serializers belong in `app/services/`.
 
 4. **Book Format Processing (PDF, EPUB, FB2)**:
-   - All parsing, rendering, and metadata extraction logic belongs in `app/services/format/`.
-   - Must provide a unified adapter in `app/services/format/index.ts` implementing `IBookParser` from `app/types/format.ts`.
+   - All parsing, rendering, and metadata extraction logic belongs in `app/services/engine/`.
+   - Must provide a unified adapter in `app/services/engine/index.ts` implementing `IBookParser` from `app/types/format.ts`.
 
 5. **Internationalization (i18n)**:
    - Never hardcode user-visible strings in templates.

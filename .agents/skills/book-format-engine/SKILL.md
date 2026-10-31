@@ -10,7 +10,7 @@ Use this skill when developing or maintaining e-book file parsing, text layer ex
 
 ## Supported Formats & Architecture
 
-All format-specific parsers must reside in `app/services/format/` and follow the Strategy/Adapter pattern.
+All format-specific parsers must reside in `app/services/engine/` and follow the Strategy/Adapter pattern.
 
 1. **Contracts (`app/types/format.ts`)**:
    - Every format parser must implement unified interfaces:
@@ -20,14 +20,14 @@ All format-specific parsers must reside in `app/services/format/` and follow the
      - `IBookDocument`: metadata, chapters, reader viewport adapter.
 
 2. **Specialized Format Services**:
-   - `app/services/format/pdf.service.ts`:
+   - `app/services/engine/pdf.service.ts`:
      - PDF rendering (via PDF.js or native canvas), text layer extraction, viewport scaling, page thumbnail generation.
-   - `app/services/format/epub.service.ts`:
+   - `app/services/engine/epub.service.ts`:
      - EPUB zip archive unpacking, OPF metadata & manifest parsing, NCX / Navigation Document TOC extraction, CFI (Canonical Fragment Identifier) navigation.
-   - `app/services/format/fb2.service.ts`:
+   - `app/services/engine/fb2.service.ts`:
      - FB2 XML/DOM parsing, Base64 binary cover extraction, fiction-book description mapping, section-by-section pagination.
 
-3. **Unified Engine Adapter (`app/services/format/index.ts`)**:
+3. **Unified Engine Adapter (`app/services/engine/index.ts`)**:
    - Provide a factory function or unified adapter `createBookParser(fileType: BookFormatType): IBookParser`.
    - UI reader components (`app/components/reader/`) must ONLY interact with this unified adapter, never with format-specific libraries directly.
 

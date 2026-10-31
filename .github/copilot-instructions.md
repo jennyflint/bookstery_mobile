@@ -22,8 +22,8 @@ Domain: E-book reader and management application supporting multiple book format
 - All JSON manipulation, API requests, data fetching, and state management logic must reside exclusively inside `app/composables/` or `app/services/`.
 
 ### Book Format Processing (PDF, EPUB, FB2)
-- All parsing, rendering engines, metadata extraction, and format conversion logic MUST be placed in `app/services/format/` (e.g., `pdf.service.ts`, `epub.service.ts`, `fb2.service.ts`).
-- Provide a unified interface/adapter in `app/services/format/index.ts` so UI components interact with book formats agnostic of the underlying file type.
+- All parsing, rendering engines, metadata extraction, and format conversion logic MUST be placed in `app/services/engine/` (e.g., `pdf.service.ts`, `epub.service.ts`, `fb2.service.ts`).
+- Provide a unified interface/adapter in `app/services/engine/index.ts` so UI components interact with book formats agnostic of the underlying file type.
 - Shared format contracts (`IBookParser`, `IBookMetadata`, `IBookChapter`) must be defined in `app/types/format.ts`.
 
 ### Internationalization (i18n)
@@ -84,11 +84,11 @@ When handling specific user requests, adopt one of the following specialized rol
 - Strictly validate and type every JSON response and payload against interfaces in `app/types/`.
 
 ### Role: Book Format Engine Specialist (PDF / EPUB / FB2)
-- Implement format parsers strictly behind the strategy/adapter interface defined in `app/services/format/index.ts`.
+- Implement format parsers strictly behind the strategy/adapter interface defined in `app/services/engine/index.ts`.
 - File breakdown:
-  - `app/services/format/pdf.service.ts` — Rendering & text layer extraction.
-  - `app/services/format/epub.service.ts` — Zip unpacking, OPF/NCX parsing, CFI navigation.
-  - `app/services/format/fb2.service.ts` — XML/DOM parsing, base64/binary cover extraction, section mapping.
+  - `app/services/engine/pdf.service.ts` — Rendering & text layer extraction.
+  - `app/services/engine/epub.service.ts` — Zip unpacking, OPF/NCX parsing, CFI navigation.
+  - `app/services/engine/fb2.service.ts` — XML/DOM parsing, base64/binary cover extraction, section mapping.
 - Contracts must strictly implement types from `app/types/format.ts`.
 
 ### Role: TypeScript & Architecture Reviewer

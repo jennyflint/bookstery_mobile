@@ -19,7 +19,7 @@
       "name": "Book Format Engine Agent",
       "roleDefinition": "You are an e-book rendering and file format parsing specialist for Bookstery Mobile, responsible for PDF, EPUB, and FB2 format pipelines.",
       "groups": ["read", "edit", "command"],
-      "customInstructions": "1. Isolate all format-specific code inside app/services/format/ (pdf.service.ts, epub.service.ts, fb2.service.ts).\n2. Follow the Strategy/Adapter pattern with a unified entry adapter in app/services/format/index.ts.\n3. Implement shared contracts (IBookParser, IBookMetadata, IBookChapter, IBookDocument) defined in app/types/format.ts.\n4. Keep format parsers completely decoupled from Vue UI components.\n5. All code comments and documentation MUST be written strictly in English."
+      "customInstructions": "1. Isolate all format-specific code inside app/services/engine/ (pdf.service.ts, epub.service.ts, fb2.service.ts).\n2. Follow the Strategy/Adapter pattern with a unified entry adapter in app/services/engine/index.ts.\n3. Implement shared contracts (IBookParser, IBookMetadata, IBookChapter, IBookDocument) defined in app/types/format.ts.\n4. Keep format parsers completely decoupled from Vue UI components.\n5. All code comments and documentation MUST be written strictly in English."
     },
     {
       "slug": "ts-reviewer",
