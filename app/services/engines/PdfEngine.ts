@@ -34,6 +34,8 @@ export class PdfEngine extends BaseEngine {
   private activeSlotRenderTasks = new Map<number, pdfjsLib.RenderTask>();
   private wheelThrottle = false;
   private scrollCleanupListener: (() => void) | null = null;
+  private currentScale: number = 1.0;
+  private visibilityHandler: (() => void) | null = null;
 
   async init(
     container: HTMLElement,
@@ -96,6 +98,8 @@ export class PdfEngine extends BaseEngine {
       this.pdfDocument = await loadingTask.promise;
       this.totalPagesCount = this.pdfDocument.numPages;
       this.currentPageNumber = 1;
+
+      this.attachVisibilityListener();
 
       if (this.paginationMode === 'scroll') {
         await this.renderScrollMode();
@@ -183,6 +187,7 @@ export class PdfEngine extends BaseEngine {
     const initialViewport = firstPage.getViewport({ scale: 1 });
     const containerWidth = Math.max(this.container.clientWidth, 320);
     const targetScale = Math.max(Math.min((containerWidth - 32) / initialViewport.width, 2.0), 0.4);
+    this.currentScale = targetScale;
     const scaledViewport = firstPage.getViewport({ scale: targetScale });
     const expectedWidth = Math.floor(scaledViewport.width);
     const expectedHeight = Math.floor(scaledViewport.height);
@@ -276,7 +281,6 @@ export class PdfEngine extends BaseEngine {
     if (!this.pdfDocument || this.renderedPages.has(pageNumber)) {
       return;
     }
-    this.renderedPages.add(pageNumber);
 
     try {
       const pageProxy = await this.pdfDocument.getPage(pageNumber);
@@ -308,6 +312,7 @@ export class PdfEngine extends BaseEngine {
       this.activeSlotRenderTasks.set(pageNumber, renderTask);
 
       await renderTask.promise;
+      this.renderedPages.add(pageNumber);
       this.activeSlotRenderTasks.delete(pageNumber);
 
       try {
@@ -324,7 +329,63 @@ export class PdfEngine extends BaseEngine {
 
       pageProxy.cleanup();
     } catch (err) {
+      this.renderedPages.delete(pageNumber);
+      this.activeSlotRenderTasks.delete(pageNumber);
       console.warn(`[PdfEngine] Error rendering page ${pageNumber} into slot:`, err);
+    }
+  }
+
+  private refreshVisibleSlots(): void {
+    if (!this.scrollContainer || !this.pdfDocument) {
+      return;
+    }
+    const containerTop = this.scrollContainer.scrollTop;
+    const containerHeight = this.scrollContainer.clientHeight;
+    const slots = this.scrollContainer.querySelectorAll<HTMLElement>('.pdf-page-slot');
+
+    slots.forEach((slot) => {
+      const top = slot.offsetTop;
+      const bottom = top + slot.offsetHeight;
+      if (bottom >= containerTop - 250 && top <= containerTop + containerHeight + 250) {
+        const pageNum = parseInt(slot.dataset.pageNumber || '1', 10);
+        const canvas = slot.querySelector('canvas');
+        if (!canvas || !this.renderedPages.has(pageNum)) {
+          this.renderedPages.delete(pageNum);
+          this.renderPageIntoSlot(pageNum, slot, this.currentScale);
+        }
+      }
+    });
+  }
+
+  private onVisibilityChange(): void {
+    if (typeof document === 'undefined' || document.visibilityState !== 'visible') {
+      return;
+    }
+    if (!this.pdfDocument || !this.container) {
+      return;
+    }
+
+    if (this.paginationMode === 'scroll') {
+      this.refreshVisibleSlots();
+    } else {
+      this.renderButtonsMode(this.currentPageNumber);
+    }
+  }
+
+  private attachVisibilityListener(): void {
+    if (typeof document === 'undefined' || this.visibilityHandler) {
+      return;
+    }
+    this.visibilityHandler = () => {
+      this.onVisibilityChange();
+    };
+    document.addEventListener('visibilitychange', this.visibilityHandler);
+  }
+
+  private detachVisibilityListener(): void {
+    if (this.visibilityHandler && typeof document !== 'undefined') {
+      document.removeEventListener('visibilitychange', this.visibilityHandler);
+      this.visibilityHandler = null;
     }
   }
 
@@ -480,6 +541,7 @@ export class PdfEngine extends BaseEngine {
   }
 
   destroy(): void {
+    this.detachVisibilityListener();
     this.cleanupScroll();
 
     if (this.activeRenderTask) {

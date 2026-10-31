@@ -1,5 +1,6 @@
 import { onMounted, onUnmounted } from 'vue';
 import { App, type AppState } from '@capacitor/app';
+import { Capacitor } from '@capacitor/core';
 import { KeepAwake } from '@capacitor-community/keep-awake';
 import { useReaderStore } from '../stores/readerStore';
 import { SqliteService } from '../services/database/SqliteService';
@@ -8,8 +9,12 @@ export function useAppLifecycle() {
   const readerStore = useReaderStore();
   let appStateListener: { remove: () => void } | null = null;
   let backButtonListener: { remove: () => void } | null = null;
+  let webVisibilityHandler: (() => void) | null = null;
 
   const enableKeepAwake = async (): Promise<void> => {
+    if (!Capacitor.isNativePlatform()) {
+      return;
+    }
     try {
       await KeepAwake.keepAwake();
     } catch {
@@ -17,6 +22,9 @@ export function useAppLifecycle() {
   };
 
   const disableKeepAwake = async (): Promise<void> => {
+    if (!Capacitor.isNativePlatform()) {
+      return;
+    }
     try {
       await KeepAwake.allowSleep();
     } catch {
@@ -38,25 +46,37 @@ export function useAppLifecycle() {
   };
 
   onMounted(async () => {
-    appStateListener = await App.addListener('appStateChange', async (state: AppState) => {
-      if (!state.isActive) {
-        await persistCurrentProgress();
-        await disableKeepAwake();
-      } else if (readerStore.currentBook) {
-        await enableKeepAwake();
-      }
-    });
+    if (Capacitor.isNativePlatform()) {
+      try {
+        appStateListener = await App.addListener('appStateChange', async (state: AppState) => {
+          if (!state.isActive) {
+            await persistCurrentProgress();
+            await disableKeepAwake();
+          } else if (readerStore.currentBook) {
+            await enableKeepAwake();
+          }
+        });
 
-    backButtonListener = await App.addListener('backButton', () => {
-      if (readerStore.selection) {
-        readerStore.setSelection(null);
-        return;
+        backButtonListener = await App.addListener('backButton', () => {
+          if (readerStore.selection) {
+            readerStore.setSelection(null);
+            return;
+          }
+          if (!readerStore.isImmersiveMode) {
+            readerStore.setImmersiveMode(true);
+            return;
+          }
+        });
+      } catch {
       }
-      if (!readerStore.isImmersiveMode) {
-        readerStore.setImmersiveMode(true);
-        return;
-      }
-    });
+    } else if (typeof document !== 'undefined') {
+      webVisibilityHandler = async () => {
+        if (document.visibilityState === 'hidden') {
+          await persistCurrentProgress();
+        }
+      };
+      document.addEventListener('visibilitychange', webVisibilityHandler);
+    }
   });
 
   onUnmounted(async () => {
@@ -71,6 +91,11 @@ export function useAppLifecycle() {
     if (backButtonListener) {
       backButtonListener.remove();
       backButtonListener = null;
+    }
+
+    if (webVisibilityHandler && typeof document !== 'undefined') {
+      document.removeEventListener('visibilitychange', webVisibilityHandler);
+      webVisibilityHandler = null;
     }
   });
 

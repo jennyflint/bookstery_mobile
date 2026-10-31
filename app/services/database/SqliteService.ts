@@ -3,6 +3,34 @@ import { Capacitor } from '@capacitor/core';
 import { SCHEMA_V1 } from './migrations';
 import type { BookRecord, DictionaryItem, SyncQueueItem, SyncStatus, UserSession } from '../../types';
 
+const WEB_STORAGE_BOOKS_KEY = 'bookstery_web_books';
+
+function loadWebBooks(): Map<string, BookRecord> {
+  const map = new Map<string, BookRecord>();
+  if (typeof window === 'undefined') {
+    return map;
+  }
+  try {
+    const raw = localStorage.getItem(WEB_STORAGE_BOOKS_KEY);
+    if (raw) {
+      const list: BookRecord[] = JSON.parse(raw);
+      list.forEach((b) => map.set(b.id, b));
+    }
+  } catch {
+  }
+  return map;
+}
+
+function saveWebBooks(books: Map<string, BookRecord>): void {
+  if (typeof window === 'undefined') {
+    return;
+  }
+  try {
+    localStorage.setItem(WEB_STORAGE_BOOKS_KEY, JSON.stringify(Array.from(books.values())));
+  } catch {
+  }
+}
+
 export class SqliteService {
   private static instance: SqliteService | null = null;
   private sqliteConnection: SQLiteConnection | null = null;
@@ -10,7 +38,7 @@ export class SqliteService {
   private isInitialized: boolean = false;
   private readonly dbName: string = 'bookstery_db';
 
-  private inMemoryBooks: Map<string, BookRecord> = new Map();
+  private inMemoryBooks: Map<string, BookRecord> = loadWebBooks();
   private inMemoryQueue: SyncQueueItem[] = [];
   private inMemoryDictionary: DictionaryItem[] = [];
   private inMemorySession: UserSession | null = null;
@@ -120,6 +148,7 @@ export class SqliteService {
       }
     }
     this.inMemoryBooks.set(book.id, { ...book });
+    saveWebBooks(this.inMemoryBooks);
   }
 
   async updateReadingPosition(bookId: string, locator: string, progressPercentage: number): Promise<void> {
@@ -142,6 +171,7 @@ export class SqliteService {
       book.progress_percentage = progressPercentage;
       book.last_read_at = now;
       book.updated_at = now;
+      saveWebBooks(this.inMemoryBooks);
     }
   }
 
@@ -154,6 +184,7 @@ export class SqliteService {
       }
     }
     this.inMemoryBooks.delete(id);
+    saveWebBooks(this.inMemoryBooks);
   }
 
   async getPendingSyncQueue(): Promise<SyncQueueItem[]> {
