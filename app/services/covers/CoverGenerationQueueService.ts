@@ -1,4 +1,5 @@
 import { Filesystem, Directory } from '@capacitor/filesystem';
+import { Capacitor } from '@capacitor/core';
 import { CoverExtractorService } from './CoverExtractorService';
 import { SqliteService } from '../database/SqliteService';
 import type { BookFormat } from '../../types';
@@ -115,8 +116,8 @@ export class CoverGenerationQueueService {
     const storagePath = `public/covers/${bookId}.webp`;
     const base64Data = uint8ArrayToBase64(coverBytes);
 
-    try {
-      if (typeof fetch !== 'undefined') {
+    if (!Capacitor.isNativePlatform() && typeof fetch !== 'undefined') {
+      try {
         await fetch('/api/covers/save', {
           method: 'POST',
           headers: {
@@ -127,8 +128,8 @@ export class CoverGenerationQueueService {
             base64: base64Data,
           }),
         });
-      }
-    } catch {}
+      } catch {}
+    }
 
     try {
       await Filesystem.writeFile({
