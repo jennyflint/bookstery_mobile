@@ -9,6 +9,7 @@ import AppLogo from '../components/ui/AppLogo.vue';
 import BookGrid from '../components/library/BookGrid.vue';
 import DeviceScannerModal from '../components/library/DeviceScannerModal.vue';
 import SyncStatusBadge from '../components/common/SyncStatusBadge.vue';
+import SyncButton from '../components/common/SyncButton.vue';
 import LanguageSwitcher from '../components/common/LanguageSwitcher.vue';
 import GoogleSignInButton from '../components/auth/GoogleSignInButton.vue';
 
@@ -53,6 +54,7 @@ const handleImported = async () => {
         <AppLogo :subtitle="t('library.title')" />
 
         <div class="flex items-center gap-2">
+          <SyncButton />
           <SyncStatusBadge />
           <LanguageSwitcher />
         </div>

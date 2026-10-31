@@ -1,10 +1,16 @@
 import { GoogleAuth } from '@codetrix-studio/capacitor-google-auth';
+import { SqliteService } from '../database/SqliteService';
 import type { GoogleUser } from '../../types';
 
 export class GoogleAuthService {
   private static instance: GoogleAuthService | null = null;
   private currentUser: GoogleUser | null = null;
   private isInitialized: boolean = false;
+  private sqliteService: SqliteService;
+
+  constructor(sqliteService?: SqliteService) {
+    this.sqliteService = sqliteService || SqliteService.getInstance();
+  }
 
   static getInstance(): GoogleAuthService {
     if (!GoogleAuthService.instance) {
@@ -20,7 +26,12 @@ export class GoogleAuthService {
     try {
       await GoogleAuth.initialize({
         clientId: clientId || 'bookstery-android-client-id.apps.googleusercontent.com',
-        scopes: ['profile', 'email', 'https://www.googleapis.com/auth/drive.appdata'],
+        scopes: [
+          'profile',
+          'email',
+          'https://www.googleapis.com/auth/drive.file',
+          'https://www.googleapis.com/auth/drive.appdata',
+        ],
         grantOfflineAccess: true,
       });
       this.isInitialized = true;
@@ -42,6 +53,11 @@ export class GoogleAuthService {
         accessToken: response.authentication.accessToken,
       };
       this.currentUser = user;
+      await this.sqliteService.saveUserSession({
+        email: user.email,
+        display_name: user.displayName,
+        last_sync_at: Date.now(),
+      });
       return user;
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : String(err);
@@ -58,7 +74,16 @@ export class GoogleAuthService {
           this.currentUser.accessToken = response.accessToken;
           return this.currentUser;
         }
-        return await this.signIn();
+        const session = await this.sqliteService.getUserSession();
+        if (session && session.email) {
+          this.currentUser = {
+            id: 'cached-user',
+            email: session.email,
+            displayName: session.display_name || 'Reader',
+            accessToken: response.accessToken,
+          };
+          return this.currentUser;
+        }
       }
       return null;
     } catch {
@@ -86,10 +111,16 @@ export class GoogleAuthService {
     } catch {
     } finally {
       this.currentUser = null;
+      await this.sqliteService.resetUserSession();
+      await this.sqliteService.setDriveFolderId(null);
     }
   }
 
   getCurrentUser(): GoogleUser | null {
     return this.currentUser;
+  }
+
+  isAuthenticated(): boolean {
+    return this.currentUser !== null;
   }
 }

@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { useReaderStore } from '../../stores/readerStore';
+import SyncStatusBadge from '../common/SyncStatusBadge.vue';
 
 const emit = defineEmits<{
   (e: 'back'): void;
@@ -41,16 +42,19 @@ const readerStore = useReaderStore();
           {{ readerStore.currentBook?.title || 'Bookstery' }}
         </h2>
 
-        <button
-          type="button"
-          class="p-2 rounded-xl text-zinc-600 hover:bg-zinc-100 active:scale-95 transition-all"
-          :title="t('reader.settings')"
-          @click="emit('open-settings')"
-        >
-          <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4" />
-          </svg>
-        </button>
+        <div class="flex items-center gap-2">
+          <SyncStatusBadge />
+          <button
+            type="button"
+            class="p-2 rounded-xl text-zinc-600 hover:bg-zinc-100 active:scale-95 transition-all"
+            :title="t('reader.settings')"
+            @click="emit('open-settings')"
+          >
+            <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4" />
+            </svg>
+          </button>
+        </div>
       </header>
     </transition>
 

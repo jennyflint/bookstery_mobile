@@ -2,6 +2,7 @@
 import { ref } from 'vue';
 import { useReaderStore } from '../../stores/readerStore';
 import type { ReaderPaginationMode, ReaderTheme } from '../../types';
+import SyncButton from '../common/SyncButton.vue';
 
 defineProps<{
   isOpen: boolean;
@@ -75,15 +76,18 @@ const decreaseFont = () => {
     >
       <div class="flex items-center justify-between pb-2 border-b border-zinc-100">
         <h3 class="text-base font-bold text-zinc-900">{{ t('reader.settings') }}</h3>
-        <button
-          type="button"
-          class="p-1 rounded-lg text-zinc-400 hover:text-zinc-600 transition-colors"
-          @click="emit('close')"
-        >
-          <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
-          </svg>
-        </button>
+        <div class="flex items-center gap-2">
+          <SyncButton />
+          <button
+            type="button"
+            class="p-1 rounded-lg text-zinc-400 hover:text-zinc-600 transition-colors"
+            @click="emit('close')"
+          >
+            <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+        </div>
       </div>
 
       <!-- Presets -->

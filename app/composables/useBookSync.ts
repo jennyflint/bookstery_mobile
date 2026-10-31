@@ -1,10 +1,11 @@
 import { storeToRefs } from 'pinia';
 import { useSyncStore } from '../stores/syncStore';
-import { SyncService } from '../services/sync/SyncService';
+import { SyncQueueService } from '../services/sync/SyncQueueService';
 
 export function useBookSync() {
   const syncStore = useSyncStore();
-  const { isOnline, isSyncing, pendingQueueCount, lastSyncAt } = storeToRefs(syncStore);
+  const { isOnline, isSyncing, pendingQueueCount, lastSyncAt, syncVisualState, errorMessage } =
+    storeToRefs(syncStore);
 
   const initSync = async (): Promise<void> => {
     await syncStore.init();
@@ -14,10 +15,19 @@ export function useBookSync() {
     await syncStore.triggerSync();
   };
 
-  const queueProgress = async (bookId: string, locator: string, progressPercentage: number): Promise<void> => {
-    const syncService = SyncService.getInstance();
-    await syncService.queueProgressUpdate(bookId, locator, progressPercentage);
+  const queueProgress = async (
+    bookId: string,
+    locator: string,
+    progressPercentage: number,
+  ): Promise<void> => {
+    const queueService = SyncQueueService.getInstance();
+    await queueService.queueWithDebounce(bookId, locator, progressPercentage, 4000);
     await syncStore.refreshQueueCount();
+  };
+
+  const cancelDebounce = (): void => {
+    const queueService = SyncQueueService.getInstance();
+    queueService.cancelDebounce();
   };
 
   return {
@@ -25,8 +35,11 @@ export function useBookSync() {
     isSyncing,
     pendingQueueCount,
     lastSyncAt,
+    syncVisualState,
+    errorMessage,
     initSync,
     syncNow,
     queueProgress,
+    cancelDebounce,
   };
 }

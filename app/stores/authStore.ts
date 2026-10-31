@@ -1,6 +1,7 @@
 import { defineStore } from 'pinia';
 import { GoogleAuthService } from '../services/auth/GoogleAuthService';
 import { SqliteService } from '../services/database/SqliteService';
+import { useSyncStore } from './syncStore';
 import type { GoogleUser } from '../types';
 
 export const useAuthStore = defineStore('auth', {
@@ -36,12 +37,8 @@ export const useAuthStore = defineStore('auth', {
         this.user = user;
         this.isAuthenticated = true;
 
-        const sqlite = SqliteService.getInstance();
-        await sqlite.saveUserSession({
-          email: user.email,
-          display_name: user.displayName,
-          last_sync_at: Date.now(),
-        });
+        const syncStore = useSyncStore();
+        await syncStore.refreshQueueCount();
       } finally {
         this.isLoading = false;
       }
@@ -54,12 +51,8 @@ export const useAuthStore = defineStore('auth', {
         this.user = null;
         this.isAuthenticated = false;
 
-        const sqlite = SqliteService.getInstance();
-        await sqlite.saveUserSession({
-          email: null,
-          display_name: null,
-          last_sync_at: null,
-        });
+        const syncStore = useSyncStore();
+        syncStore.setUnauthenticated();
       } finally {
         this.isLoading = false;
       }

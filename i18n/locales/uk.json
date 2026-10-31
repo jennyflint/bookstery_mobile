@@ -81,7 +81,12 @@
     "signInWithGoogle": "Увійти через Google",
     "signOut": "Вийти з акаунта",
     "signedInAs": "Вхід виконано як",
-    "cloudSyncNotice": "Увійдіть через Google для хмарної синхронізації прогресу читання між усіма пристроями через Google Drive."
+    "cloudSyncNotice": "Увійдіть через Google для хмарної синхронізації прогресу читання між усіма пристроями через Google Drive.",
+    "confirmSignOutTitle": "Вихід з облікового запису",
+    "confirmSignOutMessage": "Ви впевнені, що хочете вийти з Google?",
+    "pendingWarning": "У вас є {count} незбережених змін прогресу, які ще не відправлено у хмару. Прогрес читання збережеться на цьому пристрої, але синхронізація з хмарою призупиниться до наступного входу.",
+    "confirmButton": "Вийти все одно",
+    "cancelButton": "Скасувати"
   },
   "sync": {
     "status": "Стан синхронізації",
@@ -91,7 +96,14 @@
     "synced": "Актуально",
     "pending": "Очікує: {count}",
     "syncNow": "Синхронізувати зараз",
-    "lastSynced": "Остання синхронізація: {time}"
+    "lastSynced": "Остання синхронізація: {time}",
+    "syncedJustNow": "Щойно синхронізовано",
+    "syncedMinutesAgo": "Синхронізовано {minutes} хв тому",
+    "syncedHoursAgo": "Синхронізовано {hours} год тому",
+    "unauthenticatedTooltip": "Увійдіть для синхронізації з Google Drive",
+    "retryTooltip": "Помилка синхронізації. Натисніть для повтору",
+    "offlineTooltip": "Немає підключення до мережі",
+    "success": "Синхронізовано успішно"
   },
   "settings": {
     "title": "Налаштування",

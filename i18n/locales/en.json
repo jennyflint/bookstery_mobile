@@ -81,7 +81,12 @@
     "signInWithGoogle": "Sign In with Google",
     "signOut": "Sign Out",
     "signedInAs": "Signed in as",
-    "cloudSyncNotice": "Sign in with Google to enable cloud progress sync across devices via Google Drive."
+    "cloudSyncNotice": "Sign in with Google to enable cloud progress sync across devices via Google Drive.",
+    "confirmSignOutTitle": "Sign Out",
+    "confirmSignOutMessage": "Are you sure you want to sign out?",
+    "pendingWarning": "You have {count} un-synced progress updates. Local progress remains saved on this device, but cloud sync will pause until you sign in again.",
+    "confirmButton": "Sign Out Anyway",
+    "cancelButton": "Cancel"
   },
   "sync": {
     "status": "Sync Status",
@@ -91,7 +96,14 @@
     "synced": "Up to date",
     "pending": "{count} pending syncs",
     "syncNow": "Sync Now",
-    "lastSynced": "Last synced: {time}"
+    "lastSynced": "Last synced: {time}",
+    "syncedJustNow": "Synced just now",
+    "syncedMinutesAgo": "Synced {minutes}m ago",
+    "syncedHoursAgo": "Synced {hours}h ago",
+    "unauthenticatedTooltip": "Sign in with Google for cloud sync",
+    "retryTooltip": "Sync error. Click to retry",
+    "offlineTooltip": "No network connection",
+    "success": "Synced successfully"
   },
   "settings": {
     "title": "Settings",

@@ -1,20 +1,20 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { SyncService } from '../../../services/sync/SyncService';
-import { SqliteService } from '../../../services/database/SqliteService';
-import { GoogleAuthService } from '../../../services/auth/GoogleAuthService';
-import { GoogleDriveService } from '../../../services/drive/GoogleDriveService';
+import { SyncService } from '../../../app/services/sync/SyncService';
+import { SqliteService } from '../../../app/services/database/SqliteService';
+import { GoogleAuthService } from '../../../app/services/auth/GoogleAuthService';
+import { GoogleDriveFolderService } from '../../../app/services/drive/GoogleDriveFolderService';
 
 describe('SyncService', () => {
   let sqliteService: SqliteService;
   let authService: GoogleAuthService;
-  let driveService: GoogleDriveService;
+  let folderService: GoogleDriveFolderService;
   let syncService: SyncService;
 
   beforeEach(() => {
     vi.clearAllMocks();
     sqliteService = new SqliteService();
-    authService = new GoogleAuthService();
-    driveService = new GoogleDriveService();
+    authService = new GoogleAuthService(sqliteService);
+    folderService = new GoogleDriveFolderService(sqliteService, authService);
 
     vi.spyOn(authService, 'getCurrentUser').mockReturnValue({
       id: 'test-user-id',
@@ -23,17 +23,19 @@ describe('SyncService', () => {
       accessToken: 'mock-token',
     });
 
+    vi.spyOn(authService, 'isAuthenticated').mockReturnValue(true);
     vi.spyOn(authService, 'getAccessToken').mockResolvedValue('mock-token');
-    vi.spyOn(driveService, 'downloadProgressFile').mockResolvedValue(null);
-    vi.spyOn(driveService, 'uploadProgressFile').mockResolvedValue();
+    vi.spyOn(folderService, 'ensureStorageFolder').mockResolvedValue('test-folder');
+    vi.spyOn(folderService, 'fetchBookProgress').mockResolvedValue(null);
+    vi.spyOn(folderService, 'uploadBookProgress').mockResolvedValue();
 
-    syncService = new SyncService(sqliteService, authService, driveService);
+    syncService = new SyncService(sqliteService, authService, folderService);
   });
 
   it('should enqueue items with pending status when updating reading position', async () => {
-    (syncService as unknown as { isOnline: boolean }).isOnline = false;
+    vi.spyOn(syncService.getQueueService(), 'getIsOnline').mockReturnValue(false);
 
-    await syncService.queueProgressUpdate('book-hash-1', '15', 50.0);
+    await syncService.getQueueService().enqueue('book-hash-1', '15', 50.0);
 
     const pending = await sqliteService.getPendingSyncQueue();
     expect(pending.length).toBeGreaterThanOrEqual(1);
@@ -57,13 +59,13 @@ describe('SyncService', () => {
 
     await syncService.flushQueue();
 
-    expect(driveService.uploadProgressFile).toHaveBeenCalled();
+    expect(folderService.uploadBookProgress).toHaveBeenCalled();
     const pendingAfter = await sqliteService.getPendingSyncQueue();
     expect(pendingAfter.length).toBe(0);
   });
 
   it('should transition queue item status to failed when upload fails', async () => {
-    vi.spyOn(driveService, 'uploadProgressFile').mockRejectedValue(new Error('Network error'));
+    vi.spyOn(folderService, 'uploadBookProgress').mockRejectedValue(new Error('Network error'));
 
     await sqliteService.enqueueSyncItem({
       book_id: 'book-hash-3',

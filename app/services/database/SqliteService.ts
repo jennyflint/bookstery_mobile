@@ -8,6 +8,7 @@ const STORAGE_KEYS = {
   SYNC_QUEUE: 'bookstery_web_sync_queue',
   DICTIONARY: 'bookstery_web_dictionary',
   SESSION: 'bookstery_web_session',
+  DRIVE_FOLDER_ID: 'bookstery_web_drive_folder_id',
 };
 
 function readStorage<T>(key: string, defaultValue: T): T {
@@ -53,7 +54,6 @@ export class SqliteService {
     }
 
     if (!Capacitor.isNativePlatform()) {
-      // Web environment: persist everything directly into localStorage
       this.isNative = false;
       this.isInitialized = true;
       return;
@@ -78,9 +78,14 @@ export class SqliteService {
 
       await this.db.open();
       await this.db.execute(SCHEMA_V1);
+
+      try {
+        await this.db.execute('ALTER TABLE user_session ADD COLUMN drive_folder_id TEXT;');
+      } catch {
+      }
+
       this.isInitialized = true;
-    } catch (err) {
-      console.warn('[SqliteService] Failed to initialize native SQLite, falling back to localStorage:', err);
+    } catch {
       this.isNative = false;
       this.db = null;
       this.isInitialized = true;
@@ -92,8 +97,7 @@ export class SqliteService {
       try {
         const result = await this.db.query('SELECT * FROM books ORDER BY last_read_at DESC;');
         return (result.values as BookRecord[]) || [];
-      } catch (err) {
-        console.error('[SqliteService] Error getting books from SQLite:', err);
+      } catch {
       }
     }
     const books = readStorage<BookRecord[]>(STORAGE_KEYS.BOOKS, []);
@@ -108,8 +112,7 @@ export class SqliteService {
           return result.values[0] as BookRecord;
         }
         return null;
-      } catch (err) {
-        console.error('[SqliteService] Error getting book by id from SQLite:', err);
+      } catch {
       }
     }
     const books = readStorage<BookRecord[]>(STORAGE_KEYS.BOOKS, []);
@@ -148,8 +151,7 @@ export class SqliteService {
           book.updated_at,
         ]);
         return;
-      } catch (err) {
-        console.error('[SqliteService] Error upserting book in SQLite:', err);
+      } catch {
       }
     }
     const books = readStorage<BookRecord[]>(STORAGE_KEYS.BOOKS, []);
@@ -173,8 +175,7 @@ export class SqliteService {
         `;
         await this.db.run(query, [locator, progressPercentage, now, now, bookId]);
         return;
-      } catch (err) {
-        console.error('[SqliteService] Error updating reading position in SQLite:', err);
+      } catch {
       }
     }
     const books = readStorage<BookRecord[]>(STORAGE_KEYS.BOOKS, []);
@@ -199,8 +200,7 @@ export class SqliteService {
         `;
         await this.db.run(query, [coverPath, now, bookId]);
         return;
-      } catch (err) {
-        console.error('[SqliteService] Error updating cover path in SQLite:', err);
+      } catch {
       }
     }
     const books = readStorage<BookRecord[]>(STORAGE_KEYS.BOOKS, []);
@@ -217,8 +217,7 @@ export class SqliteService {
       try {
         await this.db.run('DELETE FROM books WHERE id = ?;', [id]);
         return;
-      } catch (err) {
-        console.error('[SqliteService] Error deleting book in SQLite:', err);
+      } catch {
       }
     }
     const books = readStorage<BookRecord[]>(STORAGE_KEYS.BOOKS, []);
@@ -233,8 +232,7 @@ export class SqliteService {
           "SELECT * FROM sync_queue WHERE status = 'pending' ORDER BY updated_at ASC;",
         );
         return (result.values as SyncQueueItem[]) || [];
-      } catch (err) {
-        console.error('[SqliteService] Error getting pending sync queue from SQLite:', err);
+      } catch {
       }
     }
     const queue = readStorage<SyncQueueItem[]>(STORAGE_KEYS.SYNC_QUEUE, []);
@@ -256,8 +254,7 @@ export class SqliteService {
           item.status,
         ]);
         return;
-      } catch (err) {
-        console.error('[SqliteService] Error enqueuing sync item in SQLite:', err);
+      } catch {
       }
     }
     const queue = readStorage<SyncQueueItem[]>(STORAGE_KEYS.SYNC_QUEUE, []);
@@ -274,8 +271,7 @@ export class SqliteService {
       try {
         await this.db.run('UPDATE sync_queue SET status = ? WHERE id = ?;', [status, id]);
         return;
-      } catch (err) {
-        console.error('[SqliteService] Error updating sync queue status in SQLite:', err);
+      } catch {
       }
     }
     const queue = readStorage<SyncQueueItem[]>(STORAGE_KEYS.SYNC_QUEUE, []);
@@ -291,8 +287,7 @@ export class SqliteService {
       try {
         await this.db.run("DELETE FROM sync_queue WHERE status = 'synced';");
         return;
-      } catch (err) {
-        console.error('[SqliteService] Error clearing synced queue in SQLite:', err);
+      } catch {
       }
     }
     const queue = readStorage<SyncQueueItem[]>(STORAGE_KEYS.SYNC_QUEUE, []);
@@ -305,8 +300,7 @@ export class SqliteService {
       try {
         const result = await this.db.query('SELECT * FROM dictionary_history ORDER BY created_at DESC;');
         return (result.values as DictionaryItem[]) || [];
-      } catch (err) {
-        console.error('[SqliteService] Error getting dictionary history from SQLite:', err);
+      } catch {
       }
     }
     const list = readStorage<DictionaryItem[]>(STORAGE_KEYS.DICTIONARY, []);
@@ -329,8 +323,7 @@ export class SqliteService {
           item.created_at,
         ]);
         return res.changes?.lastId || 1;
-      } catch (err) {
-        console.error('[SqliteService] Error saving dictionary item in SQLite:', err);
+      } catch {
       }
     }
     const list = readStorage<DictionaryItem[]>(STORAGE_KEYS.DICTIONARY, []);
@@ -349,8 +342,7 @@ export class SqliteService {
       try {
         await this.db.run('DELETE FROM dictionary_history WHERE id = ?;', [id]);
         return;
-      } catch (err) {
-        console.error('[SqliteService] Error deleting dictionary item in SQLite:', err);
+      } catch {
       }
     }
     const list = readStorage<DictionaryItem[]>(STORAGE_KEYS.DICTIONARY, []);
@@ -366,8 +358,7 @@ export class SqliteService {
           return result.values[0] as UserSession;
         }
         return null;
-      } catch (err) {
-        console.error('[SqliteService] Error getting user session from SQLite:', err);
+      } catch {
       }
     }
     return readStorage<UserSession | null>(STORAGE_KEYS.SESSION, null);
@@ -377,24 +368,82 @@ export class SqliteService {
     if (this.isNative && this.db) {
       try {
         const query = `
-          INSERT INTO user_session (id, email, display_name, last_sync_at)
-          VALUES (1, ?, ?, ?)
+          INSERT INTO user_session (id, email, display_name, last_sync_at, drive_folder_id)
+          VALUES (1, ?, ?, ?, ?)
           ON CONFLICT(id) DO UPDATE SET
             email = excluded.email,
             display_name = excluded.display_name,
-            last_sync_at = excluded.last_sync_at;
+            last_sync_at = excluded.last_sync_at,
+            drive_folder_id = COALESCE(excluded.drive_folder_id, user_session.drive_folder_id);
         `;
-        await this.db.run(query, [session.email, session.display_name, session.last_sync_at]);
+        await this.db.run(query, [
+          session.email,
+          session.display_name,
+          session.last_sync_at,
+          session.drive_folder_id ?? null,
+        ]);
         return;
-      } catch (err) {
-        console.error('[SqliteService] Error saving user session in SQLite:', err);
+      } catch {
       }
     }
+    const current = readStorage<UserSession | null>(STORAGE_KEYS.SESSION, null);
     const sessionObj: UserSession = {
       id: 1,
-      ...session,
+      email: session.email,
+      display_name: session.display_name,
+      last_sync_at: session.last_sync_at,
+      drive_folder_id: session.drive_folder_id !== undefined ? session.drive_folder_id : current?.drive_folder_id ?? null,
     };
     writeStorage(STORAGE_KEYS.SESSION, sessionObj);
+  }
+
+  async getDriveFolderId(): Promise<string | null> {
+    if (this.isNative && this.db) {
+      try {
+        const result = await this.db.query('SELECT drive_folder_id FROM user_session WHERE id = 1;');
+        if (result.values && result.values.length > 0) {
+          return (result.values[0].drive_folder_id as string) || null;
+        }
+        return null;
+      } catch {
+      }
+    }
+    return readStorage<string | null>(STORAGE_KEYS.DRIVE_FOLDER_ID, null);
+  }
+
+  async setDriveFolderId(folderId: string | null): Promise<void> {
+    if (this.isNative && this.db) {
+      try {
+        const query = `
+          INSERT INTO user_session (id, email, display_name, last_sync_at, drive_folder_id)
+          VALUES (1, NULL, NULL, NULL, ?)
+          ON CONFLICT(id) DO UPDATE SET drive_folder_id = excluded.drive_folder_id;
+        `;
+        await this.db.run(query, [folderId]);
+        return;
+      } catch {
+      }
+    }
+    writeStorage(STORAGE_KEYS.DRIVE_FOLDER_ID, folderId);
+    const session = readStorage<UserSession | null>(STORAGE_KEYS.SESSION, null);
+    if (session) {
+      session.drive_folder_id = folderId;
+      writeStorage(STORAGE_KEYS.SESSION, session);
+    }
+  }
+
+  async resetUserSession(): Promise<void> {
+    if (this.isNative && this.db) {
+      try {
+        await this.db.run(
+          'UPDATE user_session SET email = NULL, display_name = NULL, last_sync_at = NULL, drive_folder_id = NULL WHERE id = 1;',
+        );
+        return;
+      } catch {
+      }
+    }
+    writeStorage(STORAGE_KEYS.SESSION, null);
+    writeStorage(STORAGE_KEYS.DRIVE_FOLDER_ID, null);
   }
 
   async close(): Promise<void> {

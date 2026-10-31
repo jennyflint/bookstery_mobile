@@ -36,7 +36,8 @@ CREATE TABLE IF NOT EXISTS user_session (
   id INTEGER PRIMARY KEY CHECK (id = 1),
   email TEXT,
   display_name TEXT,
-  last_sync_at INTEGER
+  last_sync_at INTEGER,
+  drive_folder_id TEXT
 );
 
 CREATE INDEX IF NOT EXISTS idx_books_updated_at ON books(updated_at);

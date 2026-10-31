@@ -1,8 +1,9 @@
+export * from './auth';
+export * from './sync';
+
 export type BookFormat = 'pdf' | 'epub' | 'fb2';
 
 export type ReaderTheme = 'light' | 'sepia' | 'night' | 'oled' | 'custom';
-
-export type SyncStatus = 'pending' | 'processing' | 'synced' | 'failed';
 
 export interface BookRecord {
   id: string;
@@ -18,15 +19,6 @@ export interface BookRecord {
   updated_at: number;
 }
 
-export interface SyncQueueItem {
-  id?: number;
-  book_id: string;
-  locator: string;
-  progress_percentage: number;
-  updated_at: number;
-  status: SyncStatus;
-}
-
 export interface DictionaryItem {
   id?: number;
   book_id: string | null;
@@ -37,24 +29,10 @@ export interface DictionaryItem {
   created_at: number;
 }
 
-export interface UserSession {
-  id: number;
-  email: string | null;
-  display_name: string | null;
-  last_sync_at: number | null;
-}
-
 export interface RemoteBookProgress {
   locator: string;
   progress_percentage: number;
   updated_at: number;
-}
-
-export interface DriveSyncPayload {
-  version: number;
-  device_id: string;
-  updated_at: number;
-  books: Record<string, RemoteBookProgress>;
 }
 
 export interface ReaderLocation {
@@ -112,19 +90,4 @@ export interface TranslationResult {
   translatedText: string;
   sourceLang: string;
   targetLang: string;
-}
-
-export interface ConflictResolutionResult {
-  winnerLocator: string;
-  winnerPercentage: number;
-  winnerUpdatedAt: number;
-  source: 'local' | 'remote';
-}
-
-export interface GoogleUser {
-  id: string;
-  email: string;
-  displayName: string;
-  imageUrl?: string;
-  accessToken: string;
 }
