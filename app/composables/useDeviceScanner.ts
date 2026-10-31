@@ -1,8 +1,10 @@
 import { ref } from 'vue';
 import { Directory, Filesystem } from '@capacitor/filesystem';
 import { DeviceFileScannerService } from '../services/scanner/DeviceFileScannerService';
+import { FileHashService } from '../services/scanner/FileHashService';
+import { CoverGenerationQueueService } from '../services/covers/CoverGenerationQueueService';
 import { useLibraryStore } from '../stores/libraryStore';
-import type { ScannedFile } from '../types';
+import type { BookRecord, ScannedFile } from '../types';
 
 export function useDeviceScanner() {
   const isScanning = ref(false);
@@ -10,6 +12,7 @@ export function useDeviceScanner() {
   const scannedFiles = ref<ScannedFile[]>([]);
   const scannerService = new DeviceFileScannerService();
   const libraryStore = useLibraryStore();
+  const coverQueue = CoverGenerationQueueService.getInstance();
 
   const scanDevice = async (): Promise<ScannedFile[]> => {
     isScanning.value = true;
@@ -51,6 +54,17 @@ export function useDeviceScanner() {
             await libraryStore.addBook(imported);
             existingIds.add(imported.id);
             importedCount++;
+
+            const fileData = await Filesystem.readFile({
+              path: file.path,
+              directory: Directory.Documents,
+            });
+
+            coverQueue.enqueue(imported.id, imported.format, fileData.data).then((coverPath) => {
+              if (coverPath) {
+                libraryStore.updateCover(imported.id, coverPath);
+              }
+            });
           }
         } catch {
         }
@@ -63,7 +77,7 @@ export function useDeviceScanner() {
     }
   };
 
-  const importFromBlob = async (file: File): Promise<void> => {
+  const importBook = async (file: File): Promise<BookRecord | null> => {
     isScanning.value = true;
     try {
       await libraryStore.loadBooks();
@@ -87,10 +101,32 @@ export function useDeviceScanner() {
       const imported = await scannerService.importBookFile(tempPath, Directory.Documents, existingIds);
       if (imported) {
         await libraryStore.addBook(imported);
+        const coverPath = await coverQueue.enqueue(imported.id, imported.format, arrayBuffer);
+        if (coverPath) {
+          imported.cover_path = coverPath;
+          await libraryStore.updateCover(imported.id, coverPath);
+        }
+        return imported;
       }
+
+      const hash = await FileHashService.calculateSha256(base64);
+      const existing = libraryStore.books.find((b) => b.id === hash);
+      if (existing) {
+        const coverPath = await coverQueue.enqueue(existing.id, existing.format, arrayBuffer);
+        if (coverPath) {
+          existing.cover_path = coverPath;
+          await libraryStore.updateCover(existing.id, coverPath);
+        }
+        return existing;
+      }
+      return null;
     } finally {
       isScanning.value = false;
     }
+  };
+
+  const importFromBlob = async (file: File): Promise<void> => {
+    await importBook(file);
   };
 
   return {
@@ -99,6 +135,7 @@ export function useDeviceScanner() {
     scannedFiles,
     scanDevice,
     importFiles,
+    importBook,
     importFromBlob,
   };
 }

@@ -4,9 +4,9 @@ export class FileHashService {
 
     if (typeof data === 'string') {
       const encoder = new TextEncoder();
-      buffer = encoder.encode(data).buffer;
+      buffer = encoder.encode(data).buffer as ArrayBuffer;
     } else if (data instanceof Uint8Array) {
-      buffer = data.buffer;
+      buffer = data.buffer as ArrayBuffer;
     } else {
       buffer = data;
     }

@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { ref, computed } from 'vue';
 import type { BookRecord } from '../../types';
 
 const props = defineProps<{
@@ -11,6 +12,33 @@ const emit = defineEmits<{
 }>();
 
 const { t } = useI18n();
+
+const DEFAULT_COVER = '/img/covers/default.webp';
+const failedSources = ref<Set<string>>(new Set());
+
+const coverSrc = computed(() => {
+  const bookId = props.book.id;
+
+  if (typeof window !== 'undefined' && bookId) {
+    const cached = localStorage.getItem(`bookstery_cover_${bookId}`);
+    if (cached && !failedSources.value.has(cached)) {
+      return cached;
+    }
+  }
+
+  if (props.book.cover_path && !failedSources.value.has(props.book.cover_path)) {
+    return props.book.cover_path;
+  }
+
+  return DEFAULT_COVER;
+});
+
+const handleImageError = () => {
+  const current = coverSrc.value;
+  if (current && current !== DEFAULT_COVER) {
+    failedSources.value.add(current);
+  }
+};
 
 const formatBadgeClass = (format: string) => {
   switch (format) {
@@ -50,6 +78,15 @@ const formatBadgeClass = (format: string) => {
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
         </svg>
       </button>
+    </div>
+
+    <div class="w-full h-44 my-3 rounded-xl overflow-hidden bg-zinc-100 flex items-center justify-center border border-zinc-100 shadow-inner">
+      <img
+        :src="coverSrc"
+        :alt="props.book.title"
+        class="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
+        @error="handleImageError"
+      />
     </div>
 
     <div class="my-4">

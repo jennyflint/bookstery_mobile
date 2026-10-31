@@ -188,6 +188,30 @@ export class SqliteService {
     }
   }
 
+  async updateCoverPath(bookId: string, coverPath: string | null): Promise<void> {
+    const now = Date.now();
+    if (this.isNative && this.db) {
+      try {
+        const query = `
+          UPDATE books
+          SET cover_path = ?, updated_at = ?
+          WHERE id = ?;
+        `;
+        await this.db.run(query, [coverPath, now, bookId]);
+        return;
+      } catch (err) {
+        console.error('[SqliteService] Error updating cover path in SQLite:', err);
+      }
+    }
+    const books = readStorage<BookRecord[]>(STORAGE_KEYS.BOOKS, []);
+    const book = books.find((b) => b.id === bookId);
+    if (book) {
+      book.cover_path = coverPath;
+      book.updated_at = now;
+      writeStorage(STORAGE_KEYS.BOOKS, books);
+    }
+  }
+
   async deleteBook(id: string): Promise<void> {
     if (this.isNative && this.db) {
       try {

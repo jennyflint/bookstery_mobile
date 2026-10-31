@@ -29,4 +29,9 @@ export default defineNuxtConfig({
   tailwindcss: {
     cssPath: '~/assets/css/tailwind.css',
   },
+  postcss: {
+    plugins: {
+      'tailwindcss/nesting': false,
+    },
+  },
 });

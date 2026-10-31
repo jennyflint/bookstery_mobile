@@ -1,5 +1,7 @@
 import { defineStore } from 'pinia';
+import { Directory, Filesystem } from '@capacitor/filesystem';
 import { SqliteService } from '../services/database/SqliteService';
+import { CoverGenerationQueueService } from '../services/covers/CoverGenerationQueueService';
 import type { BookFormat, BookRecord } from '../types';
 
 export const useLibraryStore = defineStore('library', {
@@ -32,8 +34,48 @@ export const useLibraryStore = defineStore('library', {
       try {
         const sqlite = SqliteService.getInstance();
         this.books = await sqlite.getAllBooks();
+        this.generateMissingCovers();
       } finally {
         this.isLoading = false;
+      }
+    },
+    async generateMissingCovers(): Promise<void> {
+      const missing = this.books.filter((b) => !b.cover_path);
+      if (missing.length === 0) {
+        return;
+      }
+
+      const queue = CoverGenerationQueueService.getInstance();
+
+      for (const book of missing) {
+        try {
+          const fileData = await Filesystem.readFile({
+            path: book.file_path,
+            directory: Directory.Data,
+          });
+
+          if (fileData.data) {
+            queue.enqueue(book.id, book.format, fileData.data).then((coverPath) => {
+              if (coverPath) {
+                this.updateCover(book.id, coverPath);
+              }
+            });
+          }
+        } catch {
+          try {
+            const docData = await Filesystem.readFile({
+              path: book.file_path,
+              directory: Directory.Documents,
+            });
+            if (docData.data) {
+              queue.enqueue(book.id, book.format, docData.data).then((coverPath) => {
+                if (coverPath) {
+                  this.updateCover(book.id, coverPath);
+                }
+              });
+            }
+          } catch {}
+        }
       }
     },
     async addBook(book: BookRecord): Promise<void> {
@@ -62,6 +104,15 @@ export const useLibraryStore = defineStore('library', {
         target.locator = locator;
         target.progress_percentage = percentage;
         target.last_read_at = Date.now();
+        target.updated_at = Date.now();
+      }
+    },
+    async updateCover(bookId: string, coverPath: string | null): Promise<void> {
+      const sqlite = SqliteService.getInstance();
+      await sqlite.updateCoverPath(bookId, coverPath);
+      const target = this.books.find((b) => b.id === bookId);
+      if (target) {
+        target.cover_path = coverPath;
         target.updated_at = Date.now();
       }
     },
