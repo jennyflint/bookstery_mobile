@@ -23,12 +23,13 @@ Use this skill when developing, refactoring, or styling Vue components in Bookst
      ```
    - Never declare complex prop interfaces inside the `.vue` file; import them from `app/types/`.
 
-2. **Component Placement**:
-   - Place components in the designated domain folder:
+2. **Component & Asset Placement (Nuxt 4 `app/` Directory)**:
+   - Place components exclusively in `app/components/`, NEVER create `components/` in the project root:
      - `app/components/ui/` — Buttons, inputs, modals, switches, badges.
      - `app/components/layout/` — Headers, footers, navigation bars, bottom tab bar.
      - `app/components/reader/` — Reader controls, page viewer, TOC drawer, font size controls.
      - `app/components/library/` — Book cards, book shelves, filter drawers, sort menus.
+   - Place all styles and static assets exclusively in `app/assets/` (e.g. `app/assets/css/tailwind.css`), NEVER in root `assets/`.
 
 3. **Tailwind CSS Styling**:
    - Style with Tailwind CSS utility classes directly.

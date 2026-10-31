@@ -10,7 +10,11 @@ Use this skill when implementing data-fetching, API clients, JSON serialization/
 
 ## Core Directives
 
-1. **Separation of Layers**:
+1. **Strict `app/` Directory Placement (Nuxt 4 Encapsulation)**:
+   - ALL stores, composables, services, and plugins MUST be created exclusively inside `app/`.
+   - Creating `stores/`, `composables/`, `services/`, or `plugins/` in the project root directory is strictly forbidden.
+
+2. **Separation of Layers**:
    - **Composables (`app/composables/`)**:
      - Handle stateful Vue logic, Nuxt data hooks (`useAsyncData`, `useFetch`), and reactive wrappers around services.
    - **Services (`app/services/`)**:
@@ -18,8 +22,10 @@ Use this skill when implementing data-fetching, API clients, JSON serialization/
      - Never import Vue-specific reactivity (`ref`, `reactive`) inside services.
    - **Stores (`app/stores/`)**:
      - Handle global client state (e.g. current reader settings, user preferences, active book state) using Pinia setup syntax (`defineStore('name', () => { ... })`).
+   - **Plugins (`app/plugins/`)**:
+     - Handle Nuxt runtime plugins (e.g. Capacitor lifecycle hooks, global event buses).
 
-2. **Strict Typing on All Payloads**:
+3. **Strict Typing on All Payloads**:
    - Every JSON payload, request body, and response MUST map to an explicit interface imported from `app/types/`.
    - Never use `any`. Use `unknown` with runtime type guards (or `zod`/type predicates) if validating unknown external JSON.
    - Example:
@@ -33,9 +39,9 @@ Use this skill when implementing data-fetching, API clients, JSON serialization/
      };
      ```
 
-3. **No Direct Component Leakage**:
+4. **No Direct Component Leakage**:
    - Ensure components only receive reactive state or call clean composable methods.
    - Raw JSON payloads and HTTP endpoint URLs must never be exposed directly in UI components.
 
-4. **Comments in English**:
+5. **Comments in English**:
    - All JSDoc and inline comments explaining complex business logic MUST be written in English.

@@ -8,6 +8,19 @@ Domain: E-book reader and management application supporting multiple book format
 
 ## 1. Global Rules (Mandatory)
 
+### Strict Nuxt 4 `app/` Directory Placement (CRITICAL)
+- Bookstery Mobile uses Nuxt 4 directory architecture where all application code belongs strictly under `app/`.
+- NEVER create application files or directories in the project root.
+- Specifically:
+  - `stores` -> `app/stores/` (NEVER root `stores/`)
+  - `components` -> `app/components/` (NEVER root `components/`)
+  - `services` -> `app/services/` (NEVER root `services/`)
+  - `plugins` -> `app/plugins/` (NEVER root `plugins/`)
+  - `composables` -> `app/composables/` (NEVER root `composables/`)
+  - `assets` -> `app/assets/` (NEVER root `assets/`)
+  - `pages` -> `app/pages/`, `layouts` -> `app/layouts/`, `types` -> `app/types/`, `middleware` -> `app/middleware/`.
+- The root directory (`/var/www/bookstery_mobile/`) is reserved strictly for configuration files (`nuxt.config.ts`, `package.json`, etc.), documentation, `i18n/locales/`, `docker/`, and `tests/`.
+
 ### English-Only Comments & Documentation
 - All inline code comments, JSDoc blocks, commits, and technical documentation MUST be written strictly in English.
 - NEVER leave comments in Ukrainian, Russian, or any other non-English language inside source code files (`.ts`, `.vue`, `.js`, etc.).
@@ -52,6 +65,7 @@ Domain: E-book reader and management application supporting multiple book format
 │   │   ├── library/
 │   │   └── reader/
 │   ├── composables/       # Reactive state & Nuxt data hooks
+│   ├── plugins/           # Nuxt client/server plugins
 │   ├── services/          # Pure TS business logic, parsers & API
 │   │   └── format/        # Book format handlers (pdf, epub, fb2)
 │   ├── stores/            # Pinia stores

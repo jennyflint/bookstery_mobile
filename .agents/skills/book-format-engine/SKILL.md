@@ -10,7 +10,7 @@ Use this skill when developing or maintaining e-book file parsing, text layer ex
 
 ## Supported Formats & Architecture
 
-All format-specific parsers must reside in `app/services/engine/` and follow the Strategy/Adapter pattern.
+All format-specific parsers must reside in `app/services/engine/` (never in root `services/`) and follow the Strategy/Adapter pattern.
 
 1. **Contracts (`app/types/format.ts`)**:
    - Every format parser must implement unified interfaces:
