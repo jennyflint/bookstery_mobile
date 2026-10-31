@@ -1,0 +1,26 @@
+# Nuxt
+.output
+.data
+.nuxt
+.nitro
+.cache
+dist
+
+# Node
+node_modules
+*.log
+
+# Capacitor native build artifacts
+android/app/build
+ios/App/build
+ios/App/Pods
+
+# Misc
+.DS_Store
+.fleet
+.idea
+
+# Local env files
+.env
+.env.*
+!.env.example

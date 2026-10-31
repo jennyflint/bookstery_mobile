@@ -1,0 +1,42 @@
+name: bookstery-mobile
+
+services:
+  # Dev server with HMR: docker compose up
+  app:
+    build:
+      context: .
+      target: dev
+    image: bookstery-mobile:dev
+    container_name: bookstery-mobile-dev
+    ports:
+      - '3000:3000' # Nuxt
+      - '24678:24678' # Vite HMR websocket
+    environment:
+      NODE_ENV: development
+      NUXT_HOST: 0.0.0.0
+      NUXT_PORT: 3000
+      CHOKIDAR_USEPOLLING: 'true'
+      WATCHPACK_POLLING: 'true'
+    volumes:
+      - .:/app
+      - node_modules:/app/node_modules
+      - nuxt_cache:/app/.nuxt
+    stdin_open: true
+    tty: true
+    restart: unless-stopped
+
+  # Production static build behind nginx: docker compose --profile prod up --build web
+  web:
+    profiles: ['prod']
+    build:
+      context: .
+      target: prod
+    image: bookstery-mobile:prod
+    container_name: bookstery-mobile-web
+    ports:
+      - '8080:80'
+    restart: unless-stopped
+
+volumes:
+  node_modules:
+  nuxt_cache:

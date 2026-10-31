@@ -1,0 +1,12 @@
+.nuxt
+.output
+.data
+.cache
+dist
+node_modules
+android
+ios
+coverage
+package-lock.json
+pnpm-lock.yaml
+yarn.lock
