@@ -6,7 +6,12 @@ import {
   mockGoogleAuth,
   mockKeepAwake,
   mockNetwork,
+  mockFilePicker,
 } from './mocks/capacitor-plugins';
+
+vi.mock('@capawesome/capacitor-file-picker', () => ({
+  FilePicker: mockFilePicker,
+}));
 
 vi.mock('@capacitor/app', () => ({
   App: mockApp,

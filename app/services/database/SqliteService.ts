@@ -4,7 +4,7 @@ import {
   type SQLiteDBConnection,
 } from '@capacitor-community/sqlite';
 import { Capacitor } from '@capacitor/core';
-import { SCHEMA_V1, SCHEMA_HIGHLIGHTS } from './migrations';
+import { SCHEMA_V1, SCHEMA_HIGHLIGHTS, SCHEMA_SCAN_DIRECTORIES } from './migrations';
 import type {
   BookRecord,
   DictionaryItem,
@@ -22,6 +22,8 @@ const STORAGE_KEYS = {
   COLLECTIONS: 'bookstery_web_collections',
   BOOK_COLLECTIONS: 'bookstery_web_book_collections',
   HIGHLIGHTS: 'bookstery_web_highlights',
+  SCAN_DIRECTORIES: 'bookstery_web_scan_directories',
+  SCANNER_SETTINGS: 'bookstery_web_scanner_settings',
 };
 
 function readStorage<T>(key: string, defaultValue: T): T {
@@ -132,6 +134,18 @@ export class SqliteService {
           CREATE INDEX IF NOT EXISTS idx_book_collection_book ON book_collection(book_id);
           CREATE INDEX IF NOT EXISTS idx_book_collection_collection ON book_collection(collection_id);
         `);
+      } catch {}
+
+      try {
+        await this.db.execute(SCHEMA_SCAN_DIRECTORIES);
+      } catch {}
+
+      try {
+        await this.db.execute('ALTER TABLE books ADD COLUMN file_size INTEGER DEFAULT NULL;');
+      } catch {}
+
+      try {
+        await this.db.execute('ALTER TABLE books ADD COLUMN file_hash TEXT DEFAULT NULL;');
       } catch {}
 
       this.isInitialized = true;
@@ -323,6 +337,35 @@ export class SqliteService {
     const book = books.find((b) => b.id === bookId);
     if (book) {
       book.cover_path = coverPath;
+      book.updated_at = now;
+      writeStorage(STORAGE_KEYS.BOOKS, books);
+    }
+  }
+
+  async updateFilePathAndSize(
+    bookId: string,
+    filePath: string,
+    fileSize?: number,
+  ): Promise<void> {
+    const now = Date.now();
+    if (this.isNative && this.db) {
+      try {
+        const query = `
+          UPDATE books
+          SET file_path = ?, file_size = COALESCE(?, file_size), updated_at = ?
+          WHERE id = ?;
+        `;
+        await this.db.run(query, [filePath, fileSize ?? null, now, bookId]);
+        return;
+      } catch {}
+    }
+    const books = readStorage<BookRecord[]>(STORAGE_KEYS.BOOKS, []);
+    const book = books.find((b) => b.id === bookId);
+    if (book) {
+      book.file_path = filePath;
+      if (fileSize !== undefined) {
+        book.file_size = fileSize;
+      }
       book.updated_at = now;
       writeStorage(STORAGE_KEYS.BOOKS, books);
     }

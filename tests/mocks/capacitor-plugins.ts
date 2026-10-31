@@ -79,6 +79,15 @@ export const mockShare = {
 
 export const Share = mockShare;
 
+export const mockFilePicker = {
+  pickDirectory: vi.fn().mockResolvedValue({
+    path: 'content://com.android.externalstorage.documents/tree/primary%3ABooks',
+  }),
+  pickFiles: vi.fn().mockResolvedValue({ files: [] }),
+};
+
+export const FilePicker = mockFilePicker;
+
 export const mockSqliteDatabase = {
   open: vi.fn().mockResolvedValue(undefined),
   close: vi.fn().mockResolvedValue(undefined),

@@ -99,3 +99,27 @@ export const MIGRATION_ADD_PINNED_COLUMNS = [
   'ALTER TABLE books ADD COLUMN pinned_at INTEGER DEFAULT NULL;',
   'CREATE INDEX IF NOT EXISTS idx_books_pinned ON books(is_pinned DESC, pinned_at DESC);',
 ];
+
+export const SCHEMA_SCAN_DIRECTORIES = `
+CREATE TABLE IF NOT EXISTS scan_directories (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  uri TEXT NOT NULL UNIQUE,
+  display_name TEXT NOT NULL,
+  is_active INTEGER NOT NULL DEFAULT 1 CHECK (is_active IN (0, 1)),
+  last_scanned_at INTEGER DEFAULT NULL,
+  created_at INTEGER NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_scan_directories_active ON scan_directories(is_active);
+
+CREATE TABLE IF NOT EXISTS scanner_settings (
+  id INTEGER PRIMARY KEY CHECK (id = 1),
+  auto_scan_on_startup INTEGER NOT NULL DEFAULT 1 CHECK (auto_scan_on_startup IN (0, 1)),
+  scan_subdirectories INTEGER NOT NULL DEFAULT 1 CHECK (scan_subdirectories IN (0, 1)),
+  updated_at INTEGER NOT NULL
+);
+
+INSERT OR IGNORE INTO scanner_settings (id, auto_scan_on_startup, scan_subdirectories, updated_at)
+VALUES (1, 1, 1, 0);
+`;
+

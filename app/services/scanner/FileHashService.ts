@@ -1,10 +1,14 @@
 export class FileHashService {
-  static async calculateSha256(data: ArrayBuffer | Uint8Array | string): Promise<string> {
+  static async calculateSha256(
+    data: ArrayBuffer | Uint8Array | string | Blob,
+  ): Promise<string> {
     let buffer: ArrayBuffer;
 
     if (typeof data === 'string') {
       const encoder = new TextEncoder();
       buffer = encoder.encode(data).buffer as ArrayBuffer;
+    } else if (typeof Blob !== 'undefined' && data instanceof Blob) {
+      buffer = await data.arrayBuffer();
     } else if (data instanceof Uint8Array) {
       buffer = data.buffer as ArrayBuffer;
     } else {

@@ -12,6 +12,7 @@ import AppLogo from '../components/ui/AppLogo.vue';
 import LanguageSwitcher from '../components/common/LanguageSwitcher.vue';
 import GoogleSignInButton from '../components/auth/GoogleSignInButton.vue';
 import SyncStatusBadge from '../components/common/SyncStatusBadge.vue';
+import ScanDirectoriesSettings from '../components/settings/ScanDirectoriesSettings.vue';
 import type { ReaderTheme } from '../types';
 
 const { t } = useI18n();
@@ -479,6 +480,8 @@ const handleResetAllToDefault = () => {
           />
         </div>
       </section>
+
+      <ScanDirectoriesSettings />
 
       <section class="app-card bg-white rounded-3xl p-5 border border-zinc-200 shadow-sm flex items-center justify-between">
         <div>

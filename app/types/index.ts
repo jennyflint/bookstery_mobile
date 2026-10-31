@@ -3,6 +3,7 @@ export * from './sync';
 export * from './collection';
 export * from './highlight';
 export * from './export';
+export * from './scanner';
 
 export type BookFormat = 'pdf' | 'epub' | 'fb2';
 
@@ -22,6 +23,8 @@ export interface BookRecord {
   updated_at: number;
   is_pinned?: number;
   pinned_at?: number | null;
+  file_size?: number;
+  file_hash?: string;
 }
 
 export interface DictionaryItem {

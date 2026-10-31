@@ -29,6 +29,11 @@ export default defineNuxtConfig({
   tailwindcss: {
     cssPath: '~/assets/css/tailwind.css',
   },
+  vite: {
+    optimizeDeps: {
+      include: ['@capawesome/capacitor-file-picker'],
+    },
+  },
   postcss: {
     plugins: {
       'tailwindcss/nesting': false,
