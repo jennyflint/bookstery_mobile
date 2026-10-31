@@ -1,5 +1,6 @@
 export * from './auth';
 export * from './sync';
+export * from './folder';
 
 export type BookFormat = 'pdf' | 'epub' | 'fb2';
 

@@ -9,6 +9,8 @@ const STORAGE_KEYS = {
   DICTIONARY: 'bookstery_web_dictionary',
   SESSION: 'bookstery_web_session',
   DRIVE_FOLDER_ID: 'bookstery_web_drive_folder_id',
+  FOLDERS: 'bookstery_web_folders',
+  BOOK_FOLDERS: 'bookstery_web_book_folders',
 };
 
 function readStorage<T>(key: string, defaultValue: T): T {
@@ -77,6 +79,7 @@ export class SqliteService {
       }
 
       await this.db.open();
+      await this.db.execute('PRAGMA foreign_keys = ON;');
       await this.db.execute(SCHEMA_V1);
 
       try {
@@ -263,6 +266,11 @@ export class SqliteService {
     const books = readStorage<BookRecord[]>(STORAGE_KEYS.BOOKS, []);
     const filtered = books.filter((b) => b.id !== id);
     writeStorage(STORAGE_KEYS.BOOKS, filtered);
+    const bookFolders = readStorage<{ book_id: string; folder_id: number }[]>(STORAGE_KEYS.BOOK_FOLDERS, []);
+    writeStorage(
+      STORAGE_KEYS.BOOK_FOLDERS,
+      bookFolders.filter((bf) => bf.book_id !== id),
+    );
   }
 
   async getPendingSyncQueue(): Promise<SyncQueueItem[]> {
@@ -484,6 +492,34 @@ export class SqliteService {
     }
     writeStorage(STORAGE_KEYS.SESSION, null);
     writeStorage(STORAGE_KEYS.DRIVE_FOLDER_ID, null);
+  }
+
+  getDb(): SQLiteDBConnection | null {
+    return this.db;
+  }
+
+  isNativePlatform(): boolean {
+    return this.isNative && this.db !== null;
+  }
+
+  async executeSql(sql: string): Promise<void> {
+    if (this.isNative && this.db) {
+      await this.db.execute(sql);
+    }
+  }
+
+  async querySql<T>(sql: string, params?: unknown[]): Promise<T[]> {
+    if (this.isNative && this.db) {
+      const result = await this.db.query(sql, params);
+      return (result.values as T[]) || [];
+    }
+    return [];
+  }
+
+  async runSql(sql: string, params?: unknown[]): Promise<void> {
+    if (this.isNative && this.db) {
+      await this.db.run(sql, params);
+    }
   }
 
   async close(): Promise<void> {

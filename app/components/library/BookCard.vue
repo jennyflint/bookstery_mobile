@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref, computed } from 'vue';
 import type { BookRecord } from '../../types';
+import { useLongPress } from '../../composables/useLongPress';
 
 const props = defineProps<{
   book: BookRecord;
@@ -9,9 +10,32 @@ const props = defineProps<{
 const emit = defineEmits<{
   (e: 'select', book: BookRecord): void;
   (e: 'delete', id: string): void;
+  (e: 'open-menu', book: BookRecord): void;
 }>();
 
 const { t } = useI18n();
+
+const {
+  isTriggered: isLongPressed,
+  onTouchStart,
+  onTouchMove,
+  onTouchEnd,
+  onTouchCancel,
+  onPointerDown,
+  onPointerMove,
+  onPointerUp,
+  onPointerCancel,
+  onContextMenu,
+} = useLongPress(() => {
+  emit('open-menu', props.book);
+});
+
+const handleClick = (): void => {
+  if (isLongPressed.value) {
+    return;
+  }
+  emit('select', props.book);
+};
 
 const DEFAULT_COVER = '/img/covers/default.webp';
 const failedSources = ref<Set<string>>(new Set());
@@ -57,12 +81,21 @@ const formatBadgeClass = (format: string) => {
 <template>
   <div
     data-testid="book-card"
-    class="group relative flex flex-col justify-between app-card bg-white rounded-2xl border border-zinc-200 p-4 shadow-sm hover:shadow-md transition-all cursor-pointer active:scale-[0.98]"
-    @click="emit('select', props.book)"
+    class="app-card group relative flex cursor-pointer select-none flex-col justify-between rounded-2xl border border-zinc-200 bg-white p-4 shadow-sm transition-all hover:shadow-md active:scale-[0.98]"
+    @click="handleClick"
+    @touchstart="onTouchStart"
+    @touchmove="onTouchMove"
+    @touchend="onTouchEnd"
+    @touchcancel="onTouchCancel"
+    @pointerdown="onPointerDown"
+    @pointermove="onPointerMove"
+    @pointerup="onPointerUp"
+    @pointercancel="onPointerCancel"
+    @contextmenu="onContextMenu"
   >
     <div class="flex items-start justify-between gap-2">
       <span
-        class="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-bold uppercase tracking-wider border"
+        class="inline-flex items-center rounded border px-2 py-0.5 text-[11px] font-bold uppercase tracking-wider"
         :class="formatBadgeClass(props.book.format)"
       >
         {{ props.book.format }}
@@ -70,30 +103,47 @@ const formatBadgeClass = (format: string) => {
 
       <button
         type="button"
-        class="opacity-0 group-hover:opacity-100 focus:opacity-100 p-1.5 rounded-lg text-zinc-400 hover:text-rose-600 hover:bg-rose-50 transition-all"
+        class="rounded-lg p-1.5 text-zinc-400 opacity-0 transition-all hover:bg-rose-50 hover:text-rose-600 focus:opacity-100 group-hover:opacity-100"
         :title="t('library.deleteBook')"
         @click.stop="emit('delete', props.book.id)"
       >
-        <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+        <svg
+          class="h-4 w-4"
+          fill="none"
+          viewBox="0 0 24 24"
+          stroke="currentColor"
+        >
+          <path
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            stroke-width="2"
+            d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
+          />
         </svg>
       </button>
     </div>
 
-    <div class="w-full h-44 my-3 rounded-xl overflow-hidden bg-zinc-100 flex items-center justify-center border border-zinc-100 shadow-inner">
+    <div
+      class="my-3 flex h-44 w-full items-center justify-center overflow-hidden rounded-xl border border-zinc-100 bg-zinc-100 shadow-inner"
+    >
       <img
         :src="coverSrc"
         :alt="props.book.title"
-        class="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
+        class="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105"
         @error="handleImageError"
       />
     </div>
 
     <div class="my-4">
-      <h3 class="font-bold text-zinc-900 text-base line-clamp-2 leading-tight group-hover:text-indigo-600 transition-colors">
+      <h3
+        class="line-clamp-2 text-base font-bold leading-tight text-zinc-900 transition-colors group-hover:text-indigo-600"
+      >
         {{ props.book.title }}
       </h3>
-      <p v-if="props.book.author" class="text-xs text-zinc-500 line-clamp-1 mt-1 font-medium">
+      <p
+        v-if="props.book.author"
+        class="mt-1 line-clamp-1 text-xs font-medium text-zinc-500"
+      >
         {{ props.book.author }}
       </p>
     </div>
@@ -104,9 +154,9 @@ const formatBadgeClass = (format: string) => {
         <span>{{ Math.round(props.book.progress_percentage) }}%</span>
       </div>
 
-      <div class="w-full bg-zinc-100 rounded-full h-1.5 overflow-hidden">
+      <div class="h-1.5 w-full overflow-hidden rounded-full bg-zinc-100">
         <div
-          class="bg-indigo-600 h-1.5 rounded-full transition-all duration-300"
+          class="h-1.5 rounded-full bg-indigo-600 transition-all duration-300"
           :style="{ width: `${Math.min(Math.max(props.book.progress_percentage, 0), 100)}%` }"
         />
       </div>

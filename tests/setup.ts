@@ -93,6 +93,11 @@ if (typeof window !== 'undefined') {
         this.callback = callback;
       }
     }
-    window.IntersectionObserver = MockIntersectionObserver as unknown as typeof IntersectionObserver;
+    window.IntersectionObserver =
+      MockIntersectionObserver as unknown as typeof IntersectionObserver;
   }
+
+  (globalThis as unknown as { useI18n: () => { t: (k: string) => string } }).useI18n = () => ({
+    t: (key: string) => key,
+  });
 }

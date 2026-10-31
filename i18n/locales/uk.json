@@ -6,7 +6,34 @@
   "nav": {
     "library": "Бібліотека",
     "dictionary": "Словник",
-    "settings": "Налаштування"
+    "settings": "Налаштування",
+    "menu": "Меню"
+  },
+  "folders": {
+    "libraryCollections": "Бібліотека та колекції",
+    "allBooks": "Усі книги",
+    "collectionsTitle": "Папки та колекції",
+    "createFolder": "Створити папку",
+    "newFolderPlaceholder": "Назва папки...",
+    "create": "Створити",
+    "cancel": "Скасувати",
+    "save": "Зберегти",
+    "renameFolder": "Перейменувати папку",
+    "deleteFolder": "Видалити папку",
+    "uncategorized": "Без папки",
+    "manageFolders": "Керування папками",
+    "manageFoldersAction": "Керувати папками",
+    "selectFolders": "Призначити до колекцій",
+    "noFoldersYet": "Ще немає створених папок. Створіть нижче.",
+    "createNew": "+ Нова папка",
+    "createBtn": "Створити",
+    "markAsFinished": "Позначити як прочитане",
+    "markAsUnread": "Позначити як непрочитане",
+    "removeFromCurrentFolder": "Видалити з цієї папки",
+    "deleteTitle": "Видалити папку?",
+    "deleteReassurance": "Видалення цієї папки не видалить книги всередині неї. Вони залишаться у вашій бібліотеці.",
+    "deleteConfirm": "Видалити папку",
+    "deleteCancel": "Скасувати"
   },
   "library": {
     "title": "Мої книги",

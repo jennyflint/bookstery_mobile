@@ -6,7 +6,34 @@
   "nav": {
     "library": "Library",
     "dictionary": "Dictionary",
-    "settings": "Settings"
+    "settings": "Settings",
+    "menu": "Menu"
+  },
+  "folders": {
+    "libraryCollections": "Library & Collections",
+    "allBooks": "All Books",
+    "collectionsTitle": "Folders / Collections",
+    "createFolder": "Create Folder",
+    "newFolderPlaceholder": "Folder name...",
+    "create": "Create",
+    "cancel": "Cancel",
+    "save": "Save",
+    "renameFolder": "Rename folder",
+    "deleteFolder": "Delete folder",
+    "uncategorized": "Uncategorized",
+    "manageFolders": "Manage Folders",
+    "manageFoldersAction": "Manage Folders",
+    "selectFolders": "Assign to Collections",
+    "noFoldersYet": "No folders created yet. Create one below.",
+    "createNew": "+ New Folder",
+    "createBtn": "Create",
+    "markAsFinished": "Mark as Finished",
+    "markAsUnread": "Mark as Unread",
+    "removeFromCurrentFolder": "Remove from Current Folder",
+    "deleteTitle": "Delete Folder?",
+    "deleteReassurance": "Deleting this folder will not delete the books inside it. They will remain in your library.",
+    "deleteConfirm": "Delete Folder",
+    "deleteCancel": "Cancel"
   },
   "library": {
     "title": "My Books",

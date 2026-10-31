@@ -43,4 +43,20 @@ CREATE TABLE IF NOT EXISTS user_session (
 CREATE INDEX IF NOT EXISTS idx_books_updated_at ON books(updated_at);
 CREATE INDEX IF NOT EXISTS idx_sync_queue_status ON sync_queue(status);
 CREATE INDEX IF NOT EXISTS idx_dictionary_created ON dictionary_history(created_at);
+
+CREATE TABLE IF NOT EXISTS folders (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  name TEXT NOT NULL UNIQUE,
+  created_at INTEGER NOT NULL,
+  updated_at INTEGER NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS book_folder (
+  book_id TEXT NOT NULL REFERENCES books(id) ON DELETE CASCADE,
+  folder_id INTEGER NOT NULL REFERENCES folders(id) ON DELETE CASCADE,
+  PRIMARY KEY (book_id, folder_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_book_folder_book ON book_folder(book_id);
+CREATE INDEX IF NOT EXISTS idx_book_folder_folder ON book_folder(folder_id);
 `;
