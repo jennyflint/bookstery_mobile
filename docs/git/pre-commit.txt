@@ -1,0 +1,187 @@
+#!/bin/sh
+# -----------------------------------------------------------------------------
+# Git pre-commit hook. Husky runs it via .husky/pre-commit.
+#
+# Checks, from fastest to slowest:
+#   1. Cyrillic characters  - only in lines added in this commit
+#   2. Prettier             - staged files
+#   3. ESLint               - staged JS / TS / Vue files
+#   4. TypeScript           - whole project (nuxt typecheck)
+#
+# Tools run inside the running docker compose service (default: "app").
+# If the service is not running, local node_modules are used instead.
+#
+# Skip all checks once:   git commit --no-verify
+# Skip a single check:    SKIP_CYRILLIC=1 | SKIP_PRETTIER=1 | SKIP_LINT=1 | SKIP_TYPECHECK=1
+#                         e.g. SKIP_TYPECHECK=1 git commit -m "wip"
+# Use another service:    COMPOSE_SERVICE=frontend git commit ...
+# -----------------------------------------------------------------------------
+
+set -u
+set -f # no globbing: file names are passed as-is
+
+# Split lists on newlines only, so file names with spaces stay intact
+IFS='
+'
+
+ROOT=$(git rev-parse --show-toplevel) || exit 1
+cd "$ROOT" || exit 1
+
+COMPOSE_SERVICE=${COMPOSE_SERVICE:-app}
+SKIP_CYRILLIC=${SKIP_CYRILLIC:-0}
+SKIP_PRETTIER=${SKIP_PRETTIER:-0}
+SKIP_LINT=${SKIP_LINT:-0}
+SKIP_TYPECHECK=${SKIP_TYPECHECK:-0}
+
+# Paths where Cyrillic is allowed (git pathspecs, one per line)
+CYRILLIC_ALLOWED='*.json
+*.md
+i18n/**'
+
+FAILED=''
+
+# --- output helpers -----------------------------------------------------------
+if [ -t 1 ]; then
+  RED=$(printf '\033[31m'); GREEN=$(printf '\033[32m'); YELLOW=$(printf '\033[33m')
+  BOLD=$(printf '\033[1m'); RESET=$(printf '\033[0m')
+else
+  RED=''; GREEN=''; YELLOW=''; BOLD=''; RESET=''
+fi
+
+step() { printf '\n%s%s%s\n' "$BOLD" "$1" "$RESET"; }
+ok()   { printf '%s✅ %s%s\n' "$GREEN" "$1" "$RESET"; }
+skip() { printf '%s⏭️  %s%s\n' "$YELLOW" "$1" "$RESET"; }
+fail() {
+  printf '%s❌ %s%s\n' "$RED" "$1" "$RESET"
+  FAILED="${FAILED}
+  - $1"
+}
+
+# --- staged files -------------------------------------------------------------
+STAGED_FILES=$(git diff --cached --name-only --diff-filter=ACMR)
+
+if [ -z "$STAGED_FILES" ]; then
+  ok 'Nothing staged, skipping checks.'
+  exit 0
+fi
+
+CODE_FILES=$(printf '%s\n' "$STAGED_FILES" | grep -E '\.(js|mjs|cjs|ts|mts|cts|vue)$' || true)
+
+# --- 1. Cyrillic characters (no Node needed) -----------------------------------
+step '🔍 Checking for Cyrillic characters in added lines...'
+
+if [ "$SKIP_CYRILLIC" = '1' ]; then
+  skip 'Skipped (SKIP_CYRILLIC=1)'
+else
+  # UTF-8 Cyrillic (U+0400..U+04FF) = lead byte 0xD0-0xD3 + continuation byte.
+  # Byte matching under LC_ALL=C works the same in GNU, BSD and BusyBox grep.
+  CYRILLIC_RE=$(printf '[\320-\323][\200-\277]')
+
+  EXCLUDES=''
+  for p in $CYRILLIC_ALLOWED; do
+    EXCLUDES="${EXCLUDES}
+:(exclude)$p"
+  done
+
+  # shellcheck disable=SC2086 # intentional splitting on newlines
+  MATCHES=$(
+    git diff --cached -U0 --no-color --no-ext-diff --diff-filter=ACMR \
+      --src-prefix=a/ --dst-prefix=b/ -- . $EXCLUDES |
+      LC_ALL=C awk '
+        /^\+\+\+ / { file = substr($0, 7); next }
+        /^@@ /     { split($3, h, ","); line = substr(h[1], 2) + 0; next }
+        /^\+/      { print file ":" line ": " substr($0, 2); line++ }
+      ' |
+      LC_ALL=C grep -E "$CYRILLIC_RE" || true
+  )
+
+  if [ -n "$MATCHES" ]; then
+    printf '%s\n' 'Please use English only in code. Found in:'
+    printf '%s\n' '---------------------------------------------------'
+    printf '%s\n' "$MATCHES"
+    printf '%s\n' '---------------------------------------------------'
+    printf '%s\n' 'Move user-facing texts to i18n/locales/*.json'
+    fail 'Cyrillic characters found'
+  else
+    ok 'No Cyrillic characters'
+  fi
+fi
+
+# --- choose where to run Node tools -------------------------------------------
+RUNNER=''
+if command -v docker >/dev/null 2>&1 &&
+  [ -n "$(docker compose ps --status running -q "$COMPOSE_SERVICE" 2>/dev/null)" ]; then
+  RUNNER='docker'
+elif [ -x node_modules/.bin/eslint ]; then
+  RUNNER='local'
+fi
+
+run() {
+  if [ "$RUNNER" = 'docker' ]; then
+    # -T: no TTY, so the hook also works from IDE / GUI git clients
+    docker compose exec -T "$COMPOSE_SERVICE" "$@"
+  else
+    "$@"
+  fi
+}
+
+if [ -z "$RUNNER" ]; then
+  printf '\n%s%s%s\n' "$RED" "Cannot run Node tools: docker compose service \"$COMPOSE_SERVICE\" is not running and node_modules are missing." "$RESET"
+  printf '%s\n' 'Start the container:  docker compose up -d'
+  printf '%s\n' 'or install locally:   npm install'
+  printf '%s\n' 'or skip once:         git commit --no-verify'
+  exit 1
+fi
+
+printf '\n🐳 Running tools via: %s\n' "$RUNNER"
+
+# --- 2. Prettier ----------------------------------------------------------------
+step '🎨 Checking formatting (Prettier)...'
+
+if [ "$SKIP_PRETTIER" = '1' ]; then
+  skip 'Skipped (SKIP_PRETTIER=1)'
+# shellcheck disable=SC2086
+elif run npx --no -- prettier --check --ignore-unknown --no-error-on-unmatched-pattern -- $STAGED_FILES; then
+  ok 'Formatting is correct'
+else
+  printf '%s\n' 'Fix with: npm run format'
+  fail 'Prettier found formatting issues'
+fi
+
+# --- 3. ESLint ------------------------------------------------------------------
+step '🧹 Running linter (ESLint)...'
+
+if [ "$SKIP_LINT" = '1' ]; then
+  skip 'Skipped (SKIP_LINT=1)'
+elif [ -z "$CODE_FILES" ]; then
+  skip 'No JS / TS / Vue files staged'
+# shellcheck disable=SC2086
+elif run npx --no -- eslint --max-warnings=0 --no-warn-ignored -- $CODE_FILES; then
+  ok 'ESLint passed'
+else
+  printf '%s\n' 'Auto-fix what is possible with: npm run lint:fix'
+  fail 'ESLint found issues'
+fi
+
+# --- 4. TypeScript --------------------------------------------------------------
+step '🔎 Running type check (nuxt typecheck)...'
+
+if [ "$SKIP_TYPECHECK" = '1' ]; then
+  skip 'Skipped (SKIP_TYPECHECK=1)'
+elif [ -z "$CODE_FILES" ]; then
+  skip 'No JS / TS / Vue files staged'
+elif run npx --no -- nuxt typecheck; then
+  ok 'TypeScript passed'
+else
+  fail 'TypeScript found issues'
+fi
+
+# --- summary --------------------------------------------------------------------
+if [ -n "$FAILED" ]; then
+  printf '\n%s🚫 Commit blocked:%s%s\n' "$RED" "$FAILED" "$RESET"
+  printf '%s\n' 'Bypass (not recommended): git commit --no-verify'
+  exit 1
+fi
+
+printf '\n%s✅ All clear. Proceeding to commit...%s\n' "$GREEN" "$RESET"
+exit 0

@@ -1,0 +1,2 @@
+# The hook source lives in docs/git/pre-commit.txt
+exec sh "$(git rev-parse --show-toplevel)/docs/git/pre-commit.txt" "$@"

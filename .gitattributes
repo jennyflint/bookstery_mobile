@@ -1,0 +1,15 @@
+# Normalize line endings: shell scripts / git hooks must use LF
+* text=auto eol=lf
+
+.husky/* text eol=lf
+docs/git/pre-commit.txt text eol=lf
+*.sh text eol=lf
+
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.webp binary
+*.ico binary
+*.woff binary
+*.woff2 binary
