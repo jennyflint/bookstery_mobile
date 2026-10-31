@@ -50,7 +50,7 @@ const tooltipStyle = computed(() => {
   if (!activeCoordinates.value) {
     return { display: 'none' };
   }
-  const x = Math.max(16, Math.min(activeCoordinates.value.x, window.innerWidth - 160));
+  const x = Math.max(16, Math.min(activeCoordinates.value.x, window.innerWidth - 16));
   const y = Math.max(16, activeCoordinates.value.y - 54);
 
   return {
@@ -196,7 +196,7 @@ const handleDismiss = () => {
 <template>
   <div
     v-if="isVisible"
-    class="fixed z-50 flex items-center gap-1.5 bg-zinc-900/95 text-white rounded-2xl px-3 py-2 shadow-2xl backdrop-blur-md border border-zinc-700/80 text-xs font-semibold animate-in fade-in zoom-in-95 duration-150 select-none"
+    class="fixed z-50 flex items-center gap-1.5 max-w-[96vw] overflow-x-auto scrollbar-none whitespace-nowrap bg-zinc-900/95 text-white rounded-2xl px-3 py-2 shadow-2xl backdrop-blur-md border border-zinc-700/80 text-xs font-semibold animate-in fade-in zoom-in-95 duration-150 select-none"
     :style="tooltipStyle"
   >
     <div class="flex items-center gap-1.5 pr-1 border-r border-zinc-700/80">
@@ -218,7 +218,7 @@ const handleDismiss = () => {
     <button
       type="button"
       data-testid="add-note-action"
-      class="flex items-center gap-1 px-2 py-1 rounded-lg hover:bg-zinc-800 active:scale-95 transition-all text-amber-300"
+      class="shrink-0 flex items-center gap-1 px-2 py-1 rounded-lg hover:bg-zinc-800 active:scale-95 transition-all text-amber-300"
       :title="highlightStore.selectedHighlight ? t('highlights.editNote') : t('highlights.addNote')"
       @click="handleAddNote"
     >
@@ -231,7 +231,7 @@ const handleDismiss = () => {
     <button
       type="button"
       data-testid="create-quote-card-action"
-      class="flex items-center gap-1 px-2 py-1 rounded-lg hover:bg-zinc-800 active:scale-95 transition-all text-emerald-300"
+      class="shrink-0 flex items-center gap-1 px-2 py-1 rounded-lg hover:bg-zinc-800 active:scale-95 transition-all text-emerald-300"
       :title="t('highlights.quoteCard')"
       @click="handleQuoteCard"
     >
@@ -244,7 +244,7 @@ const handleDismiss = () => {
     <button
       type="button"
       data-testid="copy-text-action"
-      class="p-1 rounded-lg hover:bg-zinc-800 active:scale-95 transition-all text-zinc-300"
+      class="shrink-0 p-1 rounded-lg hover:bg-zinc-800 active:scale-95 transition-all text-zinc-300"
       :title="t('highlights.copyText')"
       @click="handleCopy"
     >
@@ -256,21 +256,22 @@ const handleDismiss = () => {
     <button
       type="button"
       data-testid="translate-action-btn"
-      class="p-1 rounded-lg hover:bg-zinc-800 active:scale-95 transition-all text-indigo-400"
+      class="shrink-0 flex items-center gap-1 px-2 py-1 rounded-lg hover:bg-zinc-800 active:scale-95 transition-all text-indigo-400"
       :title="t('translation.translate')"
       @click="handleTranslate"
     >
       <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 5h12M9 3v2m1.048 9.5A18.022 18.022 0 016.412 9m6.088 9h7M11 21l5-10 5 10M12.751 5C11.783 10.77 8.07 15.61 3 18.129" />
       </svg>
+      <span>{{ t('translation.translate') }}</span>
     </button>
 
-    <div class="h-3 w-px bg-zinc-700/80 mx-0.5" />
+    <div class="h-3 w-px bg-zinc-700/80 mx-0.5 shrink-0" />
 
     <button
       type="button"
       data-testid="ai-explain-action"
-      class="flex items-center gap-1 px-2 py-1 rounded-lg hover:bg-zinc-800 active:scale-95 transition-all text-[#C8E695]"
+      class="shrink-0 flex items-center gap-1 px-2 py-1 rounded-lg hover:bg-zinc-800 active:scale-95 transition-all text-[#C8E695]"
       :title="t('ai.explainSnippet')"
       @click="handleAiExplain"
     >
@@ -283,7 +284,7 @@ const handleDismiss = () => {
     <button
       type="button"
       data-testid="ai-character-action"
-      class="p-1 rounded-lg hover:bg-zinc-800 active:scale-95 transition-all text-sky-300"
+      class="shrink-0 p-1 rounded-lg hover:bg-zinc-800 active:scale-95 transition-all text-sky-300"
       :title="t('ai.whoIsCharacter')"
       @click="handleAiCharacter"
     >
@@ -295,7 +296,7 @@ const handleDismiss = () => {
     <button
       type="button"
       data-testid="ai-dictionary-action"
-      class="p-1 rounded-lg hover:bg-zinc-800 active:scale-95 transition-all text-teal-300"
+      class="shrink-0 p-1 rounded-lg hover:bg-zinc-800 active:scale-95 transition-all text-teal-300"
       :title="t('ai.contextualDictionary')"
       @click="handleAiDictionary"
     >
