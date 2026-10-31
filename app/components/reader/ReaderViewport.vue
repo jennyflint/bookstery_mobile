@@ -9,19 +9,7 @@ const emit = defineEmits<{
 const readerStore = useReaderStore();
 const containerRef = ref<HTMLElement | null>(null);
 
-const themeColors = computed(() => {
-  switch (readerStore.settings.theme) {
-    case 'sepia':
-      return { bg: '#f4ecd8', text: '#433422' };
-    case 'night':
-      return { bg: '#18181b', text: '#f4f4f5' };
-    case 'oled':
-      return { bg: '#000000', text: '#e4e4e7' };
-    case 'light':
-    default:
-      return { bg: '#ffffff', text: '#18181b' };
-  }
-});
+const themeColors = computed(() => readerStore.currentThemeColors);
 
 const viewportStyle = computed(() => ({
   backgroundColor: themeColors.value.bg,

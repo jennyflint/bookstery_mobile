@@ -8,6 +8,7 @@ export class EpubEngine extends BaseEngine {
   private rendition: Rendition | null = null;
   private currentCfi: string = '';
   private currentPercentage: number = 0;
+  private currentColors: { bg: string; text: string } | null = null;
 
   async init(container: HTMLElement, data: Uint8Array | ArrayBuffer | string): Promise<void> {
     this.container = container;
@@ -23,6 +24,10 @@ export class EpubEngine extends BaseEngine {
       flow: this.paginationMode === 'scroll' ? 'scrolled-doc' : 'paginated',
       spread: 'none',
     });
+
+    if (this.currentColors) {
+      this.applyTheme(this.currentColors);
+    }
 
     this.rendition.on('relocated', (location: Location) => {
       if (location && location.start) {
@@ -91,6 +96,9 @@ export class EpubEngine extends BaseEngine {
         flow: mode === 'scroll' ? 'scrolled-doc' : 'paginated',
         spread: 'none',
       });
+      if (this.currentColors) {
+        this.applyTheme(this.currentColors);
+      }
       this.rendition.on('relocated', (location: Location) => {
         if (location && location.start) {
           this.currentCfi = location.start.cfi;
@@ -106,6 +114,21 @@ export class EpubEngine extends BaseEngine {
       } else {
         await this.rendition.display();
       }
+    }
+  }
+
+  applyTheme(colors: { bg: string; text: string }): void {
+    this.currentColors = colors;
+    if (this.rendition) {
+      this.rendition.themes.default({
+        body: {
+          'background-color': `${colors.bg} !important`,
+          color: `${colors.text} !important`,
+        },
+        'p, div, span, h1, h2, h3, h4, h5, h6, a, li, blockquote': {
+          color: `${colors.text} !important`,
+        },
+      });
     }
   }
 

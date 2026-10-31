@@ -19,10 +19,18 @@ const route = useRoute();
 const router = useRouter();
 const libraryStore = useLibraryStore();
 const readerStore = useReaderStore();
-const { openBook, nextPage, prevPage, setPaginationMode, closeBook } = useReader();
+const { openBook, nextPage, prevPage, setPaginationMode, applyTheme, closeBook } = useReader();
 const { enableKeepAwake, disableKeepAwake } = useAppLifecycle();
 const { clearSelection } = useTextSelection();
 const translationService = TranslationService.getInstance();
+
+watch(
+  () => readerStore.currentThemeColors,
+  (colors) => {
+    applyTheme(colors);
+  },
+  { deep: true },
+);
 
 const viewportRef = ref<InstanceType<typeof ReaderViewport> | null>(null);
 const isSettingsOpen = ref(false);

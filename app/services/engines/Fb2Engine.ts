@@ -274,6 +274,13 @@ export class Fb2Engine extends BaseEngine {
     });
   }
 
+  applyTheme(colors: { bg: string; text: string }): void {
+    if (this.scrollContainer) {
+      this.scrollContainer.style.backgroundColor = colors.bg;
+      this.scrollContainer.style.color = colors.text;
+    }
+  }
+
   getCurrentLocation(): ReaderLocation {
     return { ...this.location };
   }

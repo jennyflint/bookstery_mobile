@@ -46,13 +46,19 @@
     "settings": "Settings",
     "paginationMode": "Page navigation",
     "paginationScroll": "Scroll",
-    "paginationButtons": "Buttons"
+    "paginationButtons": "Buttons",
+    "textColor": "Text color",
+    "backgroundColor": "Book background",
+    "customColors": "Custom colors",
+    "preview": "Preview",
+    "previewSample": "The quick brown fox jumps over the lazy dog. Sample book text preview."
   },
   "theme": {
     "light": "Light",
     "sepia": "Sepia",
     "night": "Night",
-    "oled": "OLED Black"
+    "oled": "OLED Black",
+    "custom": "Custom"
   },
   "translation": {
     "translate": "Translate",

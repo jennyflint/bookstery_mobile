@@ -1,6 +1,6 @@
 export type BookFormat = 'pdf' | 'epub' | 'fb2';
 
-export type ReaderTheme = 'light' | 'sepia' | 'night' | 'oled';
+export type ReaderTheme = 'light' | 'sepia' | 'night' | 'oled' | 'custom';
 
 export type SyncStatus = 'pending' | 'processing' | 'synced' | 'failed';
 
@@ -73,6 +73,7 @@ export interface ReaderEngineInterface {
   prev(): Promise<void>;
   getCurrentLocation(): ReaderLocation;
   setPaginationMode?(mode: ReaderPaginationMode): void | Promise<void>;
+  applyTheme?(colors: { bg: string; text: string }): void;
   onLocationChange?: (location: ReaderLocation) => void;
   destroy(): void;
 }
@@ -83,6 +84,8 @@ export interface ReaderSettings {
   fontFamily: string;
   lineHeight: number;
   paginationMode: ReaderPaginationMode;
+  customBackgroundColor: string;
+  customTextColor: string;
 }
 
 export interface TextSelectionDetail {

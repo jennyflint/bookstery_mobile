@@ -56,7 +56,15 @@ export function useReader() {
         await engine.setPaginationMode(readerStore.settings.paginationMode);
       }
 
+      if (engine.applyTheme) {
+        engine.applyTheme(readerStore.currentThemeColors);
+      }
+
       await engine.init(container, fileData);
+
+      if (engine.applyTheme) {
+        engine.applyTheme(readerStore.currentThemeColors);
+      }
 
       if (book.locator) {
         await engine.goTo(book.locator);
@@ -138,6 +146,10 @@ export function useReader() {
     }
   };
 
+  const applyTheme = (colors: { bg: string; text: string }): void => {
+    activeEngine.value?.applyTheme?.(colors);
+  };
+
   const closeBook = (): void => {
     if (activeEngine.value) {
       activeEngine.value.destroy();
@@ -152,6 +164,7 @@ export function useReader() {
     prevPage,
     goToLocator,
     setPaginationMode,
+    applyTheme,
     closeBook,
   };
 }

@@ -21,6 +21,20 @@ function initPdfWorker(): void {
   }
 }
 
+function isDarkColor(hexOrRgb: string): boolean {
+  if (!hexOrRgb) return false;
+  let hex = hexOrRgb.replace('#', '').trim();
+  if (hex.length === 3) {
+    hex = hex.split('').map((c) => c + c).join('');
+  }
+  if (hex.length !== 6) return false;
+  const r = parseInt(hex.substring(0, 2), 16);
+  const g = parseInt(hex.substring(2, 4), 16);
+  const b = parseInt(hex.substring(4, 6), 16);
+  const lum = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
+  return lum < 0.5;
+}
+
 export class PdfEngine extends BaseEngine {
   private pdfDocument: pdfjsLib.PDFDocumentProxy | null = null;
   private currentPageProxy: pdfjsLib.PDFPageProxy | null = null;
@@ -36,6 +50,7 @@ export class PdfEngine extends BaseEngine {
   private scrollCleanupListener: (() => void) | null = null;
   private currentScale: number = 1.0;
   private visibilityHandler: (() => void) | null = null;
+  private currentColors: { bg: string; text: string } | null = null;
 
   async init(
     container: HTMLElement,
@@ -213,6 +228,9 @@ export class PdfEngine extends BaseEngine {
       pageSlot.appendChild(placeholder);
 
       scrollWrapper.appendChild(pageSlot);
+      if (this.currentColors) {
+        this.applySlotTheme(pageSlot);
+      }
     }
 
     this.pageObserver = new IntersectionObserver(
@@ -299,6 +317,10 @@ export class PdfEngine extends BaseEngine {
 
       slot.innerHTML = '';
       slot.appendChild(canvas);
+      if (this.currentColors) {
+        this.applySlotTheme(slot);
+        this.applyCanvasTheme(canvas);
+      }
 
       const textLayerDiv = document.createElement('div');
       textLayerDiv.className =
@@ -457,6 +479,10 @@ export class PdfEngine extends BaseEngine {
     canvas.style.height = `${Math.floor(viewport.height)}px`;
 
     viewportContainer.appendChild(canvas);
+    if (this.currentColors) {
+      this.applySlotTheme(viewportContainer);
+      this.applyCanvasTheme(canvas);
+    }
 
     const textLayerDiv = document.createElement('div');
     textLayerDiv.className =
@@ -538,6 +564,40 @@ export class PdfEngine extends BaseEngine {
     this.activeSlotRenderTasks.clear();
     this.renderedPages.clear();
     this.scrollContainer = null;
+  }
+
+  private applyCanvasTheme(canvas: HTMLCanvasElement): void {
+    if (!this.currentColors) return;
+    const dark = isDarkColor(this.currentColors.bg);
+    const isPureWhite =
+      this.currentColors.bg.toLowerCase() === '#ffffff' || this.currentColors.bg.toLowerCase() === '#fff';
+
+    if (dark) {
+      canvas.style.filter = 'invert(0.9) hue-rotate(180deg)';
+      canvas.style.mixBlendMode = 'normal';
+    } else if (!isPureWhite) {
+      canvas.style.filter = 'none';
+      canvas.style.mixBlendMode = 'multiply';
+    } else {
+      canvas.style.filter = 'none';
+      canvas.style.mixBlendMode = 'normal';
+    }
+  }
+
+  private applySlotTheme(slot: HTMLElement): void {
+    if (!this.currentColors) return;
+    slot.style.backgroundColor = this.currentColors.bg;
+  }
+
+  applyTheme(colors: { bg: string; text: string }): void {
+    this.currentColors = colors;
+    if (!this.container) return;
+
+    const slots = this.container.querySelectorAll<HTMLElement>('.pdf-page-slot, .pdf-page-container');
+    slots.forEach((slot) => this.applySlotTheme(slot));
+
+    const canvases = this.container.querySelectorAll<HTMLCanvasElement>('.pdf-canvas');
+    canvases.forEach((canvas) => this.applyCanvasTheme(canvas));
   }
 
   destroy(): void {

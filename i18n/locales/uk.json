@@ -46,13 +46,19 @@
     "settings": "Параметри",
     "paginationMode": "Режим перегортання",
     "paginationScroll": "Прокручування",
-    "paginationButtons": "Кнопками"
+    "paginationButtons": "Кнопками",
+    "textColor": "Колір тексту",
+    "backgroundColor": "Фон книги",
+    "customColors": "Власні кольори",
+    "preview": "Попередній перегляд",
+    "previewSample": "Швидка бура лисиця стрибає через ледачого собаку. Це зразок тексту книги."
   },
   "theme": {
     "light": "Світла",
     "sepia": "Сепія",
     "night": "Нічна",
-    "oled": "OLED Чорна"
+    "oled": "OLED Чорна",
+    "custom": "Власна"
   },
   "translation": {
     "translate": "Перекласти",

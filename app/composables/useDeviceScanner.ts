@@ -77,7 +77,7 @@ export function useDeviceScanner() {
       }
       const base64 = btoa(binaryString);
 
-      const tempPath = `temp_${file.name}`;
+      const tempPath = `${file.name}`;
       await Filesystem.writeFile({
         path: tempPath,
         data: base64,

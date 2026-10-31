@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { ref } from 'vue';
 import { useReaderStore } from '../stores/readerStore';
 import LanguageSwitcher from '../components/common/LanguageSwitcher.vue';
 import GoogleSignInButton from '../components/auth/GoogleSignInButton.vue';
@@ -7,6 +8,12 @@ import type { ReaderTheme } from '../types';
 
 const { t } = useI18n();
 const readerStore = useReaderStore();
+
+const bgInputRef = ref<HTMLInputElement | null>(null);
+const textInputRef = ref<HTMLInputElement | null>(null);
+
+const bgSwatches = ['#ffffff', '#fbf0d9', '#f4ecd8', '#eaf4ec', '#18181b', '#000000'];
+const textSwatches = ['#18181b', '#433422', '#1e3a8a', '#2e4a36', '#f4f4f5', '#e4e4e7'];
 
 const themes: { id: ReaderTheme; nameKey: string }[] = [
   { id: 'light', nameKey: 'theme.light' },
@@ -17,6 +24,22 @@ const themes: { id: ReaderTheme; nameKey: string }[] = [
 
 const selectTheme = (theme: ReaderTheme) => {
   readerStore.setTheme(theme);
+};
+
+const handleBgChange = (color: string) => {
+  readerStore.setCustomBackgroundColor(color);
+};
+
+const handleTextChange = (color: string) => {
+  readerStore.setCustomTextColor(color);
+};
+
+const triggerBgPicker = () => {
+  bgInputRef.value?.click();
+};
+
+const triggerTextPicker = () => {
+  textInputRef.value?.click();
 };
 </script>
 
@@ -51,7 +74,15 @@ const selectTheme = (theme: ReaderTheme) => {
         </h2>
 
         <div class="space-y-2">
-          <label class="text-xs font-semibold text-zinc-700 block">{{ t('reader.theme') }}</label>
+          <div class="flex items-center justify-between">
+            <label class="text-xs font-semibold text-zinc-700 block">{{ t('reader.theme') }}</label>
+            <span
+              v-if="readerStore.settings.theme === 'custom'"
+              class="text-[10px] font-bold text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded-full border border-indigo-200"
+            >
+              {{ t('theme.custom') }}
+            </span>
+          </div>
           <div class="grid grid-cols-4 gap-2">
             <button
               v-for="item in themes"
@@ -63,6 +94,109 @@ const selectTheme = (theme: ReaderTheme) => {
             >
               {{ t(item.nameKey) }}
             </button>
+          </div>
+        </div>
+
+        <!-- Custom Color Pickers -->
+        <div class="space-y-4 bg-zinc-50 p-4 rounded-2xl border border-zinc-200/80">
+          <div class="flex items-center justify-between">
+            <label class="text-xs font-bold text-zinc-700 uppercase tracking-wider">
+              {{ t('reader.customColors') }}
+            </label>
+          </div>
+
+          <!-- Background Color Picker -->
+          <div class="space-y-2">
+            <div class="flex items-center justify-between text-xs font-semibold text-zinc-600">
+              <span>{{ t('reader.backgroundColor') }}</span>
+              <span class="font-mono text-zinc-500 uppercase text-[11px]">{{ readerStore.settings.customBackgroundColor }}</span>
+            </div>
+            <div class="flex items-center gap-3">
+              <div
+                class="relative w-10 h-10 rounded-xl border border-zinc-300 shadow-sm cursor-pointer flex items-center justify-center overflow-hidden shrink-0"
+                :style="{ backgroundColor: readerStore.settings.customBackgroundColor }"
+                @click="triggerBgPicker"
+              >
+                <input
+                  ref="bgInputRef"
+                  type="color"
+                  :value="readerStore.settings.customBackgroundColor"
+                  class="absolute inset-0 opacity-0 cursor-pointer w-full h-full"
+                  @input="handleBgChange(($event.target as HTMLInputElement).value)"
+                />
+                <svg class="w-4 h-4 text-zinc-400 drop-shadow" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 21a4 4 0 01-4-4 4 4 0 014-4c.73 0 1.41.2 2 .54V7a2 2 0 012-2h4a2 2 0 012 2v6.54c.59-.34 1.27-.54 2-.54a4 4 0 014 4 4 4 0 01-4 4H7z" />
+                </svg>
+              </div>
+              <div class="flex items-center gap-1.5 flex-wrap">
+                <button
+                  v-for="swatch in bgSwatches"
+                  :key="swatch"
+                  type="button"
+                  class="w-7 h-7 rounded-lg border transition-transform active:scale-95 shadow-xs"
+                  :style="{
+                    backgroundColor: swatch,
+                    borderColor: readerStore.settings.customBackgroundColor.toLowerCase() === swatch.toLowerCase() ? '#6366f1' : '#e4e4e7',
+                  }"
+                  @click="handleBgChange(swatch)"
+                />
+              </div>
+            </div>
+          </div>
+
+          <!-- Text Color Picker -->
+          <div class="space-y-2 pt-1">
+            <div class="flex items-center justify-between text-xs font-semibold text-zinc-600">
+              <span>{{ t('reader.textColor') }}</span>
+              <span class="font-mono text-zinc-500 uppercase text-[11px]">{{ readerStore.settings.customTextColor }}</span>
+            </div>
+            <div class="flex items-center gap-3">
+              <div
+                class="relative w-10 h-10 rounded-xl border border-zinc-300 shadow-sm cursor-pointer flex items-center justify-center overflow-hidden shrink-0"
+                :style="{ backgroundColor: readerStore.settings.customTextColor }"
+                @click="triggerTextPicker"
+              >
+                <input
+                  ref="textInputRef"
+                  type="color"
+                  :value="readerStore.settings.customTextColor"
+                  class="absolute inset-0 opacity-0 cursor-pointer w-full h-full"
+                  @input="handleTextChange(($event.target as HTMLInputElement).value)"
+                />
+                <span class="font-bold text-sm" :style="{ color: readerStore.settings.customBackgroundColor }">A</span>
+              </div>
+              <div class="flex items-center gap-1.5 flex-wrap">
+                <button
+                  v-for="swatch in textSwatches"
+                  :key="swatch"
+                  type="button"
+                  class="w-7 h-7 rounded-lg border transition-transform active:scale-95 shadow-xs"
+                  :style="{
+                    backgroundColor: swatch,
+                    borderColor: readerStore.settings.customTextColor.toLowerCase() === swatch.toLowerCase() ? '#6366f1' : '#e4e4e7',
+                  }"
+                  @click="handleTextChange(swatch)"
+                />
+              </div>
+            </div>
+          </div>
+
+          <!-- Live Preview -->
+          <div class="space-y-1.5 pt-1">
+            <div class="text-[11px] font-semibold text-zinc-500 uppercase tracking-wider">
+              {{ t('reader.preview') }}
+            </div>
+            <div
+              class="p-3.5 rounded-xl border border-zinc-200/80 shadow-inner transition-colors duration-200 text-xs leading-relaxed"
+              :style="{
+                backgroundColor: readerStore.settings.customBackgroundColor,
+                color: readerStore.settings.customTextColor,
+              }"
+            >
+              <p class="font-medium">
+                {{ t('reader.previewSample') }}
+              </p>
+            </div>
           </div>
         </div>
 

@@ -16,6 +16,8 @@ const DEFAULT_SETTINGS: ReaderSettings = {
   fontFamily: 'serif',
   lineHeight: 1.6,
   paginationMode: 'scroll',
+  customBackgroundColor: '#ffffff',
+  customTextColor: '#18181b',
 };
 
 function getStoredSettings(): ReaderSettings {
@@ -54,6 +56,27 @@ export const useReaderStore = defineStore('reader', {
     isRendering: false,
     selection: null as TextSelectionDetail | null,
   }),
+  getters: {
+    currentThemeColors: (state): { bg: string; text: string } => {
+      if (state.settings.theme === 'custom') {
+        return {
+          bg: state.settings.customBackgroundColor || '#ffffff',
+          text: state.settings.customTextColor || '#18181b',
+        };
+      }
+      switch (state.settings.theme) {
+        case 'sepia':
+          return { bg: '#f4ecd8', text: '#433422' };
+        case 'night':
+          return { bg: '#18181b', text: '#f4f4f5' };
+        case 'oled':
+          return { bg: '#000000', text: '#e4e4e7' };
+        case 'light':
+        default:
+          return { bg: '#ffffff', text: '#18181b' };
+      }
+    },
+  },
   actions: {
     setBook(book: BookRecord): void {
       this.currentBook = book;
@@ -80,8 +103,31 @@ export const useReaderStore = defineStore('reader', {
       this.settings.paginationMode = mode;
       persistSettings(this.settings);
     },
+    setCustomBackgroundColor(color: string): void {
+      this.settings.customBackgroundColor = color;
+      this.settings.theme = 'custom';
+      persistSettings(this.settings);
+    },
+    setCustomTextColor(color: string): void {
+      this.settings.customTextColor = color;
+      this.settings.theme = 'custom';
+      persistSettings(this.settings);
+    },
     setTheme(theme: ReaderTheme): void {
       this.settings.theme = theme;
+      if (theme === 'light') {
+        this.settings.customBackgroundColor = '#ffffff';
+        this.settings.customTextColor = '#18181b';
+      } else if (theme === 'sepia') {
+        this.settings.customBackgroundColor = '#f4ecd8';
+        this.settings.customTextColor = '#433422';
+      } else if (theme === 'night') {
+        this.settings.customBackgroundColor = '#18181b';
+        this.settings.customTextColor = '#f4f4f5';
+      } else if (theme === 'oled') {
+        this.settings.customBackgroundColor = '#000000';
+        this.settings.customTextColor = '#e4e4e7';
+      }
       persistSettings(this.settings);
     },
     setFontSize(size: number): void {
