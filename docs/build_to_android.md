@@ -1,0 +1,239 @@
+# Building Bookstery Mobile for Android (APK Guide)
+
+This guide provides step-by-step instructions for building the **Bookstery Mobile** application into an Android Package Kit (**APK**).
+
+The project uses **Nuxt 4** (SPA mode, `ssr: false`) coupled with **Capacitor 7** (`@capacitor/android`). The web assets are generated into `.output/public` and synced to the native Android Gradle project.
+
+---
+
+## 1. Prerequisites
+
+Before building the APK, ensure your workstation has the following tools installed and configured:
+
+### 1.1. Node.js & npm
+- **Node.js**: `v20.x` or `v22.x` (LTS recommended)
+- **npm**: `v10.x` or newer
+- Verify installation:
+  ```bash
+  node -v
+  npm -v
+  ```
+
+### 1.2. Java Development Kit (JDK)
+- **JDK 17** or **JDK 21** is required for Capacitor 7 and modern Android Gradle Plugin versions.
+- Verify installation:
+  ```bash
+  javac -version
+  java -version
+  ```
+- Ensure the `JAVA_HOME` environment variable is set:
+  - **Windows (PowerShell)**:
+    ```powershell
+    $env:JAVA_HOME = "C:\Program Files\Eclipse Adoptium\jdk-17.x.x-hotspot" # Adjust path as needed
+    ```
+  - **macOS / Linux**:
+    ```bash
+    export JAVA_HOME=/usr/lib/jvm/java-17-openjdk-amd64 # Adjust path as needed
+    ```
+
+### 1.3. Android Studio & Android SDK
+1. Download and install [Android Studio](https://developer.android.com/studio).
+2. Open Android Studio and launch **SDK Manager** (**Tools > SDK Manager**):
+   - **SDK Platforms**: Install **Android 14 (API level 34)** or **Android 15 (API level 35)**.
+   - **SDK Tools**: Check and install:
+     - *Android SDK Build-Tools* (version 34.0.0 or newer)
+     - *Android SDK Command-line Tools (latest)*
+     - *Android SDK Platform-Tools*
+3. Set the `ANDROID_HOME` (or `ANDROID_SDK_ROOT`) environment variable:
+   - **Windows (PowerShell)**:
+     ```powershell
+     [Environment]::SetEnvironmentVariable("ANDROID_HOME", "$env:LOCALAPPDATA\Android\Sdk", "User")
+     $env:PATH += ";$env:LOCALAPPDATA\Android\Sdk\platform-tools;$env:LOCALAPPDATA\Android\Sdk\cmdline-tools\latest\bin"
+     ```
+   - **macOS / Linux (`~/.bashrc` or `~/.zshrc`)**:
+     ```bash
+     export ANDROID_HOME=$HOME/Android/Sdk # On macOS: $HOME/Library/Android/sdk
+     export PATH=$PATH:$ANDROID_HOME/platform-tools:$ANDROID_HOME/cmdline-tools/latest/bin
+     ```
+4. Accept SDK licenses:
+   ```bash
+   sdkmanager --licenses
+   ```
+
+---
+
+## 2. Project Setup & Web Build
+
+### Step 1: Install Dependencies
+Ensure all npm packages are installed:
+```bash
+npm install
+```
+
+### Step 2: Build the Static Web Application
+Nuxt must compile the Vue frontend into static web assets. Capacitor reads files from `.output/public`:
+```bash
+npm run generate
+```
+Verify that the `.output/public/` directory contains `index.html` and the generated bundles.
+
+---
+
+## 3. Initializing & Syncing Android Project
+
+### Step 1: Add the Android Platform (First-Time Only)
+If the `android/` directory does not exist in the project root, initialize it:
+```bash
+npx cap add android
+```
+This generates the native Android Gradle project rooted in the `./android` folder with package ID `com.bookstery.app`.
+
+### Step 2: Synchronize Assets and Plugins
+Whenever you update web code or add/remove Capacitor plugins, sync the changes to the native Android directory:
+```bash
+npm run cap:sync
+```
+*(This script runs `nuxt generate && cap sync`)*.
+
+---
+
+## 4. Building the Debug APK
+
+You can build the debug APK using either **Android Studio (GUI)** or the **Gradle CLI (Terminal)**.
+
+### Option A: Via Gradle CLI (Fastest)
+
+1. Navigate to the `android` directory:
+   - **Windows**:
+     ```powershell
+     cd android
+     .\gradlew assembleDebug
+     cd ..
+     ```
+   - **macOS / Linux**:
+     ```bash
+     cd android
+     chmod +x gradlew
+     ./gradlew assembleDebug
+     cd ..
+     ```
+
+2. Output APK Location:
+   The generated debug APK will be located at:
+   ```
+   android/app/build/outputs/apk/debug/app-debug.apk
+   ```
+
+---
+
+### Option B: Via Android Studio (GUI)
+
+1. Open the Android project in Android Studio:
+   ```bash
+   npm run cap:android
+   # Or manually open the `android/` folder in Android Studio
+   ```
+2. Wait for Gradle to finish syncing project dependencies.
+3. In the top menu, navigate to:
+   **Build** > **Build Bundle(s) / APK(s)** > **Build APK(s)**.
+4. When the build finishes, a notification will appear in the bottom-right corner. Click **locate** to reveal `app-debug.apk`.
+
+---
+
+## 5. Building a Release (Production) Signed APK
+
+For distributing the app outside Google Play (direct APK install) or uploading to app stores, build a release APK signed with a cryptographic key.
+
+### Step 1: Generate a Keystore (If you do not have one)
+Run the following command to generate a release signing key:
+```bash
+keytool -genkey -v -keystore bookstery-release-key.jks -alias bookstery -keyalg RSA -keysize 2048 -validity 10000
+```
+Store `bookstery-release-key.jks` in a secure location outside public version control.
+
+### Step 2: Build via Android Studio
+1. Open the project in Android Studio (`npm run cap:android`).
+2. Go to **Build** > **Generate Signed Bundle / APK...**.
+3. Select **APK** and click **Next**.
+4. Specify:
+   - **Key store path**: Path to `bookstery-release-key.jks`.
+   - **Key store password** & **Key password**.
+   - **Key alias**: `bookstery`.
+5. Select build variant `release`.
+6. Click **Finish**.
+7. The signed APK will be output to:
+   ```
+   android/app/release/app-release.apk
+   ```
+
+### Step 3: Build via Command Line (Alternative)
+1. In `android/`, run:
+   ```bash
+   ./gradlew assembleRelease
+   ```
+   *(On Windows: `.\gradlew assembleRelease`)*
+2. The unsigned APK will be created at:
+   `android/app/build/outputs/apk/release/app-release-unsigned.apk`
+3. Align and sign it using `zipalign` and `apksigner`:
+   ```bash
+   zipalign -v -p 4 android/app/build/outputs/apk/release/app-release-unsigned.apk bookstery-aligned.apk
+   apksigner sign --ks bookstery-release-key.jks --out bookstery-release.apk bookstery-aligned.apk
+   ```
+
+---
+
+## 6. Installing the APK on a Device or Emulator
+
+### Method 1: Using ADB (Android Debug Bridge)
+1. Enable **Developer Options** and **USB Debugging** on your Android device.
+2. Connect your device via USB or start an Android Virtual Device (AVD).
+3. Verify your device is connected:
+   ```bash
+   adb devices
+   ```
+4. Install the APK:
+   ```bash
+   adb install -r android/app/build/outputs/apk/debug/app-debug.apk
+   ```
+
+### Method 2: Direct Transfer
+- Copy `app-debug.apk` (or `bookstery-release.apk`) to your phone via USB cable, Google Drive, or messaging apps.
+- On your phone, tap the file and allow installation from unknown sources when prompted.
+
+### Method 3: Run directly with Capacitor
+To build, deploy, and launch automatically on a connected device/emulator:
+```bash
+npx cap run android
+```
+
+---
+
+## 7. Troubleshooting & FAQ
+
+### Issue: `webDir does not exist` during `cap sync`
+- **Cause**: Capacitor cannot find the compiled web files because `nuxt generate` was not executed.
+- **Solution**: Always run `npm run generate` before syncing:
+  ```bash
+  npm run generate
+  npx cap sync android
+  ```
+
+### Issue: Gradle error `Unsupported class file major version`
+- **Cause**: Incompatible Java version. Capacitor 7 requires JDK 17 or JDK 21. Java 22+ may cause issues with older Gradle plugins.
+- **Solution**: Install JDK 17/21 and ensure `JAVA_HOME` points to it.
+
+### Issue: `Android SDK not found`
+- **Cause**: `ANDROID_HOME` or `ANDROID_SDK_ROOT` is not configured.
+- **Solution**: Set `ANDROID_HOME` pointing to your Android SDK folder (e.g. `C:\Users\<user>\AppData\Local\Android\Sdk` on Windows or `~/Library/Android/sdk` on macOS).
+
+### Issue: Live Reload during Mobile Development
+To test code changes on your Android device in real-time without rebuilding the APK each time:
+1. Start Nuxt dev server with host `0.0.0.0`:
+   ```bash
+   npm run dev
+   ```
+2. In another terminal, run:
+   ```bash
+   npx cap run android -l --external
+   ```
+   Select your local Wi-Fi IP address when prompted.
