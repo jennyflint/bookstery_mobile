@@ -1,14 +1,29 @@
-import type { ReaderEngineInterface, ReaderLocation, ReaderPaginationMode } from '../../types';
+import type {
+  HighlightRecord,
+  ReaderEngineInterface,
+  ReaderLocation,
+  ReaderPaginationMode,
+} from '../../types';
 
 export abstract class BaseEngine implements ReaderEngineInterface {
   protected container: HTMLElement | null = null;
   protected paginationMode: ReaderPaginationMode = 'scroll';
   public onLocationChange?: (location: ReaderLocation) => void;
+  protected highlights: HighlightRecord[] = [];
+  protected onHighlightClickCallback?: (highlight: HighlightRecord) => void;
 
   protected location: ReaderLocation = {
     locator: '1',
     progressPercentage: 0,
   };
+
+  setHighlights(
+    highlights: HighlightRecord[],
+    onHighlightClick?: (highlight: HighlightRecord) => void,
+  ): void {
+    this.highlights = highlights;
+    this.onHighlightClickCallback = onHighlightClick;
+  }
 
   abstract init(
     container: HTMLElement,

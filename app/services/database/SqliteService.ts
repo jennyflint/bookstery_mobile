@@ -4,7 +4,7 @@ import {
   type SQLiteDBConnection,
 } from '@capacitor-community/sqlite';
 import { Capacitor } from '@capacitor/core';
-import { SCHEMA_V1 } from './migrations';
+import { SCHEMA_V1, SCHEMA_HIGHLIGHTS } from './migrations';
 import type {
   BookRecord,
   DictionaryItem,
@@ -21,6 +21,7 @@ const STORAGE_KEYS = {
   DRIVE_FOLDER_ID: 'bookstery_web_drive_folder_id',
   FOLDERS: 'bookstery_web_folders',
   BOOK_FOLDERS: 'bookstery_web_book_folders',
+  HIGHLIGHTS: 'bookstery_web_highlights',
 };
 
 function readStorage<T>(key: string, defaultValue: T): T {
@@ -109,6 +110,10 @@ export class SqliteService {
         await this.db.execute(
           'CREATE INDEX IF NOT EXISTS idx_books_pinned ON books(is_pinned DESC, pinned_at DESC);',
         );
+      } catch {}
+
+      try {
+        await this.db.execute(SCHEMA_HIGHLIGHTS);
       } catch {}
 
       this.isInitialized = true;

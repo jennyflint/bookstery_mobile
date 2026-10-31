@@ -2,7 +2,7 @@ import * as pdfjsLib from 'pdfjs-dist';
 // @ts-expect-error Vite URL import for pdf.worker
 import pdfWorkerUrl from 'pdfjs-dist/build/pdf.worker.min.js?url';
 import { BaseEngine } from './BaseEngine';
-import type { ReaderLocation, ReaderPaginationMode } from '../../types';
+import type { HighlightRecord, ReaderLocation, ReaderPaginationMode } from '../../types';
 
 interface TextContentItem {
   str: string;
@@ -355,6 +355,8 @@ export class PdfEngine extends BaseEngine {
       } catch {
       }
 
+      this.restoreHighlightsForPage(pageNumber, slot);
+
       pageProxy.cleanup();
     } catch (err) {
       this.renderedPages.delete(pageNumber);
@@ -608,6 +610,122 @@ export class PdfEngine extends BaseEngine {
 
     const canvases = this.container.querySelectorAll<HTMLCanvasElement>('.pdf-canvas');
     canvases.forEach((canvas) => this.applyCanvasTheme(canvas));
+  }
+
+  override setHighlights(
+    highlights: HighlightRecord[],
+    onHighlightClick?: (highlight: HighlightRecord) => void,
+  ): void {
+    super.setHighlights(highlights, onHighlightClick);
+    this.restoreHighlightsAllVisible();
+  }
+
+  private restoreHighlightsAllVisible(): void {
+    if (!this.scrollContainer) return;
+    const slots = this.scrollContainer.querySelectorAll<HTMLElement>('.pdf-page-slot');
+    slots.forEach((slot) => {
+      const pageNum = parseInt(slot.dataset.pageNumber || '1', 10);
+      if (this.renderedPages.has(pageNum)) {
+        this.restoreHighlightsForPage(pageNum, slot);
+      }
+    });
+  }
+
+  private restoreHighlightsForPage(pageNumber: number, slot: HTMLElement): void {
+    let overlay = slot.querySelector<SVGSVGElement>('.pdf-highlight-overlay');
+    if (!overlay) {
+      overlay = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+      overlay.setAttribute('class', 'pdf-highlight-overlay absolute inset-0 w-full h-full pointer-events-none');
+      overlay.style.zIndex = '10';
+      slot.appendChild(overlay);
+    } else {
+      overlay.innerHTML = '';
+    }
+
+    const colorMap: Record<string, { fill: string; stroke: string }> = {
+      yellow: { fill: 'rgba(254, 240, 138, 0.45)', stroke: '#CA8A04' },
+      green: { fill: 'rgba(200, 230, 149, 0.45)', stroke: '#3E5725' },
+      pink: { fill: 'rgba(251, 207, 232, 0.45)', stroke: '#DB2777' },
+      blue: { fill: 'rgba(186, 230, 253, 0.45)', stroke: '#0284C7' },
+      purple: { fill: 'rgba(233, 213, 255, 0.45)', stroke: '#9333EA' },
+    };
+
+    const pageHighlights = this.highlights.filter((hl) => {
+      if (hl.format !== 'pdf') return false;
+      try {
+        const parsed = JSON.parse(hl.locator);
+        if (parsed && parsed.page === pageNumber) return true;
+      } catch {}
+      const asNum = parseInt(hl.locator, 10);
+      return asNum === pageNumber;
+    });
+
+    const textLayer = slot.querySelector('.pdf-text-layer');
+    if (!textLayer) return;
+
+    for (const hl of pageHighlights) {
+      const colors = colorMap[hl.color] || colorMap.green;
+      let drawn = false;
+
+      try {
+        const parsed = JSON.parse(hl.locator);
+        if (parsed && Array.isArray(parsed.rects)) {
+          for (const rect of parsed.rects) {
+            this.createSvgRect(overlay, rect.x, rect.y, rect.width, rect.height, colors, hl);
+            drawn = true;
+          }
+        } else if (parsed && Array.isArray(parsed.bounds)) {
+          const [bx, by, bw, bh] = parsed.bounds;
+          this.createSvgRect(overlay, bx, by, bw, bh, colors, hl);
+          drawn = true;
+        }
+      } catch {}
+
+      if (!drawn && hl.selected_text) {
+        const spans = Array.from(textLayer.querySelectorAll('span'));
+        const textTarget = hl.selected_text.trim();
+        const slotRect = slot.getBoundingClientRect();
+
+        for (const span of spans) {
+          const spanText = (span.textContent || '').trim();
+          if (spanText && (spanText.includes(textTarget) || textTarget.includes(spanText))) {
+            const spanRect = span.getBoundingClientRect();
+            const relX = spanRect.left - slotRect.left;
+            const relY = spanRect.top - slotRect.top;
+            this.createSvgRect(overlay, relX, relY, spanRect.width, spanRect.height, colors, hl);
+          }
+        }
+      }
+    }
+  }
+
+  private createSvgRect(
+    svg: SVGSVGElement,
+    x: number,
+    y: number,
+    width: number,
+    height: number,
+    colors: { fill: string; stroke: string },
+    hl: HighlightRecord,
+  ): void {
+    const rect = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+    rect.setAttribute('x', String(Math.round(x)));
+    rect.setAttribute('y', String(Math.round(y)));
+    rect.setAttribute('width', String(Math.round(width)));
+    rect.setAttribute('height', String(Math.round(height)));
+    rect.setAttribute('fill', colors.fill);
+    rect.setAttribute('stroke', colors.stroke);
+    rect.setAttribute('stroke-width', '1.5');
+    rect.setAttribute('rx', '2');
+    rect.setAttribute('class', 'pointer-events-auto cursor-pointer transition-opacity hover:opacity-80');
+    rect.setAttribute('data-highlight-id', hl.id);
+
+    rect.addEventListener('click', (e) => {
+      e.stopPropagation();
+      this.onHighlightClickCallback?.(hl);
+    });
+
+    svg.appendChild(rect);
   }
 
   destroy(): void {

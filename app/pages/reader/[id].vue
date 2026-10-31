@@ -4,6 +4,7 @@ import { useRoute, useRouter } from 'vue-router';
 import { Directory, Filesystem } from '@capacitor/filesystem';
 import { useLibraryStore } from '../../stores/libraryStore';
 import { useReaderStore } from '../../stores/readerStore';
+import { useHighlightStore } from '../../stores/highlightStore';
 import { useReader } from '../../composables/useReader';
 import { useAppLifecycle } from '../../composables/useAppLifecycle';
 import { useTextSelection } from '../../composables/useTextSelection';
@@ -14,12 +15,17 @@ import ReaderOverlayControls from '../../components/reader/ReaderOverlayControls
 import ThemeSettingsSheet from '../../components/reader/ThemeSettingsSheet.vue';
 import TextSelectionTooltip from '../../components/reader/TextSelectionTooltip.vue';
 import TranslationBottomSheet from '../../components/translation/TranslationBottomSheet.vue';
+import HighlightNoteModal from '../../components/reader/HighlightNoteModal.vue';
+import BookNotesDrawer from '../../components/reader/BookNotesDrawer.vue';
+import QuoteCardModal from '../../components/export/QuoteCardModal.vue';
+import NotesExportModal from '../../components/export/NotesExportModal.vue';
 
 const route = useRoute();
 const router = useRouter();
 const libraryStore = useLibraryStore();
 const readerStore = useReaderStore();
-const { openBook, nextPage, prevPage, setPaginationMode, applyTheme, closeBook } = useReader();
+const highlightStore = useHighlightStore();
+const { openBook, nextPage, prevPage, goToLocator, setPaginationMode, applyTheme, closeBook, activeEngine } = useReader();
 const { enableKeepAwake, disableKeepAwake } = useAppLifecycle();
 const { clearSelection } = useTextSelection();
 const translationService = TranslationService.getInstance();
@@ -28,6 +34,16 @@ watch(
   () => readerStore.currentThemeColors,
   (colors) => {
     applyTheme(colors);
+  },
+  { deep: true },
+);
+
+watch(
+  () => highlightStore.highlights,
+  (newHighlights) => {
+    activeEngine.value?.setHighlights?.(newHighlights, (hl) => {
+      highlightStore.selectedHighlight = hl;
+    });
   },
   { deep: true },
 );
@@ -48,6 +64,9 @@ onMounted(async () => {
     router.replace('/');
     return;
   }
+
+  highlightStore.setBookContext(book.id, book.title, book.author, book.format);
+  await highlightStore.loadHighlights(book.id);
 
   await nextTick();
 
@@ -111,6 +130,12 @@ startxref
 
     try {
       await openBook(viewportRef.value.containerRef, book, rawData);
+      activeEngine.value?.setHighlights?.(
+        highlightStore.highlights,
+        (hl) => {
+          highlightStore.selectedHighlight = hl;
+        },
+      );
     } catch (openErr) {
       console.error('[Reader] Failed to open book:', openErr);
     }
@@ -166,6 +191,7 @@ const handleCloseTranslation = () => {
       @next="nextPage"
       @prev="prevPage"
       @open-settings="handleOpenSettings"
+      @open-notes="highlightStore.openNotesDrawer"
     />
 
     <ThemeSettingsSheet
@@ -184,5 +210,15 @@ const handleCloseTranslation = () => {
       :book-id="bookId"
       @close="handleCloseTranslation"
     />
+
+    <HighlightNoteModal />
+
+    <BookNotesDrawer
+      @navigate="goToLocator"
+    />
+
+    <QuoteCardModal />
+
+    <NotesExportModal />
   </div>
 </template>

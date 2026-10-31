@@ -58,10 +58,16 @@ if (typeof window !== 'undefined') {
     measureText: vi.fn(() => ({ width: 0 })),
     transform: vi.fn(),
     rect: vi.fn(),
+    strokeRect: vi.fn(),
+    createLinearGradient: vi.fn(() => ({
+      addColorStop: vi.fn(),
+    })),
+    quadraticCurveTo: vi.fn(),
     clip: vi.fn(),
   };
 
   HTMLCanvasElement.prototype.getContext = vi.fn().mockReturnValue(dummyContext);
+  HTMLCanvasElement.prototype.toDataURL = vi.fn().mockReturnValue('data:image/png;base64,mockCanvasData');
 
   if (!window.matchMedia) {
     window.matchMedia = vi.fn().mockImplementation((query: string) => ({

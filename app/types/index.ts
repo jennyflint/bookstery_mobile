@@ -1,6 +1,8 @@
 export * from './auth';
 export * from './sync';
 export * from './folder';
+export * from './highlight';
+export * from './export';
 
 export type BookFormat = 'pdf' | 'epub' | 'fb2';
 
@@ -59,6 +61,10 @@ export interface ReaderEngineInterface {
   getCurrentLocation(): ReaderLocation;
   setPaginationMode?(mode: ReaderPaginationMode): void | Promise<void>;
   applyTheme?(colors: { bg: string; text: string }): void;
+  setHighlights?(
+    highlights: HighlightRecord[],
+    onHighlightClick?: (highlight: HighlightRecord) => void,
+  ): void;
   onLocationChange?: (location: ReaderLocation) => void;
   destroy(): void;
 }

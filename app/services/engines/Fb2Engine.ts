@@ -1,6 +1,6 @@
 import JSZip from 'jszip';
 import { BaseEngine } from './BaseEngine';
-import type { ReaderLocation } from '../../types';
+import type { HighlightRecord, ReaderLocation } from '../../types';
 
 export class Fb2Engine extends BaseEngine {
   private rawXml: string = '';
@@ -9,6 +9,106 @@ export class Fb2Engine extends BaseEngine {
   private currentParagraphIndex: number = 0;
   private scrollContainer: HTMLElement | null = null;
   private scrollHandler: (() => void) | null = null;
+
+  override setHighlights(
+    highlights: HighlightRecord[],
+    onHighlightClick?: (highlight: HighlightRecord) => void,
+  ): void {
+    super.setHighlights(highlights, onHighlightClick);
+    this.restoreHighlights();
+  }
+
+  private restoreHighlights(): void {
+    if (!this.container || this.paragraphElements.length === 0) return;
+
+    const colorBorderMap: Record<string, { bg: string; border: string }> = {
+      yellow: { bg: '#FEF08A', border: '#CA8A04' },
+      green: { bg: '#C8E695', border: '#3E5725' },
+      pink: { bg: '#FBCFE8', border: '#DB2777' },
+      blue: { bg: '#BAE6FD', border: '#0284C7' },
+      purple: { bg: '#E9D5FF', border: '#9333EA' },
+    };
+
+    const existingMarks = this.container.querySelectorAll('.bookstery-hl');
+    existingMarks.forEach((m) => {
+      const parent = m.parentNode;
+      if (parent) {
+        parent.replaceChild(document.createTextNode(m.textContent || ''), m);
+        parent.normalize();
+      }
+    });
+
+    for (const hl of this.highlights) {
+      if (hl.format !== 'fb2') continue;
+      const textToFind = hl.selected_text.trim();
+      if (!textToFind) continue;
+
+      const palette = colorBorderMap[hl.color] || colorBorderMap.green;
+
+      let targetElements: HTMLElement[] = this.paragraphElements;
+      if (hl.locator && hl.locator.startsWith('fb2-p-')) {
+        const found = this.paragraphElements.find((p) => p.id === hl.locator);
+        if (found) {
+          targetElements = [found];
+        }
+      }
+
+      for (const p of targetElements) {
+        const pText = p.textContent || '';
+        if (pText.includes(textToFind)) {
+          this.wrapTextInElement(p, textToFind, hl, palette.bg, palette.border);
+          break;
+        }
+      }
+    }
+  }
+
+  private wrapTextInElement(
+    element: HTMLElement,
+    text: string,
+    hl: HighlightRecord,
+    bg: string,
+    border: string,
+  ): void {
+    const walker = document.createTreeWalker(element, NodeFilter.SHOW_TEXT);
+    let currentNode = walker.nextNode();
+
+    while (currentNode) {
+      const nodeText = currentNode.textContent || '';
+      const matchIndex = nodeText.indexOf(text);
+      if (matchIndex !== -1) {
+        const range = document.createRange();
+        range.setStart(currentNode, matchIndex);
+        range.setEnd(currentNode, matchIndex + text.length);
+
+        const mark = document.createElement('mark');
+        mark.className = `bookstery-hl hl-${hl.color} cursor-pointer rounded-xs px-0.5 select-text transition-colors`;
+        mark.dataset.highlightId = hl.id;
+        mark.style.backgroundColor = bg;
+        mark.style.borderBottom = `2px solid ${border}`;
+        mark.style.color = 'inherit';
+
+        mark.addEventListener('click', (e) => {
+          e.stopPropagation();
+          this.onHighlightClickCallback?.(hl);
+        });
+
+        try {
+          range.surroundContents(mark);
+        } catch {
+          mark.textContent = text;
+          const afterText = nodeText.substring(matchIndex + text.length);
+          currentNode.textContent = nodeText.substring(0, matchIndex);
+          currentNode.parentNode?.insertBefore(mark, currentNode.nextSibling);
+          if (afterText) {
+            mark.parentNode?.insertBefore(document.createTextNode(afterText), mark.nextSibling);
+          }
+        }
+        break;
+      }
+      currentNode = walker.nextNode();
+    }
+  }
 
   async init(
     container: HTMLElement,
@@ -30,6 +130,7 @@ export class Fb2Engine extends BaseEngine {
     }
 
     this.renderSemanticHtml();
+    this.restoreHighlights();
 
     if (initialLocator) {
       await this.goTo(initialLocator);

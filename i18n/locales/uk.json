@@ -161,5 +161,63 @@
     "readingPreferences": "Параметри читання",
     "language": "Мова інтерфейсу",
     "version": "Версія"
+  },
+  "highlights": {
+    "addNote": "Додати нотатку",
+    "editNote": "Редагувати нотатку",
+    "quoteCard": "Картка цитати",
+    "copyText": "Копіювати текст",
+    "delete": "Видалити",
+    "deleteHighlight": "Видалити виділення",
+    "notesTitle": "Нотатки та цитати",
+    "searchPlaceholder": "Пошук нотаток або цитат...",
+    "emptyNotes": "Ще немає збережених виділень",
+    "emptyNotesSubtitle": "Виділіть фрагмент тексту в книзі, щоб підкреслити його або додати роздуми.",
+    "filterAll": "Усі",
+    "exportNotes": "Експортувати нотатки",
+    "notePlaceholder": "Запишіть свої думки до цієї цитати...",
+    "saveNote": "Зберегти нотатку",
+    "quoteSnippet": "Виділена цитата",
+    "cancel": "Скасувати",
+    "colors": {
+      "yellow": "Жовтий",
+      "green": "Зелений",
+      "pink": "Рожевий",
+      "blue": "Блакитний",
+      "purple": "Фіолетовий"
+    }
+  },
+  "export": {
+    "title": "Експорт нотаток та виділень",
+    "format": "Формат файлу",
+    "formats": {
+      "md": "Markdown (.md) для Obsidian/Notion",
+      "html": "HTML-документ (.html) для друку",
+      "txt": "Текстовий файл (.txt)",
+      "json": "Структурований JSON (.json)"
+    },
+    "exportAndShare": "Поділитися файлом",
+    "download": "Завантажити файл",
+    "exporting": "Експортування...",
+    "exportedSuccess": "Файл успішно збережено",
+    "close": "Закрити"
+  },
+  "quoteCard": {
+    "title": "Генератор карток цитат",
+    "theme": "Тема оформлення",
+    "themes": {
+      "sepia": "Папір / Сепія",
+      "green": "Bookstery Зелений",
+      "oled": "OLED Ніч",
+      "white": "Чистий Білий"
+    },
+    "aspectRatio": "Формат зображення",
+    "portrait": "Портрет (4:5)",
+    "square": "Квадрат (1:1)",
+    "saveToGallery": "Зберегти в галерею",
+    "shareImage": "Поділитися зображенням",
+    "savedSuccess": "Збережено у пам'ять пристрою",
+    "generating": "Створення зображення...",
+    "close": "Закрити"
   }
 }

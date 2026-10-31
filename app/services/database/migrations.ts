@@ -62,6 +62,36 @@ CREATE TABLE IF NOT EXISTS book_folder (
 
 CREATE INDEX IF NOT EXISTS idx_book_folder_book ON book_folder(book_id);
 CREATE INDEX IF NOT EXISTS idx_book_folder_folder ON book_folder(folder_id);
+
+CREATE TABLE IF NOT EXISTS highlights (
+  id TEXT PRIMARY KEY,
+  book_id TEXT NOT NULL REFERENCES books(id) ON DELETE CASCADE,
+  format TEXT NOT NULL CHECK (format IN ('pdf', 'epub', 'fb2')),
+  locator TEXT NOT NULL,
+  selected_text TEXT NOT NULL,
+  color TEXT NOT NULL CHECK (color IN ('yellow', 'green', 'pink', 'blue', 'purple')),
+  note TEXT DEFAULT NULL,
+  created_at INTEGER NOT NULL,
+  updated_at INTEGER NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_highlights_book ON highlights(book_id, created_at DESC);
+`;
+
+export const SCHEMA_HIGHLIGHTS = `
+CREATE TABLE IF NOT EXISTS highlights (
+  id TEXT PRIMARY KEY,
+  book_id TEXT NOT NULL REFERENCES books(id) ON DELETE CASCADE,
+  format TEXT NOT NULL CHECK (format IN ('pdf', 'epub', 'fb2')),
+  locator TEXT NOT NULL,
+  selected_text TEXT NOT NULL,
+  color TEXT NOT NULL CHECK (color IN ('yellow', 'green', 'pink', 'blue', 'purple')),
+  note TEXT DEFAULT NULL,
+  created_at INTEGER NOT NULL,
+  updated_at INTEGER NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_highlights_book ON highlights(book_id, created_at DESC);
 `;
 
 export const MIGRATION_ADD_PINNED_COLUMNS = [

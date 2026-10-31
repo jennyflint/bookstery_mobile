@@ -73,6 +73,12 @@ export const mockSqliteConnection = {
   retrieveConnection: vi.fn(),
 };
 
+export const mockShare = {
+  share: vi.fn().mockResolvedValue({ activityType: undefined }),
+};
+
+export const Share = mockShare;
+
 export const mockSqliteDatabase = {
   open: vi.fn().mockResolvedValue(undefined),
   close: vi.fn().mockResolvedValue(undefined),

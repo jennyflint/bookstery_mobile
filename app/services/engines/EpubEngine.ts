@@ -1,7 +1,7 @@
 import ePub from 'epubjs';
 import type { Book, Rendition, Location } from 'epubjs';
 import { BaseEngine } from './BaseEngine';
-import type { ReaderLocation, ReaderPaginationMode } from '../../types';
+import type { HighlightRecord, ReaderLocation, ReaderPaginationMode } from '../../types';
 
 export class EpubEngine extends BaseEngine {
   private book: Book | null = null;
@@ -9,6 +9,36 @@ export class EpubEngine extends BaseEngine {
   private currentCfi: string = '';
   private currentPercentage: number = 0;
   private currentColors: { bg: string; text: string } | null = null;
+
+  override setHighlights(
+    highlights: HighlightRecord[],
+    onHighlightClick?: (highlight: HighlightRecord) => void,
+  ): void {
+    super.setHighlights(highlights, onHighlightClick);
+    this.restoreHighlights();
+  }
+
+  private restoreHighlights(): void {
+    if (!this.rendition || !this.rendition.annotations) {
+      return;
+    }
+
+    for (const hl of this.highlights) {
+      if (hl.format === 'epub' && hl.locator) {
+        try {
+          this.rendition.annotations.add(
+            'highlight',
+            hl.locator,
+            {},
+            () => {
+              this.onHighlightClickCallback?.(hl);
+            },
+            'hl-' + hl.color,
+          );
+        } catch {}
+      }
+    }
+  }
 
   async init(
     container: HTMLElement,
@@ -45,6 +75,10 @@ export class EpubEngine extends BaseEngine {
         this.location = this.getCurrentLocation();
         this.onLocationChange?.(this.location);
       }
+    });
+
+    this.rendition.on('rendered', () => {
+      this.restoreHighlights();
     });
 
     try {
@@ -136,6 +170,31 @@ export class EpubEngine extends BaseEngine {
         },
         'p, div, span, h1, h2, h3, h4, h5, h6, a, li, blockquote': {
           color: `${colors.text} !important`,
+        },
+        '.hl-yellow': {
+          'background-color': '#FEF08A !important',
+          fill: '#FEF08A !important',
+          'fill-opacity': '0.55 !important',
+        },
+        '.hl-green': {
+          'background-color': '#C8E695 !important',
+          fill: '#C8E695 !important',
+          'fill-opacity': '0.55 !important',
+        },
+        '.hl-pink': {
+          'background-color': '#FBCFE8 !important',
+          fill: '#FBCFE8 !important',
+          'fill-opacity': '0.55 !important',
+        },
+        '.hl-blue': {
+          'background-color': '#BAE6FD !important',
+          fill: '#BAE6FD !important',
+          'fill-opacity': '0.55 !important',
+        },
+        '.hl-purple': {
+          'background-color': '#E9D5FF !important',
+          fill: '#E9D5FF !important',
+          'fill-opacity': '0.55 !important',
         },
       });
     }

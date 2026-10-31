@@ -161,5 +161,63 @@
     "readingPreferences": "Reading Preferences",
     "language": "Interface Language",
     "version": "Version"
+  },
+  "highlights": {
+    "addNote": "Add Note",
+    "editNote": "Edit Note",
+    "quoteCard": "Quote Card",
+    "copyText": "Copy Text",
+    "delete": "Delete",
+    "deleteHighlight": "Delete Highlight",
+    "notesTitle": "Notes & Highlights",
+    "searchPlaceholder": "Search notes or quotes...",
+    "emptyNotes": "No highlights recorded yet",
+    "emptyNotesSubtitle": "Select text in the reader to highlight or attach personal notes.",
+    "filterAll": "All",
+    "exportNotes": "Export Notes",
+    "notePlaceholder": "Draft your thought or reflection on this quote...",
+    "saveNote": "Save Note",
+    "quoteSnippet": "Selected Quote",
+    "cancel": "Cancel",
+    "colors": {
+      "yellow": "Yellow",
+      "green": "Green",
+      "pink": "Pink",
+      "blue": "Blue",
+      "purple": "Purple"
+    }
+  },
+  "export": {
+    "title": "Export Notes & Highlights",
+    "format": "File Format",
+    "formats": {
+      "md": "Markdown (.md) for Obsidian/Notion",
+      "html": "HTML Document (.html) print-styled",
+      "txt": "Plain Text (.txt)",
+      "json": "Structured JSON (.json)"
+    },
+    "exportAndShare": "Share File",
+    "download": "Download File",
+    "exporting": "Exporting...",
+    "exportedSuccess": "Export completed successfully",
+    "close": "Close"
+  },
+  "quoteCard": {
+    "title": "Quote Card Generator",
+    "theme": "Visual Theme",
+    "themes": {
+      "sepia": "Paper / Sepia",
+      "green": "Bookstery Green",
+      "oled": "OLED Night",
+      "white": "Clean White"
+    },
+    "aspectRatio": "Aspect Ratio",
+    "portrait": "Portrait (4:5)",
+    "square": "Square (1:1)",
+    "saveToGallery": "Save to Gallery",
+    "shareImage": "Share Image",
+    "savedSuccess": "Saved to device storage",
+    "generating": "Generating image...",
+    "close": "Close"
   }
 }
