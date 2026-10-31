@@ -80,4 +80,32 @@ describe('BookCard Component', () => {
 
     expect(img.attributes('src')).toBe('/img/covers/default.webp');
   });
+
+  it('should not render pinned badge when is_pinned is 0 or undefined', () => {
+    const wrapper = mount(BookCard, {
+      props: {
+        book: {
+          ...baseBook,
+          is_pinned: 0,
+        },
+      },
+    });
+
+    const badge = wrapper.find('[data-testid="pinned-badge"]');
+    expect(badge.exists()).toBe(false);
+  });
+
+  it('should render pinned badge when is_pinned is 1', () => {
+    const wrapper = mount(BookCard, {
+      props: {
+        book: {
+          ...baseBook,
+          is_pinned: 1,
+        },
+      },
+    });
+
+    const badge = wrapper.find('[data-testid="pinned-badge"]');
+    expect(badge.exists()).toBe(true);
+  });
 });

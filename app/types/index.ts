@@ -18,6 +18,8 @@ export interface BookRecord {
   total_items: number;
   last_read_at: number;
   updated_at: number;
+  is_pinned?: number;
+  pinned_at?: number | null;
 }
 
 export interface DictionaryItem {

@@ -16,11 +16,16 @@ const emit = defineEmits<{
   (e: 'close'): void;
   (e: 'manage-folders', book: BookRecord): void;
   (e: 'toggle-finished', book: BookRecord): void;
+  (e: 'toggle-pin', book: BookRecord): void;
   (e: 'remove-from-folder', payload: { book: BookRecord; folderId: number }): void;
   (e: 'delete-book', book: BookRecord): void;
 }>();
 
 const { t } = useI18n();
+
+const isPinned = computed((): boolean => {
+  return props.book?.is_pinned === 1;
+});
 
 const isFinished = computed((): boolean => {
   return (props.book?.progress_percentage ?? 0) >= 100;
@@ -29,6 +34,13 @@ const isFinished = computed((): boolean => {
 const isInsideSpecificFolder = computed((): boolean => {
   return typeof props.currentFolderId === 'number';
 });
+
+const handleTogglePin = (): void => {
+  if (props.book) {
+    emit('toggle-pin', props.book);
+    emit('close');
+  }
+};
 
 const handleManageFolders = (): void => {
   if (props.book) {
@@ -116,6 +128,43 @@ const handleDeleteBook = (): void => {
         </div>
 
         <div class="space-y-1 p-3">
+          <button
+            type="button"
+            :data-testid="isPinned ? 'unpin-book-action' : 'pin-book-action'"
+            class="flex w-full items-center gap-3 rounded-2xl border border-[#C8E695]/30 bg-white/70 px-4 py-3 text-sm font-semibold text-[#3E5725] transition-all hover:bg-white active:scale-[0.99]"
+            @click="handleTogglePin"
+          >
+            <svg
+              v-if="!isPinned"
+              class="h-5 w-5 text-[#3E5725]"
+              fill="none"
+              viewBox="0 0 24 24"
+              stroke="currentColor"
+            >
+              <path
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                stroke-width="2"
+                d="M5 5a2 2 0 012-2h10a2 2 0 012 2v2a2 2 0 01-2 2H7a2 2 0 01-2-2V5zm7 4v12m-4-6l4 6 4-6"
+              />
+            </svg>
+            <svg
+              v-else
+              class="h-5 w-5 text-amber-700"
+              fill="none"
+              viewBox="0 0 24 24"
+              stroke="currentColor"
+            >
+              <path
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                stroke-width="2"
+                d="M3 3l18 18M9 9v3m3-3v3m4 0v-1m-7 4l3 5 3-5M7 5h2m6 0h2"
+              />
+            </svg>
+            <span>{{ isPinned ? t('library.unpinBook') : t('library.pinToTop') }}</span>
+          </button>
+
           <button
             type="button"
             data-testid="action-manage-folders"

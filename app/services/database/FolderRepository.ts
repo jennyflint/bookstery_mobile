@@ -295,7 +295,7 @@ export class FolderRepository {
             WHERE NOT EXISTS (
               SELECT 1 FROM book_folder bf WHERE bf.book_id = b.id
             )
-            ORDER BY b.last_read_at DESC;
+            ORDER BY b.is_pinned DESC, b.pinned_at DESC, b.last_read_at DESC;
           `;
           return await this.sqliteService.querySql<BookRecord>(query);
         }
@@ -304,7 +304,7 @@ export class FolderRepository {
           SELECT b.* FROM books b
           INNER JOIN book_folder bf ON b.id = bf.book_id
           WHERE bf.folder_id = ?
-          ORDER BY b.last_read_at DESC;
+          ORDER BY b.is_pinned DESC, b.pinned_at DESC, b.last_read_at DESC;
         `;
         return await this.sqliteService.querySql<BookRecord>(query, [folderId]);
       } catch {

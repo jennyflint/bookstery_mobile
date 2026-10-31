@@ -48,7 +48,12 @@
     "filterFb2": "FB2",
     "deleteBook": "Delete",
     "lastRead": "Last read",
-    "progress": "Progress"
+    "progress": "Progress",
+    "pinToTop": "Pin to Top",
+    "unpinBook": "Unpin Book",
+    "pinned": "Pinned",
+    "pinnedSection": "Pinned Books",
+    "allBooksSection": "All Books"
   },
   "scanner": {
     "title": "Scan Device For Books",

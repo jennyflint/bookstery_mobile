@@ -1,7 +1,17 @@
-import { CapacitorSQLite, SQLiteConnection, type SQLiteDBConnection } from '@capacitor-community/sqlite';
+import {
+  CapacitorSQLite,
+  SQLiteConnection,
+  type SQLiteDBConnection,
+} from '@capacitor-community/sqlite';
 import { Capacitor } from '@capacitor/core';
 import { SCHEMA_V1 } from './migrations';
-import type { BookRecord, DictionaryItem, SyncQueueItem, SyncStatus, UserSession } from '../../types';
+import type {
+  BookRecord,
+  DictionaryItem,
+  SyncQueueItem,
+  SyncStatus,
+  UserSession,
+} from '../../types';
 
 const STORAGE_KEYS = {
   BOOKS: 'bookstery_web_books',
@@ -31,8 +41,7 @@ function writeStorage<T>(key: string, value: T): void {
   }
   try {
     localStorage.setItem(key, JSON.stringify(value));
-  } catch {
-  }
+  } catch {}
 }
 
 export class SqliteService {
@@ -84,8 +93,23 @@ export class SqliteService {
 
       try {
         await this.db.execute('ALTER TABLE user_session ADD COLUMN drive_folder_id TEXT;');
-      } catch {
-      }
+      } catch {}
+
+      try {
+        await this.db.execute(
+          'ALTER TABLE books ADD COLUMN is_pinned INTEGER NOT NULL DEFAULT 0 CHECK (is_pinned IN (0, 1));',
+        );
+      } catch {}
+
+      try {
+        await this.db.execute('ALTER TABLE books ADD COLUMN pinned_at INTEGER DEFAULT NULL;');
+      } catch {}
+
+      try {
+        await this.db.execute(
+          'CREATE INDEX IF NOT EXISTS idx_books_pinned ON books(is_pinned DESC, pinned_at DESC);',
+        );
+      } catch {}
 
       this.isInitialized = true;
     } catch {
@@ -98,13 +122,28 @@ export class SqliteService {
   async getAllBooks(): Promise<BookRecord[]> {
     if (this.isNative && this.db) {
       try {
-        const result = await this.db.query('SELECT * FROM books ORDER BY last_read_at DESC;');
+        const result = await this.db.query(
+          'SELECT * FROM books ORDER BY is_pinned DESC, pinned_at DESC, last_read_at DESC;',
+        );
         return (result.values as BookRecord[]) || [];
-      } catch {
-      }
+      } catch {}
     }
     const books = readStorage<BookRecord[]>(STORAGE_KEYS.BOOKS, []);
-    return books.sort((a, b) => b.last_read_at - a.last_read_at);
+    return books.sort((a, b) => {
+      const pinA = a.is_pinned ?? 0;
+      const pinB = b.is_pinned ?? 0;
+      if (pinA !== pinB) {
+        return pinB - pinA;
+      }
+      if (pinA === 1) {
+        const timeA = a.pinned_at ?? 0;
+        const timeB = b.pinned_at ?? 0;
+        if (timeA !== timeB) {
+          return timeB - timeA;
+        }
+      }
+      return b.last_read_at - a.last_read_at;
+    });
   }
 
   async getBookById(id: string): Promise<BookRecord | null> {
@@ -115,8 +154,7 @@ export class SqliteService {
           return result.values[0] as BookRecord;
         }
         return null;
-      } catch {
-      }
+      } catch {}
     }
     const books = readStorage<BookRecord[]>(STORAGE_KEYS.BOOKS, []);
     return books.find((b) => b.id === id) || null;
@@ -163,11 +201,13 @@ export class SqliteService {
   }
 
   async upsertBook(book: BookRecord): Promise<void> {
+    const isPinned = book.is_pinned ?? 0;
+    const pinnedAt = book.pinned_at ?? null;
     if (this.isNative && this.db) {
       try {
         const query = `
-          INSERT INTO books (id, title, author, format, file_path, cover_path, locator, progress_percentage, total_items, last_read_at, updated_at)
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          INSERT INTO books (id, title, author, format, file_path, cover_path, locator, progress_percentage, total_items, last_read_at, updated_at, is_pinned, pinned_at)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
           ON CONFLICT(id) DO UPDATE SET
             title = excluded.title,
             author = excluded.author,
@@ -178,7 +218,9 @@ export class SqliteService {
             progress_percentage = excluded.progress_percentage,
             total_items = excluded.total_items,
             last_read_at = excluded.last_read_at,
-            updated_at = excluded.updated_at;
+            updated_at = excluded.updated_at,
+            is_pinned = excluded.is_pinned,
+            pinned_at = excluded.pinned_at;
         `;
         await this.db.run(query, [
           book.id,
@@ -192,22 +234,32 @@ export class SqliteService {
           book.total_items,
           book.last_read_at,
           book.updated_at,
+          isPinned,
+          pinnedAt,
         ]);
         return;
-      } catch {
-      }
+      } catch {}
     }
     const books = readStorage<BookRecord[]>(STORAGE_KEYS.BOOKS, []);
     const index = books.findIndex((b) => b.id === book.id);
+    const updatedBook: BookRecord = {
+      ...book,
+      is_pinned: isPinned,
+      pinned_at: pinnedAt,
+    };
     if (index !== -1) {
-      books[index] = { ...book };
+      books[index] = updatedBook;
     } else {
-      books.push({ ...book });
+      books.push(updatedBook);
     }
     writeStorage(STORAGE_KEYS.BOOKS, books);
   }
 
-  async updateReadingPosition(bookId: string, locator: string, progressPercentage: number): Promise<void> {
+  async updateReadingPosition(
+    bookId: string,
+    locator: string,
+    progressPercentage: number,
+  ): Promise<void> {
     const now = Date.now();
     if (this.isNative && this.db) {
       try {
@@ -218,8 +270,7 @@ export class SqliteService {
         `;
         await this.db.run(query, [locator, progressPercentage, now, now, bookId]);
         return;
-      } catch {
-      }
+      } catch {}
     }
     const books = readStorage<BookRecord[]>(STORAGE_KEYS.BOOKS, []);
     const book = books.find((b) => b.id === bookId);
@@ -243,8 +294,7 @@ export class SqliteService {
         `;
         await this.db.run(query, [coverPath, now, bookId]);
         return;
-      } catch {
-      }
+      } catch {}
     }
     const books = readStorage<BookRecord[]>(STORAGE_KEYS.BOOKS, []);
     const book = books.find((b) => b.id === bookId);
@@ -260,13 +310,15 @@ export class SqliteService {
       try {
         await this.db.run('DELETE FROM books WHERE id = ?;', [id]);
         return;
-      } catch {
-      }
+      } catch {}
     }
     const books = readStorage<BookRecord[]>(STORAGE_KEYS.BOOKS, []);
     const filtered = books.filter((b) => b.id !== id);
     writeStorage(STORAGE_KEYS.BOOKS, filtered);
-    const bookFolders = readStorage<{ book_id: string; folder_id: number }[]>(STORAGE_KEYS.BOOK_FOLDERS, []);
+    const bookFolders = readStorage<{ book_id: string; folder_id: number }[]>(
+      STORAGE_KEYS.BOOK_FOLDERS,
+      [],
+    );
     writeStorage(
       STORAGE_KEYS.BOOK_FOLDERS,
       bookFolders.filter((bf) => bf.book_id !== id),
@@ -280,8 +332,7 @@ export class SqliteService {
           "SELECT * FROM sync_queue WHERE status = 'pending' ORDER BY updated_at ASC;",
         );
         return (result.values as SyncQueueItem[]) || [];
-      } catch {
-      }
+      } catch {}
     }
     const queue = readStorage<SyncQueueItem[]>(STORAGE_KEYS.SYNC_QUEUE, []);
     return queue.filter((item) => item.status === 'pending');
@@ -302,8 +353,7 @@ export class SqliteService {
           item.status,
         ]);
         return;
-      } catch {
-      }
+      } catch {}
     }
     const queue = readStorage<SyncQueueItem[]>(STORAGE_KEYS.SYNC_QUEUE, []);
     const maxId = queue.reduce((max, q) => Math.max(max, q.id || 0), 0);
@@ -319,8 +369,7 @@ export class SqliteService {
       try {
         await this.db.run('UPDATE sync_queue SET status = ? WHERE id = ?;', [status, id]);
         return;
-      } catch {
-      }
+      } catch {}
     }
     const queue = readStorage<SyncQueueItem[]>(STORAGE_KEYS.SYNC_QUEUE, []);
     const target = queue.find((q) => q.id === id);
@@ -335,8 +384,7 @@ export class SqliteService {
       try {
         await this.db.run("DELETE FROM sync_queue WHERE status = 'synced';");
         return;
-      } catch {
-      }
+      } catch {}
     }
     const queue = readStorage<SyncQueueItem[]>(STORAGE_KEYS.SYNC_QUEUE, []);
     const remaining = queue.filter((item) => item.status !== 'synced');
@@ -346,10 +394,11 @@ export class SqliteService {
   async getDictionaryHistory(): Promise<DictionaryItem[]> {
     if (this.isNative && this.db) {
       try {
-        const result = await this.db.query('SELECT * FROM dictionary_history ORDER BY created_at DESC;');
+        const result = await this.db.query(
+          'SELECT * FROM dictionary_history ORDER BY created_at DESC;',
+        );
         return (result.values as DictionaryItem[]) || [];
-      } catch {
-      }
+      } catch {}
     }
     const list = readStorage<DictionaryItem[]>(STORAGE_KEYS.DICTIONARY, []);
     return list.sort((a, b) => b.created_at - a.created_at);
@@ -371,8 +420,7 @@ export class SqliteService {
           item.created_at,
         ]);
         return res.changes?.lastId || 1;
-      } catch {
-      }
+      } catch {}
     }
     const list = readStorage<DictionaryItem[]>(STORAGE_KEYS.DICTIONARY, []);
     const maxId = list.reduce((max, d) => Math.max(max, d.id || 0), 0);
@@ -390,8 +438,7 @@ export class SqliteService {
       try {
         await this.db.run('DELETE FROM dictionary_history WHERE id = ?;', [id]);
         return;
-      } catch {
-      }
+      } catch {}
     }
     const list = readStorage<DictionaryItem[]>(STORAGE_KEYS.DICTIONARY, []);
     const filtered = list.filter((item) => item.id !== id);
@@ -406,8 +453,7 @@ export class SqliteService {
           return result.values[0] as UserSession;
         }
         return null;
-      } catch {
-      }
+      } catch {}
     }
     return readStorage<UserSession | null>(STORAGE_KEYS.SESSION, null);
   }
@@ -431,8 +477,7 @@ export class SqliteService {
           session.drive_folder_id ?? null,
         ]);
         return;
-      } catch {
-      }
+      } catch {}
     }
     const current = readStorage<UserSession | null>(STORAGE_KEYS.SESSION, null);
     const sessionObj: UserSession = {
@@ -440,7 +485,10 @@ export class SqliteService {
       email: session.email,
       display_name: session.display_name,
       last_sync_at: session.last_sync_at,
-      drive_folder_id: session.drive_folder_id !== undefined ? session.drive_folder_id : current?.drive_folder_id ?? null,
+      drive_folder_id:
+        session.drive_folder_id !== undefined
+          ? session.drive_folder_id
+          : (current?.drive_folder_id ?? null),
     };
     writeStorage(STORAGE_KEYS.SESSION, sessionObj);
   }
@@ -448,13 +496,14 @@ export class SqliteService {
   async getDriveFolderId(): Promise<string | null> {
     if (this.isNative && this.db) {
       try {
-        const result = await this.db.query('SELECT drive_folder_id FROM user_session WHERE id = 1;');
+        const result = await this.db.query(
+          'SELECT drive_folder_id FROM user_session WHERE id = 1;',
+        );
         if (result.values && result.values.length > 0) {
           return (result.values[0].drive_folder_id as string) || null;
         }
         return null;
-      } catch {
-      }
+      } catch {}
     }
     return readStorage<string | null>(STORAGE_KEYS.DRIVE_FOLDER_ID, null);
   }
@@ -469,8 +518,7 @@ export class SqliteService {
         `;
         await this.db.run(query, [folderId]);
         return;
-      } catch {
-      }
+      } catch {}
     }
     writeStorage(STORAGE_KEYS.DRIVE_FOLDER_ID, folderId);
     const session = readStorage<UserSession | null>(STORAGE_KEYS.SESSION, null);
@@ -487,8 +535,7 @@ export class SqliteService {
           'UPDATE user_session SET email = NULL, display_name = NULL, last_sync_at = NULL, drive_folder_id = NULL WHERE id = 1;',
         );
         return;
-      } catch {
-      }
+      } catch {}
     }
     writeStorage(STORAGE_KEYS.SESSION, null);
     writeStorage(STORAGE_KEYS.DRIVE_FOLDER_ID, null);
@@ -527,8 +574,7 @@ export class SqliteService {
       try {
         await this.db.close();
         await this.sqliteConnection.closeConnection(this.dbName, false);
-      } catch {
-      }
+      } catch {}
       this.db = null;
       this.sqliteConnection = null;
       this.isInitialized = false;

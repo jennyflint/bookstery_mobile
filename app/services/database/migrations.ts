@@ -10,7 +10,9 @@ CREATE TABLE IF NOT EXISTS books (
   progress_percentage REAL NOT NULL DEFAULT 0.0,
   total_items INTEGER NOT NULL DEFAULT 0,
   last_read_at INTEGER NOT NULL,
-  updated_at INTEGER NOT NULL
+  updated_at INTEGER NOT NULL,
+  is_pinned INTEGER NOT NULL DEFAULT 0 CHECK (is_pinned IN (0, 1)),
+  pinned_at INTEGER DEFAULT NULL
 );
 
 CREATE TABLE IF NOT EXISTS sync_queue (
@@ -41,6 +43,7 @@ CREATE TABLE IF NOT EXISTS user_session (
 );
 
 CREATE INDEX IF NOT EXISTS idx_books_updated_at ON books(updated_at);
+CREATE INDEX IF NOT EXISTS idx_books_pinned ON books(is_pinned DESC, pinned_at DESC);
 CREATE INDEX IF NOT EXISTS idx_sync_queue_status ON sync_queue(status);
 CREATE INDEX IF NOT EXISTS idx_dictionary_created ON dictionary_history(created_at);
 
@@ -60,3 +63,9 @@ CREATE TABLE IF NOT EXISTS book_folder (
 CREATE INDEX IF NOT EXISTS idx_book_folder_book ON book_folder(book_id);
 CREATE INDEX IF NOT EXISTS idx_book_folder_folder ON book_folder(folder_id);
 `;
+
+export const MIGRATION_ADD_PINNED_COLUMNS = [
+  'ALTER TABLE books ADD COLUMN is_pinned INTEGER NOT NULL DEFAULT 0 CHECK (is_pinned IN (0, 1));',
+  'ALTER TABLE books ADD COLUMN pinned_at INTEGER DEFAULT NULL;',
+  'CREATE INDEX IF NOT EXISTS idx_books_pinned ON books(is_pinned DESC, pinned_at DESC);',
+];

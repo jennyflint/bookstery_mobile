@@ -1,8 +1,27 @@
 import { defineStore } from 'pinia';
 import { Directory, Filesystem } from '@capacitor/filesystem';
 import { SqliteService } from '../services/database/SqliteService';
+import { BookRepository } from '../services/database/BookRepository';
 import { CoverGenerationQueueService } from '../services/covers/CoverGenerationQueueService';
 import type { AddBookResult, BookFormat, BookRecord } from '../types';
+
+function sortLibraryBooks(books: BookRecord[]): BookRecord[] {
+  return [...books].sort((a, b) => {
+    const pinA = a.is_pinned ?? 0;
+    const pinB = b.is_pinned ?? 0;
+    if (pinA !== pinB) {
+      return pinB - pinA;
+    }
+    if (pinA === 1) {
+      const timeA = a.pinned_at ?? 0;
+      const timeB = b.pinned_at ?? 0;
+      if (timeA !== timeB) {
+        return timeB - timeA;
+      }
+    }
+    return b.last_read_at - a.last_read_at;
+  });
+}
 
 export const useLibraryStore = defineStore('library', {
   state: () => ({
@@ -14,8 +33,9 @@ export const useLibraryStore = defineStore('library', {
   }),
   getters: {
     filteredBooks(state): BookRecord[] {
-      return state.books.filter((book) => {
-        const matchesQuery = !state.searchQuery ||
+      const filtered = state.books.filter((book) => {
+        const matchesQuery =
+          !state.searchQuery ||
           book.title.toLowerCase().includes(state.searchQuery.toLowerCase()) ||
           (book.author && book.author.toLowerCase().includes(state.searchQuery.toLowerCase()));
 
@@ -23,6 +43,7 @@ export const useLibraryStore = defineStore('library', {
 
         return matchesQuery && matchesFormat;
       });
+      return sortLibraryBooks(filtered);
     },
     totalBooksCount(state): number {
       return state.books.length;
@@ -128,7 +149,34 @@ export const useLibraryStore = defineStore('library', {
       } else {
         this.books.unshift(book);
       }
+      this.books = sortLibraryBooks(this.books);
       return { success: true, book };
+    },
+    async toggleBookPin(bookId: string): Promise<void> {
+      const target = this.books.find((b) => b.id === bookId);
+      if (!target) {
+        return;
+      }
+
+      const previousPinned = target.is_pinned ?? 0;
+      const previousPinnedAt = target.pinned_at ?? null;
+
+      const newPinned = previousPinned === 1 ? 0 : 1;
+      const newPinnedAt = newPinned === 1 ? Date.now() : null;
+
+      target.is_pinned = newPinned;
+      target.pinned_at = newPinnedAt;
+      this.books = sortLibraryBooks(this.books);
+
+      try {
+        const repo = BookRepository.getInstance();
+        await repo.togglePinBook(bookId);
+      } catch (error) {
+        target.is_pinned = previousPinned;
+        target.pinned_at = previousPinnedAt;
+        this.books = sortLibraryBooks(this.books);
+        throw error;
+      }
     },
     async removeBook(id: string): Promise<void> {
       const sqlite = SqliteService.getInstance();

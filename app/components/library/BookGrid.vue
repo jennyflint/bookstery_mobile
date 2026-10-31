@@ -68,6 +68,13 @@ const handleToggleFinished = async (book: BookRecord): Promise<void> => {
   }
 };
 
+const handleTogglePin = async (book: BookRecord): Promise<void> => {
+  await libraryStore.toggleBookPin(book.id);
+  if (activeFolderId.value !== 'all') {
+    await folderStore.loadFolderBooks(activeFolderId.value);
+  }
+};
+
 const handleRemoveFromFolder = async (payload: {
   book: BookRecord;
   folderId: number;
@@ -83,7 +90,7 @@ const displayBooks = computed((): BookRecord[] => {
   const sourceBooks =
     activeFolderId.value === 'all' ? libraryStore.books : folderStore.currentBooks;
 
-  return sourceBooks.filter((book) => {
+  const filtered = sourceBooks.filter((book) => {
     const matchesQuery =
       !libraryStore.searchQuery ||
       book.title.toLowerCase().includes(libraryStore.searchQuery.toLowerCase()) ||
@@ -94,6 +101,30 @@ const displayBooks = computed((): BookRecord[] => {
 
     return matchesQuery && matchesFormat;
   });
+
+  return [...filtered].sort((a, b) => {
+    const pinA = a.is_pinned ?? 0;
+    const pinB = b.is_pinned ?? 0;
+    if (pinA !== pinB) {
+      return pinB - pinA;
+    }
+    if (pinA === 1) {
+      const timeA = a.pinned_at ?? 0;
+      const timeB = b.pinned_at ?? 0;
+      if (timeA !== timeB) {
+        return timeB - timeA;
+      }
+    }
+    return b.last_read_at - a.last_read_at;
+  });
+});
+
+const pinnedBooks = computed((): BookRecord[] => {
+  return displayBooks.value.filter((b) => b.is_pinned === 1);
+});
+
+const unpinnedBooks = computed((): BookRecord[] => {
+  return displayBooks.value.filter((b) => b.is_pinned !== 1);
 });
 </script>
 
@@ -235,16 +266,71 @@ const displayBooks = computed((): BookRecord[] => {
 
     <div
       v-if="displayBooks.length > 0"
-      class="grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5"
+      class="space-y-6"
     >
-      <BookCard
-        v-for="book in displayBooks"
-        :key="book.id"
-        :book="book"
-        @select="emit('select-book', $event)"
-        @delete="handleDelete"
-        @open-menu="handleOpenMenu"
-      />
+      <div
+        v-if="pinnedBooks.length > 0"
+        data-testid="pinned-books-section"
+        class="space-y-3"
+      >
+        <div
+          class="flex items-center gap-2 px-1 text-xs font-bold uppercase tracking-wider text-[#3E5725]"
+        >
+          <svg
+            class="h-4 w-4 text-[#E8BE54]"
+            viewBox="0 0 24 24"
+            fill="currentColor"
+          >
+            <path d="M16 12V4h1V2H7v2h1v8l-2 2v2h5.2v6h1.6v-6H18v-2l-2-2z" />
+          </svg>
+          <span>{{ t('library.pinnedSection') }}</span>
+          <span
+            class="rounded-full bg-[#E8BE54]/30 px-2 py-0.5 text-[10px] font-black text-[#3E5725]"
+          >
+            {{ pinnedBooks.length }}
+          </span>
+        </div>
+
+        <div class="grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5">
+          <BookCard
+            v-for="book in pinnedBooks"
+            :key="book.id"
+            :book="book"
+            @select="emit('select-book', $event)"
+            @delete="handleDelete"
+            @open-menu="handleOpenMenu"
+          />
+        </div>
+      </div>
+
+      <div
+        v-if="pinnedBooks.length > 0 && unpinnedBooks.length > 0"
+        data-testid="books-section-divider"
+        class="relative my-4"
+      >
+        <div class="absolute inset-0 flex items-center">
+          <div class="w-full border-t border-zinc-200"></div>
+        </div>
+        <div class="relative flex justify-start">
+          <span class="bg-white/80 pr-3 text-xs font-bold uppercase tracking-wider text-zinc-400">
+            {{ t('library.allBooksSection') }}
+          </span>
+        </div>
+      </div>
+
+      <div
+        v-if="unpinnedBooks.length > 0"
+        class="grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5"
+      >
+        <BookCard
+          v-for="book in unpinnedBooks"
+          :key="book.id"
+          :book="book"
+          @select="emit('select-book', $event)"
+          @delete="handleDelete"
+          @open-menu="handleOpenMenu"
+        />
+      </div>
     </div>
 
     <div
@@ -286,6 +372,7 @@ const displayBooks = computed((): BookRecord[] => {
       @close="handleCloseMenu"
       @manage-folders="handleManageFolders"
       @toggle-finished="handleToggleFinished"
+      @toggle-pin="handleTogglePin"
       @remove-from-folder="handleRemoveFromFolder"
       @delete-book="handleDelete($event.id)"
     />

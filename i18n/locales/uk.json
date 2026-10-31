@@ -48,7 +48,12 @@
     "filterFb2": "FB2",
     "deleteBook": "Видалити",
     "lastRead": "Востаннє читано",
-    "progress": "Прогрес"
+    "progress": "Прогрес",
+    "pinToTop": "Закріпити вгорі",
+    "unpinBook": "Відкріпити книгу",
+    "pinned": "Закріплено",
+    "pinnedSection": "Закріплені книги",
+    "allBooksSection": "Усі книги"
   },
   "scanner": {
     "title": "Пошук книг на пристрої",

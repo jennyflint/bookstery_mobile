@@ -124,8 +124,23 @@ const formatBadgeClass = (format: string) => {
     </div>
 
     <div
-      class="my-3 flex h-44 w-full items-center justify-center overflow-hidden rounded-xl border border-zinc-100 bg-zinc-100 shadow-inner"
+      class="relative my-3 flex h-44 w-full items-center justify-center overflow-hidden rounded-xl border border-zinc-100 bg-zinc-100 shadow-inner"
     >
+      <div
+        v-if="props.book.is_pinned === 1"
+        data-testid="pinned-badge"
+        class="absolute right-2 top-2 z-10 flex h-6 w-6 items-center justify-center rounded-full border border-white/80 bg-[#E8BE54] text-[#3E5725] shadow-md"
+        :title="t('library.pinned')"
+      >
+        <svg
+          class="h-3.5 w-3.5"
+          viewBox="0 0 24 24"
+          fill="currentColor"
+        >
+          <path d="M16 12V4h1V2H7v2h1v8l-2 2v2h5.2v6h1.6v-6H18v-2l-2-2z" />
+        </svg>
+      </div>
+
       <img
         :src="coverSrc"
         :alt="props.book.title"
