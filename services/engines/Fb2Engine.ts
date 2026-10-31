@@ -228,6 +228,7 @@ export class Fb2Engine extends BaseEngine {
       locator: currentElem ? currentElem.id : `fb2-p-${this.currentParagraphIndex}`,
       progressPercentage: Math.min(Math.max(progress, 0), 100),
     };
+    this.onLocationChange?.(this.location);
   }
 
   async goTo(locator: string): Promise<void> {

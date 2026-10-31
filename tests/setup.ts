@@ -75,4 +75,24 @@ if (typeof window !== 'undefined') {
       dispatchEvent: vi.fn(),
     }));
   }
+
+  if (!window.IntersectionObserver) {
+    class MockIntersectionObserver {
+      callback?: IntersectionObserverCallback;
+      observe = vi.fn((elem: HTMLElement) => {
+        if (this.callback) {
+          this.callback(
+            [{ isIntersecting: true, target: elem } as unknown as IntersectionObserverEntry],
+            this as unknown as IntersectionObserver,
+          );
+        }
+      });
+      unobserve = vi.fn();
+      disconnect = vi.fn();
+      constructor(callback?: IntersectionObserverCallback) {
+        this.callback = callback;
+      }
+    }
+    window.IntersectionObserver = MockIntersectionObserver as unknown as typeof IntersectionObserver;
+  }
 }

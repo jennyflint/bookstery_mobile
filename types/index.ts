@@ -64,12 +64,16 @@ export interface ReaderLocation {
   totalPages?: number;
 }
 
+export type ReaderPaginationMode = 'buttons' | 'scroll';
+
 export interface ReaderEngineInterface {
-  init(container: HTMLElement, data: Uint8Array | ArrayBuffer | string): Promise<void>;
+  init(container: HTMLElement, data: Uint8Array | ArrayBuffer | string | Blob): Promise<void>;
   goTo(locator: string): Promise<void>;
   next(): Promise<void>;
   prev(): Promise<void>;
   getCurrentLocation(): ReaderLocation;
+  setPaginationMode?(mode: ReaderPaginationMode): void | Promise<void>;
+  onLocationChange?: (location: ReaderLocation) => void;
   destroy(): void;
 }
 
@@ -78,6 +82,7 @@ export interface ReaderSettings {
   fontSize: number;
   fontFamily: string;
   lineHeight: number;
+  paginationMode: ReaderPaginationMode;
 }
 
 export interface TextSelectionDetail {

@@ -19,7 +19,7 @@ const route = useRoute();
 const router = useRouter();
 const libraryStore = useLibraryStore();
 const readerStore = useReaderStore();
-const { openBook, nextPage, prevPage, closeBook } = useReader();
+const { openBook, nextPage, prevPage, setPaginationMode, closeBook } = useReader();
 const { enableKeepAwake, disableKeepAwake } = useAppLifecycle();
 const { clearSelection } = useTextSelection();
 const translationService = TranslationService.getInstance();
@@ -163,6 +163,7 @@ const handleCloseTranslation = () => {
     <ThemeSettingsSheet
       :is-open="isSettingsOpen"
       @close="handleCloseSettings"
+      @change-pagination="setPaginationMode"
     />
 
     <TextSelectionTooltip

@@ -43,7 +43,10 @@
     "next": "Вперед",
     "previous": "Назад",
     "tableOfContents": "Зміст",
-    "settings": "Параметри"
+    "settings": "Параметри",
+    "paginationMode": "Режим перегортання",
+    "paginationScroll": "Прокручування",
+    "paginationButtons": "Кнопками"
   },
   "theme": {
     "light": "Світла",

@@ -43,7 +43,10 @@
     "next": "Next",
     "previous": "Previous",
     "tableOfContents": "Contents",
-    "settings": "Settings"
+    "settings": "Settings",
+    "paginationMode": "Page navigation",
+    "paginationScroll": "Scroll",
+    "paginationButtons": "Buttons"
   },
   "theme": {
     "light": "Light",

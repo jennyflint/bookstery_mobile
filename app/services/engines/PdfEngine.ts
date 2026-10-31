@@ -2,7 +2,7 @@ import * as pdfjsLib from 'pdfjs-dist';
 // @ts-expect-error Vite URL import for pdf.worker
 import pdfWorkerUrl from 'pdfjs-dist/build/pdf.worker.min.js?url';
 import { BaseEngine } from './BaseEngine';
-import type { ReaderLocation } from '../../types';
+import type { ReaderLocation, ReaderPaginationMode } from '../../types';
 
 interface TextContentItem {
   str: string;
@@ -27,6 +27,13 @@ export class PdfEngine extends BaseEngine {
   private activeRenderTask: pdfjsLib.RenderTask | null = null;
   private currentPageNumber: number = 1;
   private totalPagesCount: number = 0;
+
+  private scrollContainer: HTMLElement | null = null;
+  private pageObserver: IntersectionObserver | null = null;
+  private renderedPages = new Set<number>();
+  private activeSlotRenderTasks = new Map<number, pdfjsLib.RenderTask>();
+  private wheelThrottle = false;
+  private scrollCleanupListener: (() => void) | null = null;
 
   async init(
     container: HTMLElement,
@@ -90,10 +97,33 @@ export class PdfEngine extends BaseEngine {
       this.totalPagesCount = this.pdfDocument.numPages;
       this.currentPageNumber = 1;
 
-      await this.renderPage(this.currentPageNumber);
+      if (this.paginationMode === 'scroll') {
+        await this.renderScrollMode();
+      } else {
+        await this.renderButtonsMode(this.currentPageNumber);
+      }
     } catch (err) {
       console.error('[PdfEngine] Failed to initialize PDF document:', err);
       throw err;
+    }
+  }
+
+  async setPaginationMode(mode: ReaderPaginationMode): Promise<void> {
+    if (this.paginationMode === mode && this.container?.children.length) {
+      return;
+    }
+    this.paginationMode = mode;
+    this.cleanupScroll();
+
+    if (!this.pdfDocument || !this.container) {
+      return;
+    }
+
+    if (mode === 'scroll') {
+      await this.renderScrollMode();
+      this.scrollToPage(this.currentPageNumber);
+    } else {
+      await this.renderButtonsMode(this.currentPageNumber);
     }
   }
 
@@ -102,7 +132,12 @@ export class PdfEngine extends BaseEngine {
     if (isNaN(pageNum) || pageNum < 1 || pageNum > this.totalPagesCount) {
       return;
     }
-    await this.renderPage(pageNum);
+
+    if (this.paginationMode === 'scroll') {
+      this.scrollToPage(pageNum);
+    } else {
+      await this.renderButtonsMode(pageNum);
+    }
   }
 
   async next(): Promise<void> {
@@ -118,9 +153,10 @@ export class PdfEngine extends BaseEngine {
   }
 
   getCurrentLocation(): ReaderLocation {
-    const percentage = this.totalPagesCount > 0
-      ? Number(((this.currentPageNumber / this.totalPagesCount) * 100).toFixed(2))
-      : 0;
+    const percentage =
+      this.totalPagesCount > 0
+        ? Number(((this.currentPageNumber / this.totalPagesCount) * 100).toFixed(2))
+        : 0;
 
     return {
       locator: String(this.currentPageNumber),
@@ -130,10 +166,185 @@ export class PdfEngine extends BaseEngine {
     };
   }
 
-  private async renderPage(pageNumber: number): Promise<void> {
-    if (!this.pdfDocument || !this.container) {
+  private async renderScrollMode(): Promise<void> {
+    if (!this.pdfDocument || !this.container) return;
+    this.cleanupScroll();
+    this.container.innerHTML = '';
+
+    const scrollWrapper = document.createElement('div');
+    scrollWrapper.className =
+      'pdf-scroll-container w-full h-full overflow-y-auto overflow-x-hidden flex flex-col items-center py-6 px-2 space-y-6 select-text';
+    scrollWrapper.style.scrollBehavior = 'smooth';
+    scrollWrapper.style.webkitOverflowScrolling = 'touch';
+    this.container.appendChild(scrollWrapper);
+    this.scrollContainer = scrollWrapper;
+
+    const firstPage = await this.pdfDocument.getPage(1);
+    const initialViewport = firstPage.getViewport({ scale: 1 });
+    const containerWidth = Math.max(this.container.clientWidth, 320);
+    const targetScale = Math.max(Math.min((containerWidth - 32) / initialViewport.width, 2.0), 0.4);
+    const scaledViewport = firstPage.getViewport({ scale: targetScale });
+    const expectedWidth = Math.floor(scaledViewport.width);
+    const expectedHeight = Math.floor(scaledViewport.height);
+    try {
+      firstPage.cleanup();
+    } catch {
+    }
+
+    for (let pageNum = 1; pageNum <= this.totalPagesCount; pageNum++) {
+      const pageSlot = document.createElement('div');
+      pageSlot.id = `pdf-page-slot-${pageNum}`;
+      pageSlot.dataset.pageNumber = String(pageNum);
+      pageSlot.className =
+        'pdf-page-slot relative flex justify-center items-center bg-white shadow-md rounded-md overflow-hidden transition-all';
+      pageSlot.style.width = `${expectedWidth}px`;
+      pageSlot.style.minHeight = `${expectedHeight}px`;
+
+      const placeholder = document.createElement('div');
+      placeholder.className =
+        'pdf-slot-placeholder text-zinc-300 text-xs font-semibold flex items-center justify-center';
+      placeholder.style.height = `${expectedHeight}px`;
+      placeholder.textContent = `${pageNum} / ${this.totalPagesCount}`;
+      pageSlot.appendChild(placeholder);
+
+      scrollWrapper.appendChild(pageSlot);
+    }
+
+    this.pageObserver = new IntersectionObserver(
+      (entries) => {
+        entries.forEach((entry) => {
+          if (entry.isIntersecting) {
+            const slot = entry.target as HTMLElement;
+            const pageNum = parseInt(slot.dataset.pageNumber || '1', 10);
+            if (!this.renderedPages.has(pageNum)) {
+              this.renderPageIntoSlot(pageNum, slot, targetScale);
+            }
+          }
+        });
+      },
+      {
+        root: scrollWrapper,
+        rootMargin: '400px 0px',
+        threshold: 0.01,
+      },
+    );
+
+    scrollWrapper.querySelectorAll('.pdf-page-slot').forEach((slot) => {
+      this.pageObserver?.observe(slot);
+    });
+
+    let scrollRaf: number | null = null;
+    const handleScroll = () => {
+      if (scrollRaf) cancelAnimationFrame(scrollRaf);
+      scrollRaf = requestAnimationFrame(() => {
+        if (!this.scrollContainer) return;
+        const containerTop = this.scrollContainer.scrollTop;
+        const containerHeight = this.scrollContainer.clientHeight;
+        const checkLine = containerTop + containerHeight * 0.35;
+
+        const slots = this.scrollContainer.querySelectorAll<HTMLElement>('.pdf-page-slot');
+        for (const slot of slots) {
+          const top = slot.offsetTop;
+          const bottom = top + slot.offsetHeight;
+          if (top <= checkLine && bottom >= checkLine) {
+            const pageNum = parseInt(slot.dataset.pageNumber || '1', 10);
+            if (this.currentPageNumber !== pageNum) {
+              this.currentPageNumber = pageNum;
+              this.location = this.getCurrentLocation();
+              this.onLocationChange?.(this.location);
+            }
+            break;
+          }
+        }
+      });
+    };
+
+    scrollWrapper.addEventListener('scroll', handleScroll, { passive: true });
+    this.scrollCleanupListener = () => {
+      scrollWrapper.removeEventListener('scroll', handleScroll);
+    };
+
+    this.location = this.getCurrentLocation();
+    this.onLocationChange?.(this.location);
+  }
+
+  private async renderPageIntoSlot(
+    pageNumber: number,
+    slot: HTMLElement,
+    scale: number,
+  ): Promise<void> {
+    if (!this.pdfDocument || this.renderedPages.has(pageNumber)) {
       return;
     }
+    this.renderedPages.add(pageNumber);
+
+    try {
+      const pageProxy = await this.pdfDocument.getPage(pageNumber);
+      const viewport = pageProxy.getViewport({ scale });
+
+      const canvas = document.createElement('canvas');
+      canvas.className = 'pdf-canvas block w-full h-auto bg-white';
+      canvas.width = Math.floor(viewport.width);
+      canvas.height = Math.floor(viewport.height);
+      const canvasContext = canvas.getContext('2d');
+
+      if (!canvasContext) {
+        pageProxy.cleanup();
+        return;
+      }
+
+      slot.innerHTML = '';
+      slot.appendChild(canvas);
+
+      const textLayerDiv = document.createElement('div');
+      textLayerDiv.className =
+        'pdf-text-layer absolute top-0 left-0 overflow-hidden pointer-events-auto leading-none w-full h-full';
+      slot.appendChild(textLayerDiv);
+
+      const renderTask = pageProxy.render({
+        canvasContext,
+        viewport,
+      });
+      this.activeSlotRenderTasks.set(pageNumber, renderTask);
+
+      await renderTask.promise;
+      this.activeSlotRenderTasks.delete(pageNumber);
+
+      try {
+        const textContent = await pageProxy.getTextContent();
+        for (const item of textContent.items as TextContentItem[]) {
+          if (!item.str) continue;
+          const span = document.createElement('span');
+          span.textContent = item.str;
+          span.className = 'text-transparent select-text cursor-text';
+          textLayerDiv.appendChild(span);
+        }
+      } catch {
+      }
+
+      pageProxy.cleanup();
+    } catch (err) {
+      console.warn(`[PdfEngine] Error rendering page ${pageNumber} into slot:`, err);
+    }
+  }
+
+  private scrollToPage(pageNumber: number): void {
+    if (!this.scrollContainer) return;
+    const slot = this.scrollContainer.querySelector<HTMLElement>(`#pdf-page-slot-${pageNumber}`);
+    if (slot) {
+      this.scrollContainer.scrollTo({
+        top: slot.offsetTop - 16,
+        behavior: 'smooth',
+      });
+      this.currentPageNumber = pageNumber;
+      this.location = this.getCurrentLocation();
+      this.onLocationChange?.(this.location);
+    }
+  }
+
+  private async renderButtonsMode(pageNumber: number): Promise<void> {
+    if (!this.pdfDocument || !this.container) return;
+    this.cleanupScroll();
 
     if (this.activeRenderTask) {
       try {
@@ -158,7 +369,7 @@ export class PdfEngine extends BaseEngine {
 
     const viewportContainer = document.createElement('div');
     viewportContainer.className =
-      'pdf-page-container relative flex justify-center items-center select-text w-full h-full';
+      'pdf-page-container relative flex justify-center items-center select-text w-full h-full overflow-hidden';
 
     const canvas = document.createElement('canvas');
     canvas.className = 'pdf-canvas block shadow-md rounded bg-white';
@@ -193,6 +404,25 @@ export class PdfEngine extends BaseEngine {
     textLayerDiv.style.height = `${Math.floor(viewport.height)}px`;
     viewportContainer.appendChild(textLayerDiv);
 
+    // Mouse wheel navigation in buttons mode
+    const handleWheel = (event: WheelEvent) => {
+      if (this.wheelThrottle) return;
+      if (event.deltaY > 30) {
+        this.wheelThrottle = true;
+        setTimeout(() => {
+          this.wheelThrottle = false;
+        }, 350);
+        this.next();
+      } else if (event.deltaY < -30) {
+        this.wheelThrottle = true;
+        setTimeout(() => {
+          this.wheelThrottle = false;
+        }, 350);
+        this.prev();
+      }
+    };
+    viewportContainer.addEventListener('wheel', handleWheel, { passive: true });
+
     this.container.appendChild(viewportContainer);
 
     this.activeRenderTask = this.currentPageProxy.render({
@@ -226,9 +456,32 @@ export class PdfEngine extends BaseEngine {
     }
 
     this.location = this.getCurrentLocation();
+    this.onLocationChange?.(this.location);
+  }
+
+  private cleanupScroll(): void {
+    if (this.pageObserver) {
+      this.pageObserver.disconnect();
+      this.pageObserver = null;
+    }
+    if (this.scrollCleanupListener) {
+      this.scrollCleanupListener();
+      this.scrollCleanupListener = null;
+    }
+    this.activeSlotRenderTasks.forEach((task) => {
+      try {
+        task.cancel();
+      } catch {
+      }
+    });
+    this.activeSlotRenderTasks.clear();
+    this.renderedPages.clear();
+    this.scrollContainer = null;
   }
 
   destroy(): void {
+    this.cleanupScroll();
+
     if (this.activeRenderTask) {
       try {
         this.activeRenderTask.cancel();

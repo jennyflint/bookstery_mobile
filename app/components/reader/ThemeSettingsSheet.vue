@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { useReaderStore } from '../../stores/readerStore';
-import type { ReaderTheme } from '../../types';
+import type { ReaderPaginationMode, ReaderTheme } from '../../types';
 
 defineProps<{
   isOpen: boolean;
@@ -8,6 +8,7 @@ defineProps<{
 
 const emit = defineEmits<{
   (e: 'close'): void;
+  (e: 'change-pagination', mode: ReaderPaginationMode): void;
 }>();
 
 const { t } = useI18n();
@@ -22,6 +23,11 @@ const themes: { id: ReaderTheme; nameKey: string; bg: string; text: string; bord
 
 const selectTheme = (theme: ReaderTheme) => {
   readerStore.setTheme(theme);
+};
+
+const selectPaginationMode = (mode: ReaderPaginationMode) => {
+  readerStore.setPaginationMode(mode);
+  emit('change-pagination', mode);
 };
 
 const increaseFont = () => {
@@ -55,6 +61,40 @@ const decreaseFont = () => {
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
           </svg>
         </button>
+      </div>
+
+      <div class="space-y-3">
+        <label class="text-xs font-bold text-zinc-500 uppercase tracking-wider block">
+          {{ t('reader.paginationMode') }}
+        </label>
+        <div class="grid grid-cols-2 gap-2 bg-zinc-100 p-1.5 rounded-2xl">
+          <button
+            type="button"
+            class="py-2.5 px-3 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-2"
+            :class="readerStore.settings.paginationMode === 'scroll'
+              ? 'bg-white text-indigo-600 shadow-sm'
+              : 'text-zinc-600 hover:text-zinc-900'"
+            @click="selectPaginationMode('scroll')"
+          >
+            <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16V4m0 0L3 8m4-4l4 4m6 0v12m0 0l4-4m-4 4l-4-4" />
+            </svg>
+            <span>{{ t('reader.paginationScroll') }}</span>
+          </button>
+          <button
+            type="button"
+            class="py-2.5 px-3 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-2"
+            :class="readerStore.settings.paginationMode === 'buttons'
+              ? 'bg-white text-indigo-600 shadow-sm'
+              : 'text-zinc-600 hover:text-zinc-900'"
+            @click="selectPaginationMode('buttons')"
+          >
+            <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
+            </svg>
+            <span>{{ t('reader.paginationButtons') }}</span>
+          </button>
+        </div>
       </div>
 
       <div class="space-y-3">

@@ -1,7 +1,7 @@
 import ePub from 'epubjs';
 import type { Book, Rendition, Location } from 'epubjs';
 import { BaseEngine } from './BaseEngine';
-import type { ReaderLocation } from '../../types';
+import type { ReaderLocation, ReaderPaginationMode } from '../../types';
 
 export class EpubEngine extends BaseEngine {
   private book: Book | null = null;
@@ -20,7 +20,7 @@ export class EpubEngine extends BaseEngine {
     this.rendition = this.book.renderTo(container, {
       width: '100%',
       height: '100%',
-      flow: 'paginated',
+      flow: this.paginationMode === 'scroll' ? 'scrolled-doc' : 'paginated',
       spread: 'none',
     });
 
@@ -34,6 +34,7 @@ export class EpubEngine extends BaseEngine {
           this.currentPercentage = Number(((calcPercent || 0) * 100).toFixed(2));
         }
         this.location = this.getCurrentLocation();
+        this.onLocationChange?.(this.location);
       }
     });
 
@@ -73,6 +74,39 @@ export class EpubEngine extends BaseEngine {
       locator: this.currentCfi || '',
       progressPercentage: this.currentPercentage,
     };
+  }
+
+  async setPaginationMode(mode: ReaderPaginationMode): Promise<void> {
+    if (this.paginationMode === mode) return;
+    this.paginationMode = mode;
+    if (this.rendition && this.container && this.book) {
+      const currentLoc = this.currentCfi;
+      try {
+        this.rendition.destroy();
+      } catch {
+      }
+      this.rendition = this.book.renderTo(this.container, {
+        width: '100%',
+        height: '100%',
+        flow: mode === 'scroll' ? 'scrolled-doc' : 'paginated',
+        spread: 'none',
+      });
+      this.rendition.on('relocated', (location: Location) => {
+        if (location && location.start) {
+          this.currentCfi = location.start.cfi;
+          if (location.start.percentage !== undefined) {
+            this.currentPercentage = Number((location.start.percentage * 100).toFixed(2));
+          }
+          this.location = this.getCurrentLocation();
+          this.onLocationChange?.(this.location);
+        }
+      });
+      if (currentLoc) {
+        await this.rendition.display(currentLoc);
+      } else {
+        await this.rendition.display();
+      }
+    }
   }
 
   destroy(): void {

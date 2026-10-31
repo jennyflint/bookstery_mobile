@@ -2,7 +2,7 @@ import { ref } from 'vue';
 import { PdfEngine } from '../services/engines/PdfEngine';
 import { EpubEngine } from '../services/engines/EpubEngine';
 import { Fb2Engine } from '../services/engines/Fb2Engine';
-import type { ReaderEngineInterface, BookRecord } from '../types';
+import type { ReaderEngineInterface, BookRecord, ReaderPaginationMode } from '../types';
 import { useReaderStore } from '../stores/readerStore';
 import { useBookSync } from './useBookSync';
 
@@ -40,6 +40,22 @@ export function useReader() {
     try {
       const engine = createEngine(book.format);
       activeEngine.value = engine;
+
+      engine.onLocationChange = (location) => {
+        readerStore.updateLocation(location);
+        if (readerStore.currentBook) {
+          queueProgress(
+            readerStore.currentBook.id,
+            location.locator,
+            location.progressPercentage,
+          );
+        }
+      };
+
+      if (engine.setPaginationMode) {
+        await engine.setPaginationMode(readerStore.settings.paginationMode);
+      }
+
       await engine.init(container, fileData);
 
       if (book.locator) {
@@ -50,6 +66,18 @@ export function useReader() {
       readerStore.updateLocation(location);
     } finally {
       readerStore.setRendering(false);
+    }
+  };
+
+  const setPaginationMode = async (mode: ReaderPaginationMode): Promise<void> => {
+    readerStore.setPaginationMode(mode);
+    if (activeEngine.value?.setPaginationMode) {
+      readerStore.setRendering(true);
+      try {
+        await activeEngine.value.setPaginationMode(mode);
+      } finally {
+        readerStore.setRendering(false);
+      }
     }
   };
 
@@ -123,6 +151,7 @@ export function useReader() {
     nextPage,
     prevPage,
     goToLocator,
+    setPaginationMode,
     closeBook,
   };
 }
