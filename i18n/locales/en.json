@@ -1,3 +1,94 @@
 {
- 
+  "app": {
+    "name": "Bookstery",
+    "description": "Multi-format Android Ebook Reader"
+  },
+  "nav": {
+    "library": "Library",
+    "dictionary": "Dictionary",
+    "settings": "Settings"
+  },
+  "library": {
+    "title": "My Books",
+    "searchPlaceholder": "Search by title or author...",
+    "scanDevice": "Scan Device",
+    "importBook": "Import Book",
+    "emptyTitle": "Your library is empty",
+    "emptySubtitle": "Scan your device for books or import supported formats (.pdf, .epub, .fb2, .fb2.zip).",
+    "filterAll": "All Formats",
+    "filterPdf": "PDF",
+    "filterEpub": "EPUB",
+    "filterFb2": "FB2",
+    "deleteBook": "Delete",
+    "lastRead": "Last read",
+    "progress": "Progress"
+  },
+  "scanner": {
+    "title": "Scan Device For Books",
+    "description": "Bookstery will index local storage for supported ebooks.",
+    "startScan": "Scan Storage",
+    "scanning": "Scanning device...",
+    "foundBooks": "Found {count} books",
+    "importSelected": "Import Selected ({count})",
+    "importing": "Importing...",
+    "noFilesFound": "No new book files found on this device."
+  },
+  "reader": {
+    "loading": "Loading book...",
+    "page": "Page",
+    "of": "of",
+    "theme": "Theme",
+    "fontSize": "Font Size",
+    "immersiveMode": "Immersive Mode",
+    "next": "Next",
+    "previous": "Previous",
+    "tableOfContents": "Contents",
+    "settings": "Settings"
+  },
+  "theme": {
+    "light": "Light",
+    "sepia": "Sepia",
+    "night": "Night",
+    "oled": "OLED Black"
+  },
+  "translation": {
+    "translate": "Translate",
+    "translating": "Translating...",
+    "saveToDictionary": "Save to Dictionary",
+    "openGoogleTranslate": "Open in Google Translate",
+    "copy": "Copy",
+    "copied": "Copied to clipboard",
+    "sourceText": "Source Text",
+    "translatedText": "Translation"
+  },
+  "dictionary": {
+    "title": "Saved Words & Phrases",
+    "empty": "No saved translations yet.",
+    "emptySubtitle": "Select any text while reading to translate and save terms.",
+    "delete": "Remove",
+    "targetLanguage": "Target Language"
+  },
+  "auth": {
+    "signInWithGoogle": "Sign In with Google",
+    "signOut": "Sign Out",
+    "signedInAs": "Signed in as",
+    "cloudSyncNotice": "Sign in with Google to enable cloud progress sync across devices via Google Drive."
+  },
+  "sync": {
+    "status": "Sync Status",
+    "online": "Connected",
+    "offline": "Offline (Queued)",
+    "syncing": "Syncing progress...",
+    "synced": "Up to date",
+    "pending": "{count} pending syncs",
+    "syncNow": "Sync Now",
+    "lastSynced": "Last synced: {time}"
+  },
+  "settings": {
+    "title": "Settings",
+    "account": "Google Account",
+    "readingPreferences": "Reading Preferences",
+    "language": "Interface Language",
+    "version": "Version"
+  }
 }

@@ -5,21 +5,27 @@ ARG NODE_VERSION=22
 # -----------------------------------------------------------------------------
 # base
 # -----------------------------------------------------------------------------
-FROM node:${NODE_VERSION}-alpine AS base
+FROM node:${NODE_VERSION}-bookworm-slim AS base
 WORKDIR /app
 ENV NUXT_TELEMETRY_DISABLED=1 \
     npm_config_update_notifier=false \
     npm_config_fund=false \
-    npm_config_audit=false
-RUN apk add --no-cache libc6-compat git
+    npm_config_audit=false \
+    npm_config_legacy_peer_deps=true
+RUN apt-get update && apt-get install -y --no-install-recommends git \
+    && rm -rf /var/lib/apt/lists/*
 
 # -----------------------------------------------------------------------------
 # deps: install node_modules (cached layer)
 # -----------------------------------------------------------------------------
 FROM base AS deps
-COPY package.json package-lock.json* ./
+COPY package.json package-lock.json* .npmrc* ./
 RUN --mount=type=cache,target=/root/.npm \
-    if [ -f package-lock.json ]; then npm ci --ignore-scripts; else npm install --ignore-scripts; fi
+    if [ -f package-lock.json ]; then \
+      npm ci --legacy-peer-deps --ignore-scripts --include=optional; \
+    else \
+      npm install --legacy-peer-deps --ignore-scripts; \
+    fi
 
 # -----------------------------------------------------------------------------
 # dev: hot-reload dev server (source is bind-mounted by docker-compose)

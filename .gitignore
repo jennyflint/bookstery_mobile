@@ -24,3 +24,5 @@ ios/App/Pods
 .env
 .env.*
 !.env.example
+
+/.vscode

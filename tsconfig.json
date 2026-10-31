@@ -1,10 +1,28 @@
 {
-  // https://nuxt.com/docs/guide/concepts/typescript
-  "files": [],
-  "references": [
-    { "path": "./.nuxt/tsconfig.app.json" },
-    { "path": "./.nuxt/tsconfig.server.json" },
-    { "path": "./.nuxt/tsconfig.shared.json" },
-    { "path": "./.nuxt/tsconfig.node.json" }
+  "compilerOptions": {
+    "target": "ESNext",
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "strict": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "baseUrl": ".",
+    "paths": {
+      "~/*": ["app/*"],
+      "@/*": ["app/*"],
+      "~~/*": ["*"],
+      "@@/*": ["*"]
+    }
+  },
+  "include": [
+    "app/**/*",
+    "components/**/*",
+    "composables/**/*",
+    "pages/**/*",
+    "plugins/**/*",
+    "services/**/*",
+    "stores/**/*",
+    "types/**/*",
+    "tests/**/*"
   ]
 }

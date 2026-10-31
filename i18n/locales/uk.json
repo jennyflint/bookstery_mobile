@@ -1,3 +1,94 @@
 {
- 
+  "app": {
+    "name": "Bookstery",
+    "description": "Мультиформатний Android-рідер електронних книг"
+  },
+  "nav": {
+    "library": "Бібліотека",
+    "dictionary": "Словник",
+    "settings": "Налаштування"
+  },
+  "library": {
+    "title": "Мої книги",
+    "searchPlaceholder": "Пошук за назвою або автором...",
+    "scanDevice": "Сканувати пристрій",
+    "importBook": "Імпортувати книгу",
+    "emptyTitle": "Ваша бібліотека порожня",
+    "emptySubtitle": "Проскануйте пристрій на наявність книг або імпортуйте формати (.pdf, .epub, .fb2, .fb2.zip).",
+    "filterAll": "Усі формати",
+    "filterPdf": "PDF",
+    "filterEpub": "EPUB",
+    "filterFb2": "FB2",
+    "deleteBook": "Видалити",
+    "lastRead": "Востаннє читано",
+    "progress": "Прогрес"
+  },
+  "scanner": {
+    "title": "Пошук книг на пристрої",
+    "description": "Bookstery проіндексує сховище пристрою на наявність підтримуваних книг.",
+    "startScan": "Сканувати пам'ять",
+    "scanning": "Сканування пристрою...",
+    "foundBooks": "Знайдено книг: {count}",
+    "importSelected": "Імпортувати вибрані ({count})",
+    "importing": "Імпортування...",
+    "noFilesFound": "Нових файлів книг на пристрої не виявлено."
+  },
+  "reader": {
+    "loading": "Завантаження книги...",
+    "page": "Сторінка",
+    "of": "з",
+    "theme": "Тема",
+    "fontSize": "Розмір шрифту",
+    "immersiveMode": "Режим повного екрана",
+    "next": "Вперед",
+    "previous": "Назад",
+    "tableOfContents": "Зміст",
+    "settings": "Параметри"
+  },
+  "theme": {
+    "light": "Світла",
+    "sepia": "Сепія",
+    "night": "Нічна",
+    "oled": "OLED Чорна"
+  },
+  "translation": {
+    "translate": "Перекласти",
+    "translating": "Переклад...",
+    "saveToDictionary": "Зберегти в словник",
+    "openGoogleTranslate": "Відкрити в Google Translate",
+    "copy": "Копіювати",
+    "copied": "Скопійовано в буфер обміну",
+    "sourceText": "Оригінал",
+    "translatedText": "Переклад"
+  },
+  "dictionary": {
+    "title": "Збережені слова та фрази",
+    "empty": "Словник порожній.",
+    "emptySubtitle": "Виділяйте фрагменти тексту під час читання, щоб перекладати та зберігати їх.",
+    "delete": "Видалити",
+    "targetLanguage": "Мова перекладу"
+  },
+  "auth": {
+    "signInWithGoogle": "Увійти через Google",
+    "signOut": "Вийти з акаунта",
+    "signedInAs": "Вхід виконано як",
+    "cloudSyncNotice": "Увійдіть через Google для хмарної синхронізації прогресу читання між усіма пристроями через Google Drive."
+  },
+  "sync": {
+    "status": "Стан синхронізації",
+    "online": "В мережі",
+    "offline": "Офлайн (в черзі)",
+    "syncing": "Синхронізація...",
+    "synced": "Актуально",
+    "pending": "Очікує: {count}",
+    "syncNow": "Синхронізувати зараз",
+    "lastSynced": "Остання синхронізація: {time}"
+  },
+  "settings": {
+    "title": "Налаштування",
+    "account": "Обліковий запис Google",
+    "readingPreferences": "Параметри читання",
+    "language": "Мова інтерфейсу",
+    "version": "Версія"
+  }
 }
