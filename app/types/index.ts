@@ -83,6 +83,19 @@ export interface ScannedFile {
   path: string;
   size: number;
   format: BookFormat;
+  isDuplicate?: boolean;
+}
+
+export interface AddBookResult {
+  success: boolean;
+  isDuplicate?: boolean;
+  book?: BookRecord;
+  error?: string;
+}
+
+export interface ImportFilesResult {
+  importedCount: number;
+  duplicateCount: number;
 }
 
 export interface TranslationResult {

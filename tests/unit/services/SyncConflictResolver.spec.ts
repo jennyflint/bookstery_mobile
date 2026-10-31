@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { SyncConflictResolver } from '../../../services/sync/SyncConflictResolver';
+import { SyncConflictResolver } from '~/services/sync/SyncConflictResolver';
 
 describe('SyncConflictResolver', () => {
   it('should choose local state when local updated_at is newer', () => {

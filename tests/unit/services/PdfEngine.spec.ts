@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import * as pdfjsLib from 'pdfjs-dist';
-import { PdfEngine } from '../../../services/engines/PdfEngine';
+import { PdfEngine } from '~/services/engines/PdfEngine';
 import { mockPdfDocument, mockPdfPage, mockRenderTask } from '../../mocks/book-engines';
 
 vi.mock('pdfjs-dist', () => ({

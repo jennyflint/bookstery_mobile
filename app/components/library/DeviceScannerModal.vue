@@ -1,7 +1,6 @@
 <script setup lang="ts">
 import { ref } from 'vue';
 import { useDeviceScanner } from '../../composables/useDeviceScanner';
-import type { ScannedFile } from '../../types';
 
 defineProps<{
   isOpen: boolean;
@@ -13,13 +12,30 @@ const emit = defineEmits<{
 }>();
 
 const { t } = useI18n();
-const { isScanning, scanProgress, scannedFiles, scanDevice, importFiles, importFromBlob } = useDeviceScanner();
+const {
+  isScanning,
+  scanProgress,
+  scannedFiles,
+  duplicateNotice,
+  scanDevice,
+  importFiles,
+  importFromBlob,
+  clearDuplicateNotice,
+} = useDeviceScanner();
+
 const selectedFiles = ref<Set<string>>(new Set());
 const fileInputRef = ref<HTMLInputElement | null>(null);
+const duplicateMessage = ref<string | null>(null);
+
+const dismissDuplicateNotice = () => {
+  duplicateMessage.value = null;
+  clearDuplicateNotice();
+};
 
 const handleScan = async () => {
+  dismissDuplicateNotice();
   const files = await scanDevice();
-  selectedFiles.value = new Set(files.map((f) => f.path));
+  selectedFiles.value = new Set(files.filter((f) => !f.isDuplicate).map((f) => f.path));
 };
 
 const toggleFileSelection = (path: string) => {
@@ -31,11 +47,16 @@ const toggleFileSelection = (path: string) => {
 };
 
 const handleImportSelected = async () => {
-  const toImport = scannedFiles.value.filter((f) => selectedFiles.value.has(f.path));
+  dismissDuplicateNotice();
+  const toImport = scannedFiles.value.filter((f) => selectedFiles.value.has(f.path) && !f.isDuplicate);
   if (toImport.length > 0) {
-    await importFiles(toImport);
-    emit('imported');
-    emit('close');
+    const result = await importFiles(toImport);
+    if (result.importedCount > 0) {
+      emit('imported');
+      emit('close');
+    } else if (result.duplicateCount > 0) {
+      duplicateMessage.value = t('scanner.noNewFilesToImport');
+    }
   }
 };
 
@@ -44,13 +65,35 @@ const triggerFileInput = () => {
 };
 
 const handleFileChosen = async (event: Event) => {
+  dismissDuplicateNotice();
   const target = event.target as HTMLInputElement;
   if (target.files && target.files.length > 0) {
+    let importedAny = false;
+    const duplicates: string[] = [];
+
     for (let i = 0; i < target.files.length; i++) {
-      await importFromBlob(target.files[i]);
+      const file = target.files[i];
+      const result = await importFromBlob(file);
+      if (result.success) {
+        importedAny = true;
+      } else if (result.isDuplicate) {
+        const title = result.book?.title || file.name.replace(/\.[^/.]+$/, '').replace(/_/g, ' ');
+        duplicates.push(title);
+      }
     }
-    emit('imported');
-    emit('close');
+
+    target.value = '';
+
+    if (importedAny) {
+      emit('imported');
+      if (duplicates.length === 0) {
+        emit('close');
+      } else {
+        duplicateMessage.value = t('scanner.duplicateDetected', { title: duplicates.join(', ') });
+      }
+    } else if (duplicates.length > 0) {
+      duplicateMessage.value = t('scanner.duplicateDetected', { title: duplicates.join(', ') });
+    }
   }
 };
 </script>
@@ -79,6 +122,28 @@ const handleFileChosen = async (event: Event) => {
       </div>
 
       <div class="flex-1 overflow-y-auto py-4 space-y-4">
+        <!-- Duplicate Warning Banner -->
+        <div
+          v-if="duplicateMessage || duplicateNotice"
+          class="p-3 rounded-xl bg-amber-50 border border-amber-200 text-amber-900 text-xs flex items-start justify-between gap-2"
+        >
+          <div class="flex items-start gap-2">
+            <svg class="w-4 h-4 text-amber-600 mt-0.5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+            </svg>
+            <span>{{ duplicateMessage || (duplicateNotice ? t('scanner.duplicateDetected', { title: duplicateNotice }) : '') }}</span>
+          </div>
+          <button
+            type="button"
+            class="text-amber-500 hover:text-amber-700"
+            @click="dismissDuplicateNotice"
+          >
+            <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+        </div>
+
         <div class="flex items-center gap-3">
           <button
             type="button"
@@ -130,16 +195,26 @@ const handleFileChosen = async (event: Event) => {
             <label
               v-for="file in scannedFiles"
               :key="file.path"
-              class="flex items-center gap-3 p-3 rounded-xl border border-zinc-200 hover:bg-zinc-50 cursor-pointer transition-colors"
+              class="flex items-center gap-3 p-3 rounded-xl border transition-colors"
+              :class="file.isDuplicate ? 'bg-zinc-50 border-zinc-200 opacity-60 cursor-not-allowed' : 'border-zinc-200 hover:bg-zinc-50 cursor-pointer'"
             >
               <input
                 type="checkbox"
                 :checked="selectedFiles.has(file.path)"
-                class="w-4 h-4 rounded text-indigo-600 border-zinc-300 focus:ring-indigo-500"
+                :disabled="file.isDuplicate"
+                class="w-4 h-4 rounded text-indigo-600 border-zinc-300 focus:ring-indigo-500 disabled:opacity-40"
                 @change="toggleFileSelection(file.path)"
               />
               <div class="flex-1 min-w-0">
-                <p class="text-sm font-semibold text-zinc-900 truncate">{{ file.name }}</p>
+                <div class="flex items-center gap-2">
+                  <p class="text-sm font-semibold text-zinc-900 truncate">{{ file.name }}</p>
+                  <span
+                    v-if="file.isDuplicate"
+                    class="inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-medium bg-amber-100 text-amber-800 shrink-0"
+                  >
+                    {{ t('scanner.alreadyInLibrary') }}
+                  </span>
+                </div>
                 <p class="text-xs text-zinc-400 uppercase font-mono">{{ file.format }}</p>
               </div>
             </label>

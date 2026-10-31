@@ -2,7 +2,7 @@ import { defineStore } from 'pinia';
 import { Directory, Filesystem } from '@capacitor/filesystem';
 import { SqliteService } from '../services/database/SqliteService';
 import { CoverGenerationQueueService } from '../services/covers/CoverGenerationQueueService';
-import type { BookFormat, BookRecord } from '../types';
+import type { AddBookResult, BookFormat, BookRecord } from '../types';
 
 export const useLibraryStore = defineStore('library', {
   state: () => ({
@@ -78,7 +78,48 @@ export const useLibraryStore = defineStore('library', {
         }
       }
     },
-    async addBook(book: BookRecord): Promise<void> {
+    findDuplicate(candidate: {
+      id?: string;
+      title?: string;
+      author?: string | null;
+      file_path?: string;
+    }): BookRecord | null {
+      const candidateTitle = candidate.title?.trim().toLowerCase();
+      const candidateAuthor = candidate.author?.trim().toLowerCase() || null;
+
+      for (const existing of this.books) {
+        if (candidate.id && existing.id === candidate.id) {
+          return existing;
+        }
+        if (candidate.file_path && existing.file_path === candidate.file_path) {
+          return existing;
+        }
+        if (candidateTitle && existing.title.trim().toLowerCase() === candidateTitle) {
+          const existingAuthor = existing.author?.trim().toLowerCase() || null;
+          if (!candidateAuthor && !existingAuthor) {
+            return existing;
+          }
+          if (candidateAuthor && existingAuthor && candidateAuthor === existingAuthor) {
+            return existing;
+          }
+        }
+      }
+      return null;
+    },
+    isDuplicate(candidate: {
+      id?: string;
+      title?: string;
+      author?: string | null;
+      file_path?: string;
+    }): boolean {
+      return this.findDuplicate(candidate) !== null;
+    },
+    async addBook(book: BookRecord): Promise<AddBookResult> {
+      const duplicate = this.findDuplicate(book);
+      if (duplicate) {
+        return { success: false, isDuplicate: true, book: duplicate };
+      }
+
       const sqlite = SqliteService.getInstance();
       await sqlite.upsertBook(book);
       const index = this.books.findIndex((b) => b.id === book.id);
@@ -87,6 +128,7 @@ export const useLibraryStore = defineStore('library', {
       } else {
         this.books.unshift(book);
       }
+      return { success: true, book };
     },
     async removeBook(id: string): Promise<void> {
       const sqlite = SqliteService.getInstance();

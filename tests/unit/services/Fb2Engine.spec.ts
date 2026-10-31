@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach } from 'vitest';
-import { Fb2Engine } from '../../../services/engines/Fb2Engine';
+import { Fb2Engine } from '~/services/engines/Fb2Engine';
 
 describe('Fb2Engine', () => {
   let engine: Fb2Engine;

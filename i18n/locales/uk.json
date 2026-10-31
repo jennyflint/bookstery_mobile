@@ -31,7 +31,12 @@
     "foundBooks": "Знайдено книг: {count}",
     "importSelected": "Імпортувати вибрані ({count})",
     "importing": "Імпортування...",
-    "noFilesFound": "Нових файлів книг на пристрої не виявлено."
+    "noFilesFound": "Нових файлів книг на пристрої не виявлено.",
+    "alreadyInLibrary": "Вже в бібліотеці",
+    "duplicateDetected": "Книга \"{title}\" вже є у вашій бібліотеці і не може бути додана повторно.",
+    "duplicateNotice": "Ця книга вже є в бібліотеці.",
+    "duplicatesSkipped": "Пропущено дублікатів: {count}",
+    "noNewFilesToImport": "Усі вибрані файли вже є у вашій бібліотеці."
   },
   "reader": {
     "loading": "Завантаження книги...",

@@ -52,16 +52,54 @@ export class DeviceFileScannerService {
     return results;
   }
 
+  isDuplicate(
+    candidate: { id?: string; title?: string; author?: string | null; file_path?: string },
+    existingBooksOrIds: Set<string> | BookRecord[],
+  ): boolean {
+    if (existingBooksOrIds instanceof Set) {
+      return Boolean(candidate.id && existingBooksOrIds.has(candidate.id));
+    }
+
+    const candidateTitle = candidate.title?.trim().toLowerCase();
+    const candidateAuthor = candidate.author?.trim().toLowerCase() || null;
+
+    return existingBooksOrIds.some((book) => {
+      if (candidate.id && book.id === candidate.id) {
+        return true;
+      }
+      if (candidate.file_path && book.file_path === candidate.file_path) {
+        return true;
+      }
+      if (candidateTitle && book.title.trim().toLowerCase() === candidateTitle) {
+        const bookAuthor = book.author?.trim().toLowerCase() || null;
+        if (!candidateAuthor && !bookAuthor) {
+          return true;
+        }
+        if (candidateAuthor && bookAuthor && candidateAuthor === bookAuthor) {
+          return true;
+        }
+      }
+      return false;
+    });
+  }
+
   async importBookFile(
     sourcePath: string,
     sourceDirectory: Directory,
-    existingBookIds: Set<string>,
+    existingBooksOrIds: Set<string> | BookRecord[],
   ): Promise<BookRecord | null> {
     const fileName = sourcePath.split('/').pop() || 'book';
     const format = this.determineFormat(fileName);
 
     if (!format) {
       throw new Error(`Unsupported book format for file: ${fileName}`);
+    }
+
+    const title = fileName.replace(/\.[^/.]+$/, '').replace(/_/g, ' ');
+
+    // Fast-path duplicate check by title & path before reading entire file if existing records are provided
+    if (this.isDuplicate({ title, file_path: sourcePath }, existingBooksOrIds)) {
+      return null;
     }
 
     const fileData = await Filesystem.readFile({
@@ -72,11 +110,16 @@ export class DeviceFileScannerService {
     const rawString = typeof fileData.data === 'string' ? fileData.data : '';
     const hash = await FileHashService.calculateSha256(rawString);
 
-    if (existingBookIds.has(hash)) {
+    const destinationPath = `books/${hash}_${fileName}`;
+    if (
+      this.isDuplicate(
+        { id: hash, title, file_path: destinationPath },
+        existingBooksOrIds,
+      )
+    ) {
       return null;
     }
 
-    const destinationPath = `books/${hash}_${fileName}`;
     await Filesystem.writeFile({
       path: destinationPath,
       data: fileData.data,
@@ -84,7 +127,6 @@ export class DeviceFileScannerService {
       recursive: true,
     });
 
-    const title = fileName.replace(/\.[^/.]+$/, '').replace(/_/g, ' ');
     const initialLocator = format === 'pdf' ? '1' : format === 'fb2' ? 'fb2-p-0' : '';
     const now = Date.now();
 

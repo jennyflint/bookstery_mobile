@@ -119,6 +119,46 @@ export class SqliteService {
     return books.find((b) => b.id === id) || null;
   }
 
+  async findDuplicateBook(candidate: {
+    id?: string;
+    title?: string;
+    author?: string | null;
+    file_path?: string;
+  }): Promise<BookRecord | null> {
+    const allBooks = await this.getAllBooks();
+    const candidateTitle = candidate.title?.trim().toLowerCase();
+    const candidateAuthor = candidate.author?.trim().toLowerCase() || null;
+
+    for (const book of allBooks) {
+      if (candidate.id && book.id === candidate.id) {
+        return book;
+      }
+      if (candidate.file_path && book.file_path === candidate.file_path) {
+        return book;
+      }
+      if (candidateTitle && book.title.trim().toLowerCase() === candidateTitle) {
+        const bookAuthor = book.author?.trim().toLowerCase() || null;
+        if (!candidateAuthor && !bookAuthor) {
+          return book;
+        }
+        if (candidateAuthor && bookAuthor && candidateAuthor === bookAuthor) {
+          return book;
+        }
+      }
+    }
+    return null;
+  }
+
+  async isDuplicateBook(candidate: {
+    id?: string;
+    title?: string;
+    author?: string | null;
+    file_path?: string;
+  }): Promise<boolean> {
+    const duplicate = await this.findDuplicateBook(candidate);
+    return duplicate !== null;
+  }
+
   async upsertBook(book: BookRecord): Promise<void> {
     if (this.isNative && this.db) {
       try {

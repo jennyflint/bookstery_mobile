@@ -31,7 +31,12 @@
     "foundBooks": "Found {count} books",
     "importSelected": "Import Selected ({count})",
     "importing": "Importing...",
-    "noFilesFound": "No new book files found on this device."
+    "noFilesFound": "No new book files found on this device.",
+    "alreadyInLibrary": "Already in library",
+    "duplicateDetected": "Book \"{title}\" is already in your library and cannot be added again.",
+    "duplicateNotice": "This book is already in your library.",
+    "duplicatesSkipped": "Skipped duplicates: {count}",
+    "noNewFilesToImport": "All selected files are already in your library."
   },
   "reader": {
     "loading": "Loading book...",

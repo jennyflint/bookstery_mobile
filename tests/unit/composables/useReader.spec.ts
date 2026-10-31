@@ -1,8 +1,8 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { setActivePinia, createPinia } from 'pinia';
-import { useReader } from '../../../composables/useReader';
-import { useReaderStore } from '../../../stores/readerStore';
-import type { BookRecord } from '../../../types';
+import { useReader } from '~/composables/useReader';
+import { useReaderStore } from '~/stores/readerStore';
+import type { BookRecord } from '~/types';
 
 vi.mock('pdfjs-dist', () => ({
   getDocument: vi.fn().mockReturnValue({

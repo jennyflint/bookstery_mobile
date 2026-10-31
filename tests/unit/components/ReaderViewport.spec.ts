@@ -1,8 +1,8 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { mount } from '@vue/test-utils';
 import { setActivePinia, createPinia } from 'pinia';
-import ReaderViewport from '../../../components/reader/ReaderViewport.vue';
-import { useReaderStore } from '../../../stores/readerStore';
+import ReaderViewport from '~/components/reader/ReaderViewport.vue';
+import { useReaderStore } from '~/stores/readerStore';
 
 describe('ReaderViewport Component', () => {
   beforeEach(() => {
