@@ -4,6 +4,7 @@ export * from './collection';
 export * from './highlight';
 export * from './export';
 export * from './scanner';
+export * from './ai';
 
 export type BookFormat = 'pdf' | 'epub' | 'fb2';
 

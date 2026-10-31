@@ -8,6 +8,7 @@ const emit = defineEmits<{
   (e: 'prev'): void;
   (e: 'open-settings'): void;
   (e: 'open-notes'): void;
+  (e: 'chapter-tldr'): void;
 }>();
 
 const { t } = useI18n();
@@ -45,6 +46,17 @@ const readerStore = useReaderStore();
 
         <div class="flex items-center gap-1.5">
           <SyncStatusBadge />
+          <button
+            type="button"
+            data-testid="chapter-tldr-action"
+            class="p-2 rounded-xl text-[#3E5725] bg-[#C8E695]/30 hover:bg-[#C8E695]/60 active:scale-95 transition-all dark:text-[#C8E695] dark:bg-[#C8E695]/20"
+            :title="t('ai.chapterTldr')"
+            @click="emit('chapter-tldr')"
+          >
+            <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z" />
+            </svg>
+          </button>
           <button
             type="button"
             data-testid="open-notes-drawer-btn"

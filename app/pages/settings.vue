@@ -13,11 +13,14 @@ import LanguageSwitcher from '../components/common/LanguageSwitcher.vue';
 import GoogleSignInButton from '../components/auth/GoogleSignInButton.vue';
 import SyncStatusBadge from '../components/common/SyncStatusBadge.vue';
 import ScanDirectoriesSettings from '../components/settings/ScanDirectoriesSettings.vue';
+import AiSettingsModal from '../components/ai/AiSettingsModal.vue';
+import { useAiStore } from '../stores/aiStore';
 import type { ReaderTheme } from '../types';
 
 const { t } = useI18n();
 const readerStore = useReaderStore();
 const appThemeStore = useAppThemeStore();
+const aiStore = useAiStore();
 
 const buttonColorInputRef = ref<HTMLInputElement | null>(null);
 const appBgColorInputRef = ref<HTMLInputElement | null>(null);
@@ -483,6 +486,30 @@ const handleResetAllToDefault = () => {
 
       <ScanDirectoriesSettings />
 
+      <section class="app-card bg-white rounded-3xl p-5 border border-zinc-200 shadow-sm flex items-center justify-between dark:border-zinc-800 dark:bg-zinc-900">
+        <div class="flex items-center gap-3">
+          <div class="flex h-10 w-10 items-center justify-center rounded-xl bg-[#C8E695] text-[#3E5725]">
+            <svg class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z" />
+            </svg>
+          </div>
+          <div>
+            <h2 class="text-sm font-bold text-zinc-900 dark:text-zinc-100">{{ t('ai.settingsTitle') }}</h2>
+            <p class="text-xs text-zinc-400 font-medium">
+              {{ aiStore.isConfigured ? `${aiStore.settings.provider.toUpperCase()} (${aiStore.settings.model_id})` : t('ai.onboardingSubtitle') }}
+            </p>
+          </div>
+        </div>
+        <button
+          type="button"
+          data-testid="open-ai-settings-btn"
+          class="rounded-2xl bg-[#3E5725] px-4 py-2 text-xs font-bold text-[#F4ECD8] shadow-sm transition hover:bg-[#3E5725]/90 active:scale-95 dark:bg-[#C8E695] dark:text-[#3E5725]"
+          @click="aiStore.openSettingsModal"
+        >
+          {{ t('ai.provider') }}
+        </button>
+      </section>
+
       <section class="app-card bg-white rounded-3xl p-5 border border-zinc-200 shadow-sm flex items-center justify-between">
         <div>
           <h2 class="text-sm font-bold text-zinc-900">{{ t('settings.language') }}</h2>
@@ -534,5 +561,10 @@ const handleResetAllToDefault = () => {
         </NuxtLink>
       </div>
     </nav>
+
+    <AiSettingsModal
+      :is-open="aiStore.isSettingsModalOpen"
+      @close="aiStore.closeSettingsModal"
+    />
   </div>
 </template>

@@ -31,7 +31,15 @@ export default defineNuxtConfig({
   },
   vite: {
     optimizeDeps: {
-      include: ['@capawesome/capacitor-file-picker'],
+      include: [
+        '@capawesome/capacitor-file-picker',
+        '@capacitor/share',
+        'ai',
+        '@ai-sdk/vue',
+        '@ai-sdk/openai',
+        '@ai-sdk/google',
+        '@ai-sdk/anthropic',
+      ],
     },
   },
   postcss: {

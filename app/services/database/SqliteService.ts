@@ -4,7 +4,7 @@ import {
   type SQLiteDBConnection,
 } from '@capacitor-community/sqlite';
 import { Capacitor } from '@capacitor/core';
-import { SCHEMA_V1, SCHEMA_HIGHLIGHTS, SCHEMA_SCAN_DIRECTORIES } from './migrations';
+import { SCHEMA_V1, SCHEMA_HIGHLIGHTS, SCHEMA_SCAN_DIRECTORIES, SCHEMA_AI } from './migrations';
 import type {
   BookRecord,
   DictionaryItem,
@@ -24,6 +24,8 @@ const STORAGE_KEYS = {
   HIGHLIGHTS: 'bookstery_web_highlights',
   SCAN_DIRECTORIES: 'bookstery_web_scan_directories',
   SCANNER_SETTINGS: 'bookstery_web_scanner_settings',
+  LLM_SETTINGS: 'bookstery_web_llm_settings',
+  AI_CACHE: 'bookstery_web_ai_cache',
 };
 
 function readStorage<T>(key: string, defaultValue: T): T {
@@ -138,6 +140,10 @@ export class SqliteService {
 
       try {
         await this.db.execute(SCHEMA_SCAN_DIRECTORIES);
+      } catch {}
+
+      try {
+        await this.db.execute(SCHEMA_AI);
       } catch {}
 
       try {

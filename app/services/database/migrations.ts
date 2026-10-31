@@ -123,3 +123,31 @@ INSERT OR IGNORE INTO scanner_settings (id, auto_scan_on_startup, scan_subdirect
 VALUES (1, 1, 1, 0);
 `;
 
+export const SCHEMA_AI = `
+CREATE TABLE IF NOT EXISTS llm_settings (
+  id INTEGER PRIMARY KEY CHECK (id = 1),
+  provider TEXT NOT NULL DEFAULT 'openai' CHECK (provider IN ('openai', 'google', 'anthropic', 'custom')),
+  api_key TEXT DEFAULT NULL,
+  base_url TEXT DEFAULT NULL,
+  model_id TEXT NOT NULL DEFAULT 'gpt-4o-mini',
+  temperature REAL NOT NULL DEFAULT 0.5,
+  max_tokens INTEGER NOT NULL DEFAULT 1000,
+  is_enabled INTEGER NOT NULL DEFAULT 0 CHECK (is_enabled IN (0, 1)),
+  updated_at INTEGER NOT NULL
+);
+
+INSERT OR IGNORE INTO llm_settings (id, provider, api_key, base_url, model_id, temperature, max_tokens, is_enabled, updated_at)
+VALUES (1, 'openai', NULL, NULL, 'gpt-4o-mini', 0.5, 1000, 0, 0);
+
+CREATE TABLE IF NOT EXISTS ai_cache (
+  id TEXT PRIMARY KEY,
+  book_id TEXT NOT NULL REFERENCES books(id) ON DELETE CASCADE,
+  prompt_type TEXT NOT NULL CHECK (prompt_type IN ('explain', 'character', 'tldr', 'dictionary', 'ping')),
+  response_text TEXT NOT NULL,
+  model_used TEXT NOT NULL,
+  created_at INTEGER NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_ai_cache_book ON ai_cache(book_id, prompt_type);
+`;
+

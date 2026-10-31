@@ -3,6 +3,7 @@ import { computed } from 'vue';
 import { useReaderStore } from '../../stores/readerStore';
 import { useHighlightStore } from '../../stores/highlightStore';
 import { TranslationService } from '../../services/translation/TranslationService';
+import { useAiReader } from '../../composables/useAiReader';
 import { HIGHLIGHT_COLORS, type HighlightColor } from '../../types';
 
 const emit = defineEmits<{
@@ -13,6 +14,7 @@ const { t } = useI18n();
 const readerStore = useReaderStore();
 const highlightStore = useHighlightStore();
 const translationService = TranslationService.getInstance();
+const { triggerExplain, triggerCharacter, triggerDictionary } = useAiReader();
 
 const colors: HighlightColor[] = ['yellow', 'green', 'pink', 'blue', 'purple'];
 
@@ -154,6 +156,30 @@ const handleTranslate = () => {
   }
 };
 
+const handleAiExplain = async () => {
+  const text = getSelectionText();
+  if (text) {
+    handleDismiss();
+    await triggerExplain(text);
+  }
+};
+
+const handleAiCharacter = async () => {
+  const text = getSelectionText();
+  if (text) {
+    handleDismiss();
+    await triggerCharacter(text);
+  }
+};
+
+const handleAiDictionary = async () => {
+  const text = getSelectionText();
+  if (text) {
+    handleDismiss();
+    await triggerDictionary(text);
+  }
+};
+
 const handleDeleteHighlight = async () => {
   if (highlightStore.selectedHighlight) {
     await highlightStore.deleteHighlight(highlightStore.selectedHighlight.id);
@@ -236,6 +262,45 @@ const handleDismiss = () => {
     >
       <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 5h12M9 3v2m1.048 9.5A18.022 18.022 0 016.412 9m6.088 9h7M11 21l5-10 5 10M12.751 5C11.783 10.77 8.07 15.61 3 18.129" />
+      </svg>
+    </button>
+
+    <div class="h-3 w-px bg-zinc-700/80 mx-0.5" />
+
+    <button
+      type="button"
+      data-testid="ai-explain-action"
+      class="flex items-center gap-1 px-2 py-1 rounded-lg hover:bg-zinc-800 active:scale-95 transition-all text-[#C8E695]"
+      :title="t('ai.explainSnippet')"
+      @click="handleAiExplain"
+    >
+      <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z" />
+      </svg>
+      <span>{{ t('ai.explainSnippet') }}</span>
+    </button>
+
+    <button
+      type="button"
+      data-testid="ai-character-action"
+      class="p-1 rounded-lg hover:bg-zinc-800 active:scale-95 transition-all text-sky-300"
+      :title="t('ai.whoIsCharacter')"
+      @click="handleAiCharacter"
+    >
+      <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+      </svg>
+    </button>
+
+    <button
+      type="button"
+      data-testid="ai-dictionary-action"
+      class="p-1 rounded-lg hover:bg-zinc-800 active:scale-95 transition-all text-teal-300"
+      :title="t('ai.contextualDictionary')"
+      @click="handleAiDictionary"
+    >
+      <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
       </svg>
     </button>
 

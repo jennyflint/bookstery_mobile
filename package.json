@@ -20,6 +20,10 @@
     "cap:ios": "cap open ios"
   },
   "dependencies": {
+    "@ai-sdk/anthropic": "^4.0.94",
+    "@ai-sdk/google": "^4.0.109",
+    "@ai-sdk/openai": "^4.0.106",
+    "@ai-sdk/vue": "^4.0.159",
     "@capacitor-community/keep-awake": "^6.0.0",
     "@capacitor-community/sqlite": "^7.0.3",
     "@capacitor/android": "^7.4.0",
@@ -29,11 +33,13 @@
     "@capacitor/filesystem": "^7.0.0",
     "@capacitor/ios": "^7.4.0",
     "@capacitor/network": "^7.0.0",
+    "@capacitor/share": "^7.0.4",
     "@capawesome/capacitor-file-picker": "^7.2.0",
     "@codetrix-studio/capacitor-google-auth": "^3.3.6",
     "@nuxtjs/i18n": "^10.0.0",
     "@nuxtjs/tailwindcss": "^6.14.0",
     "@pinia/nuxt": "^0.11.2",
+    "ai": "^7.0.159",
     "epubjs": "^0.3.93",
     "jszip": "^3.10.1",
     "nuxt": "4.6.3",
@@ -45,6 +51,7 @@
   "devDependencies": {
     "@capacitor/cli": "^7.4.0",
     "@nuxt/eslint": "^1.9.0",
+    "@nuxt/nitro-server": "^4.6.3",
     "@types/jszip": "^3.4.1",
     "@vitejs/plugin-vue": "^6.0.10",
     "@vue/test-utils": "^2.4.6",

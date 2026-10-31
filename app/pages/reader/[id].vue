@@ -19,12 +19,19 @@ import HighlightNoteModal from '../../components/reader/HighlightNoteModal.vue';
 import BookNotesDrawer from '../../components/reader/BookNotesDrawer.vue';
 import QuoteCardModal from '../../components/export/QuoteCardModal.vue';
 import NotesExportModal from '../../components/export/NotesExportModal.vue';
+import AiAssistantSheet from '../../components/ai/AiAssistantSheet.vue';
+import AiSettingsModal from '../../components/ai/AiSettingsModal.vue';
+import { useAiStore } from '../../stores/aiStore';
+import { useAiReader } from '../../composables/useAiReader';
 
+const { t } = useI18n();
 const route = useRoute();
 const router = useRouter();
 const libraryStore = useLibraryStore();
 const readerStore = useReaderStore();
 const highlightStore = useHighlightStore();
+const aiStore = useAiStore();
+const { triggerChapterTldr } = useAiReader();
 const { openBook, nextPage, prevPage, goToLocator, setPaginationMode, applyTheme, closeBook, activeEngine } = useReader();
 const { enableKeepAwake, disableKeepAwake } = useAppLifecycle();
 const { clearSelection } = useTextSelection();
@@ -67,6 +74,7 @@ onMounted(async () => {
 
   highlightStore.setBookContext(book.id, book.title, book.author, book.format);
   await highlightStore.loadHighlights(book.id);
+  aiStore.checkInactivityCatchUp(book.last_read_at);
 
   await nextTick();
 
@@ -192,7 +200,58 @@ const handleCloseTranslation = () => {
       @prev="prevPage"
       @open-settings="handleOpenSettings"
       @open-notes="highlightStore.openNotesDrawer"
+      @chapter-tldr="triggerChapterTldr"
     />
+
+    <Transition
+      enter-active-class="transition duration-300 ease-out"
+      enter-from-class="-translate-y-4 opacity-0"
+      enter-to-class="translate-y-0 opacity-100"
+      leave-active-class="transition duration-200 ease-in"
+      leave-from-class="opacity-100"
+      leave-to-class="opacity-0"
+    >
+      <div
+        v-if="aiStore.showInactivityBanner"
+        class="fixed top-16 left-4 right-4 z-40 mx-auto max-w-lg rounded-2xl border border-[#3E5725]/30 bg-[#F4ECD8] p-3.5 shadow-xl backdrop-blur-md dark:border-[#C8E695]/30 dark:bg-zinc-900"
+      >
+        <div class="flex items-center justify-between gap-3">
+          <div class="flex items-center gap-2.5">
+            <div class="flex h-8 w-8 items-center justify-center rounded-xl bg-[#C8E695] text-[#3E5725]">
+              <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z" />
+              </svg>
+            </div>
+            <div>
+              <p class="text-xs font-bold text-[#3E5725] dark:text-[#C8E695]">
+                {{ t('ai.inactivityCatchupTitle') }}
+              </p>
+              <p class="text-[11px] text-zinc-600 dark:text-zinc-400">
+                {{ t('ai.inactivityCatchupMessage') }}
+              </p>
+            </div>
+          </div>
+          <div class="flex items-center gap-1.5">
+            <button
+              type="button"
+              class="rounded-xl bg-[#3E5725] px-3 py-1.5 text-xs font-bold text-[#F4ECD8] shadow-sm transition hover:bg-[#3E5725]/90 active:scale-95 dark:bg-[#C8E695] dark:text-[#3E5725]"
+              @click="triggerChapterTldr(); aiStore.dismissInactivityBanner()"
+            >
+              {{ t('ai.viewCatchup') }}
+            </button>
+            <button
+              type="button"
+              class="rounded-lg p-1 text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200"
+              @click="aiStore.dismissInactivityBanner"
+            >
+              <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+          </div>
+        </div>
+      </div>
+    </Transition>
 
     <ThemeSettingsSheet
       :is-open="isSettingsOpen"
@@ -220,5 +279,12 @@ const handleCloseTranslation = () => {
     <QuoteCardModal />
 
     <NotesExportModal />
+
+    <AiAssistantSheet />
+
+    <AiSettingsModal
+      :is-open="aiStore.isSettingsModalOpen"
+      @close="aiStore.closeSettingsModal"
+    />
   </div>
 </template>
