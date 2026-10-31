@@ -1,10 +1,10 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue';
-import { useFolderStore } from '../../stores/folderStore';
+import { useCollectionStore } from '../../stores/collectionStore';
 import { useLibraryStore } from '../../stores/libraryStore';
-import { useFolderNavigation } from '../../composables/useFolderNavigation';
-import type { FolderFilter, FolderWithCount } from '../../types';
-import FolderDeleteConfirmModal from '../library/FolderDeleteConfirmModal.vue';
+import { useCollectionNavigation } from '../../composables/useCollectionNavigation';
+import type { CollectionFilter, CollectionWithCount } from '../../types';
+import CollectionDeleteConfirmModal from '../library/CollectionDeleteConfirmModal.vue';
 
 interface Props {
   readonly isOpen: boolean;
@@ -14,115 +14,118 @@ const props = defineProps<Props>();
 
 const emit = defineEmits<{
   (e: 'close'): void;
-  (e: 'select-folder', folderId: FolderFilter): void;
+  (e: 'select-collection', collectionId: CollectionFilter): void;
 }>();
 
 const { t } = useI18n();
-const folderStore = useFolderStore();
+const collectionStore = useCollectionStore();
 const libraryStore = useLibraryStore();
-const { activeFolderId, selectFolder } = useFolderNavigation();
+const { activeCollectionId, selectCollection } = useCollectionNavigation();
 
-const isFoldersOpen = ref(true);
+const isCollectionsOpen = ref(true);
 const isCreating = ref(false);
-const newFolderName = ref('');
-const editingFolderId = ref<number | null>(null);
-const editingFolderName = ref('');
+const newCollectionName = ref('');
+const editingCollectionId = ref<number | null>(null);
+const editingCollectionName = ref('');
 const errorMessage = ref('');
 
-const folderToDelete = ref<FolderWithCount | null>(null);
+const collectionToDelete = ref<CollectionWithCount | null>(null);
 const isDeleteModalOpen = ref(false);
 
 onMounted(async () => {
-  await folderStore.fetchFolders();
+  await collectionStore.fetchCollections();
 });
 
 const totalBooks = computed((): number => {
   return libraryStore.books.length;
 });
 
-const uncategorizedCount = computed((): number => {
-  const categorizedTotal = folderStore.folders.reduce((acc, f) => acc + f.count, 0);
-  if (categorizedTotal === 0) {
+const uncollectedCount = computed((): number => {
+  const collectedTotal = collectionStore.collections.reduce((acc, c) => acc + c.count, 0);
+  if (collectedTotal === 0) {
     return totalBooks.value;
   }
-  return Math.max(0, totalBooks.value - folderStore.folders.filter((f) => f.count > 0).length);
+  return Math.max(
+    0,
+    totalBooks.value - collectionStore.collections.filter((c) => c.count > 0).length,
+  );
 });
 
-const handleSelect = async (filter: FolderFilter): Promise<void> => {
-  await selectFolder(filter);
-  emit('select-folder', filter);
+const handleSelect = async (filter: CollectionFilter): Promise<void> => {
+  await selectCollection(filter);
+  emit('select-collection', filter);
   emit('close');
 };
 
 const handleStartCreate = (): void => {
   isCreating.value = true;
-  newFolderName.value = '';
+  newCollectionName.value = '';
   errorMessage.value = '';
 };
 
 const handleCancelCreate = (): void => {
   isCreating.value = false;
-  newFolderName.value = '';
+  newCollectionName.value = '';
   errorMessage.value = '';
 };
 
 const handleSaveCreate = async (): Promise<void> => {
-  const trimmed = newFolderName.value.trim();
+  const trimmed = newCollectionName.value.trim();
   if (!trimmed) {
     return;
   }
   errorMessage.value = '';
   try {
-    const created = await folderStore.createFolder(trimmed);
+    const created = await collectionStore.createCollection(trimmed);
     isCreating.value = false;
-    newFolderName.value = '';
+    newCollectionName.value = '';
     await handleSelect(created.id);
   } catch (err) {
-    errorMessage.value = err instanceof Error ? err.message : 'Error creating folder';
+    errorMessage.value = err instanceof Error ? err.message : 'Error creating collection';
   }
 };
 
-const handleStartRename = (folder: FolderWithCount): void => {
-  editingFolderId.value = folder.id;
-  editingFolderName.value = folder.name;
+const handleStartRename = (collection: CollectionWithCount): void => {
+  editingCollectionId.value = collection.id;
+  editingCollectionName.value = collection.name;
   errorMessage.value = '';
 };
 
 const handleCancelRename = (): void => {
-  editingFolderId.value = null;
-  editingFolderName.value = '';
+  editingCollectionId.value = null;
+  editingCollectionName.value = '';
   errorMessage.value = '';
 };
 
 const handleSaveRename = async (id: number): Promise<void> => {
-  const trimmed = editingFolderName.value.trim();
+  const trimmed = editingCollectionName.value.trim();
   if (!trimmed) {
     return;
   }
   errorMessage.value = '';
   try {
-    await folderStore.renameFolder(id, trimmed);
-    editingFolderId.value = null;
-    editingFolderName.value = '';
+    await collectionStore.renameCollection(id, trimmed);
+    editingCollectionId.value = null;
+    editingCollectionName.value = '';
   } catch (err) {
-    errorMessage.value = err instanceof Error ? err.message : 'Error renaming folder';
+    errorMessage.value = err instanceof Error ? err.message : 'Error renaming collection';
   }
 };
 
-const handleOpenDelete = (folder: FolderWithCount): void => {
-  folderToDelete.value = folder;
+const handleOpenDelete = (collection: CollectionWithCount): void => {
+  collectionToDelete.value = collection;
   isDeleteModalOpen.value = true;
 };
 
 const handleConfirmDelete = async (id: number): Promise<void> => {
   try {
-    await folderStore.deleteFolder(id);
-    if (activeFolderId.value === id) {
+    await collectionStore.deleteCollection(id);
+    if (activeCollectionId.value === id) {
       await handleSelect('all');
     }
   } finally {
     isDeleteModalOpen.value = false;
-    folderToDelete.value = null;
+    collectionToDelete.value = null;
   }
 };
 </script>
@@ -137,7 +140,7 @@ const handleConfirmDelete = async (id: number): Promise<void> => {
     >
       <div
         data-testid="navigation-drawer"
-        class="fixed inset-y-0 left-0 flex w-80 max-w-[85vw] transform select-none flex-col border-r border-[#C8E695]/70 bg-[#F4ECD8] shadow-2xl transition-transform duration-300 ease-out"
+        class="fixed inset-y-0 left-0 flex w-80 max-w-[85vw] select-none flex-col border-r border-[#C8E695]/70 bg-[#F4ECD8] shadow-2xl transition-transform duration-300 ease-out"
         @click.stop
       >
         <div
@@ -155,7 +158,7 @@ const handleConfirmDelete = async (id: number): Promise<void> => {
                 {{ t('app.name') }}
               </h2>
               <p class="mt-0.5 text-[10px] font-bold uppercase tracking-wider text-[#3E5725]/70">
-                {{ t('folders.libraryCollections') }}
+                {{ t('collections.libraryCollections') }}
               </p>
             </div>
           </div>
@@ -192,10 +195,10 @@ const handleConfirmDelete = async (id: number): Promise<void> => {
 
           <button
             type="button"
-            data-testid="folder-item-all"
+            data-testid="collection-item-all"
             class="flex w-full items-center justify-between rounded-2xl border px-3.5 py-3 text-sm font-bold transition-all"
             :class="
-              activeFolderId === 'all'
+              activeCollectionId === 'all'
                 ? 'border-[#3E5725] bg-[#3E5725] text-white shadow-sm'
                 : 'border-[#C8E695]/40 bg-white/70 text-[#3E5725] hover:bg-white'
             "
@@ -215,12 +218,12 @@ const handleConfirmDelete = async (id: number): Promise<void> => {
                   d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"
                 />
               </svg>
-              <span>{{ t('folders.allBooks') }}</span>
+              <span>{{ t('collections.allBooks') }}</span>
             </div>
             <span
               class="rounded-full px-2 py-0.5 text-xs font-bold"
               :class="
-                activeFolderId === 'all'
+                activeCollectionId === 'all'
                   ? 'bg-[#C8E695] text-[#3E5725]'
                   : 'bg-[#C8E695]/40 text-[#3E5725]'
               "
@@ -233,13 +236,13 @@ const handleConfirmDelete = async (id: number): Promise<void> => {
             <div class="mb-1 flex items-center justify-between px-2 py-1">
               <button
                 type="button"
-                data-testid="toggle-folders-section-btn"
+                data-testid="toggle-collections-section-btn"
                 class="flex items-center gap-2 text-xs font-black uppercase tracking-wider text-[#3E5725]/80 transition-colors hover:text-[#3E5725]"
-                @click="isFoldersOpen = !isFoldersOpen"
+                @click="isCollectionsOpen = !isCollectionsOpen"
               >
                 <svg
                   class="h-4 w-4 transition-transform duration-200"
-                  :class="isFoldersOpen ? 'rotate-90' : 'rotate-0'"
+                  :class="isCollectionsOpen ? 'rotate-90' : 'rotate-0'"
                   fill="none"
                   viewBox="0 0 24 24"
                   stroke="currentColor"
@@ -251,14 +254,14 @@ const handleConfirmDelete = async (id: number): Promise<void> => {
                     d="M9 5l7 7-7 7"
                   />
                 </svg>
-                <span>{{ t('folders.collectionsTitle') }}</span>
+                <span>{{ t('collections.collectionsTitle') }}</span>
               </button>
 
               <button
                 type="button"
-                data-testid="create-folder-btn"
+                data-testid="create-collection-btn"
                 class="flex items-center gap-1 rounded-lg p-1 text-xs font-bold text-[#3E5725] transition-all hover:bg-[#C8E695]/50"
-                :title="t('folders.createFolder')"
+                :title="t('collections.createCollection')"
                 @click="handleStartCreate"
               >
                 <svg
@@ -278,7 +281,7 @@ const handleConfirmDelete = async (id: number): Promise<void> => {
             </div>
 
             <div
-              v-show="isFoldersOpen"
+              v-show="isCollectionsOpen"
               class="mt-2 space-y-1"
             >
               <div
@@ -286,10 +289,10 @@ const handleConfirmDelete = async (id: number): Promise<void> => {
                 class="shadow-xs space-y-2 rounded-2xl border border-[#C8E695] bg-white p-2.5"
               >
                 <input
-                  v-model="newFolderName"
+                  v-model="newCollectionName"
                   type="text"
-                  data-testid="inline-new-folder-input"
-                  :placeholder="t('folders.newFolderPlaceholder')"
+                  data-testid="inline-new-collection-input"
+                  :placeholder="t('collections.newCollectionPlaceholder')"
                   class="w-full rounded-xl border border-[#C8E695] bg-[#F4ECD8]/50 px-3 py-1.5 text-xs text-[#3E5725] placeholder:text-[#3E5725]/50 focus:outline-none focus:ring-1 focus:ring-[#3E5725]"
                   @keyup.enter="handleSaveCreate"
                   @keyup.esc="handleCancelCreate"
@@ -300,48 +303,48 @@ const handleConfirmDelete = async (id: number): Promise<void> => {
                     class="px-2.5 py-1 text-xs font-semibold text-[#3E5725]/70 hover:text-[#3E5725]"
                     @click="handleCancelCreate"
                   >
-                    {{ t('folders.cancel') }}
+                    {{ t('collections.cancel') }}
                   </button>
                   <button
                     type="button"
-                    data-testid="submit-create-folder-btn"
-                    :disabled="!newFolderName.trim()"
+                    data-testid="submit-create-collection-btn"
+                    :disabled="!newCollectionName.trim()"
                     class="rounded-lg bg-[#3E5725] px-3 py-1 text-xs font-bold text-white hover:bg-[#3E5725]/90 disabled:opacity-40"
                     @click="handleSaveCreate"
                   >
-                    {{ t('folders.create') }}
+                    {{ t('collections.create') }}
                   </button>
                 </div>
               </div>
 
               <div
-                v-for="folder in folderStore.folders"
-                :key="folder.id"
-                :data-testid="`folder-item-${folder.id}`"
+                v-for="collection in collectionStore.collections"
+                :key="collection.id"
+                :data-testid="`collection-item-${collection.id}`"
                 class="group flex items-center justify-between rounded-2xl border px-3 py-2.5 text-sm font-bold transition-all"
                 :class="
-                  activeFolderId === folder.id
+                  activeCollectionId === collection.id
                     ? 'border-[#3E5725] bg-[#3E5725] text-white shadow-sm'
                     : 'border-[#C8E695]/30 bg-white/60 text-[#3E5725] hover:bg-white'
                 "
               >
                 <div
-                  v-if="editingFolderId === folder.id"
+                  v-if="editingCollectionId === collection.id"
                   class="flex w-full items-center gap-1.5"
                 >
                   <input
-                    v-model="editingFolderName"
+                    v-model="editingCollectionName"
                     type="text"
-                    :data-testid="`input-rename-folder-${folder.id}`"
+                    :data-testid="`input-rename-collection-${collection.id}`"
                     class="flex-1 rounded-lg border border-[#3E5725] bg-white px-2 py-1 text-xs text-[#3E5725] focus:outline-none"
-                    @keyup.enter="handleSaveRename(folder.id)"
+                    @keyup.enter="handleSaveRename(collection.id)"
                     @keyup.esc="handleCancelRename"
                   />
                   <button
                     type="button"
-                    :data-testid="`save-rename-folder-${folder.id}`"
+                    :data-testid="`save-rename-collection-${collection.id}`"
                     class="rounded-lg p-1 text-emerald-700 hover:bg-emerald-100"
-                    @click="handleSaveRename(folder.id)"
+                    @click="handleSaveRename(collection.id)"
                   >
                     <svg
                       class="h-4 w-4"
@@ -382,7 +385,7 @@ const handleConfirmDelete = async (id: number): Promise<void> => {
                   <button
                     type="button"
                     class="flex flex-1 items-center gap-2.5 truncate text-left"
-                    @click="handleSelect(folder.id)"
+                    @click="handleSelect(collection.id)"
                   >
                     <svg
                       class="h-4 w-4 shrink-0"
@@ -394,35 +397,35 @@ const handleConfirmDelete = async (id: number): Promise<void> => {
                         stroke-linecap="round"
                         stroke-linejoin="round"
                         stroke-width="2"
-                        d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z"
+                        d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"
                       />
                     </svg>
-                    <span class="truncate">{{ folder.name }}</span>
+                    <span class="truncate">{{ collection.name }}</span>
                   </button>
 
                   <div class="ml-2 flex shrink-0 items-center gap-1">
                     <span
                       class="rounded-full px-2 py-0.5 text-xs font-bold"
                       :class="
-                        activeFolderId === folder.id
+                        activeCollectionId === collection.id
                           ? 'bg-[#C8E695] text-[#3E5725]'
                           : 'bg-[#C8E695]/40 text-[#3E5725]'
                       "
                     >
-                      {{ folder.count }}
+                      {{ collection.count }}
                     </span>
 
                     <button
                       type="button"
-                      :data-testid="`rename-folder-btn-${folder.id}`"
+                      :data-testid="`rename-collection-btn-${collection.id}`"
                       class="rounded-md p-1 opacity-60 transition-opacity hover:opacity-100"
                       :class="
-                        activeFolderId === folder.id
+                        activeCollectionId === collection.id
                           ? 'text-white hover:bg-white/20'
                           : 'text-[#3E5725] hover:bg-[#C8E695]/40'
                       "
-                      :title="t('folders.renameFolder')"
-                      @click.stop="handleStartRename(folder)"
+                      :title="t('collections.renameCollection')"
+                      @click.stop="handleStartRename(collection)"
                     >
                       <svg
                         class="h-3.5 w-3.5"
@@ -441,10 +444,10 @@ const handleConfirmDelete = async (id: number): Promise<void> => {
 
                     <button
                       type="button"
-                      :data-testid="`delete-folder-btn-${folder.id}`"
+                      :data-testid="`delete-collection-btn-${collection.id}`"
                       class="rounded-md p-1 text-rose-600 opacity-60 transition-opacity hover:bg-rose-100 hover:opacity-100"
-                      :title="t('folders.deleteFolder')"
-                      @click.stop="handleOpenDelete(folder)"
+                      :title="t('collections.deleteCollection')"
+                      @click.stop="handleOpenDelete(collection)"
                     >
                       <svg
                         class="h-3.5 w-3.5"
@@ -466,14 +469,14 @@ const handleConfirmDelete = async (id: number): Promise<void> => {
 
               <button
                 type="button"
-                data-testid="folder-item-uncategorized"
+                data-testid="collection-item-uncollected"
                 class="flex w-full items-center justify-between rounded-2xl border px-3 py-2.5 text-sm font-bold transition-all"
                 :class="
-                  activeFolderId === 'uncategorized'
+                  activeCollectionId === 'uncollected'
                     ? 'border-[#3E5725] bg-[#3E5725] text-white shadow-sm'
                     : 'border-[#C8E695]/30 bg-white/60 text-[#3E5725] hover:bg-white'
                 "
-                @click="handleSelect('uncategorized')"
+                @click="handleSelect('uncollected')"
               >
                 <div class="flex items-center gap-2.5 truncate">
                   <svg
@@ -489,17 +492,17 @@ const handleConfirmDelete = async (id: number): Promise<void> => {
                       d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4"
                     />
                   </svg>
-                  <span class="truncate">{{ t('folders.uncategorized') }}</span>
+                  <span class="truncate">{{ t('collections.uncollected') }}</span>
                 </div>
                 <span
                   class="rounded-full px-2 py-0.5 text-xs font-bold"
                   :class="
-                    activeFolderId === 'uncategorized'
+                    activeCollectionId === 'uncollected'
                       ? 'bg-[#C8E695] text-[#3E5725]'
                       : 'bg-[#C8E695]/40 text-[#3E5725]'
                   "
                 >
-                  {{ uncategorizedCount }}
+                  {{ uncollectedCount }}
                 </span>
               </button>
             </div>
@@ -508,9 +511,9 @@ const handleConfirmDelete = async (id: number): Promise<void> => {
       </div>
     </div>
 
-    <FolderDeleteConfirmModal
+    <CollectionDeleteConfirmModal
       :is-open="isDeleteModalOpen"
-      :folder="folderToDelete"
+      :collection="collectionToDelete"
       @close="isDeleteModalOpen = false"
       @confirm="handleConfirmDelete"
     />

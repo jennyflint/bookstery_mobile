@@ -47,21 +47,21 @@ CREATE INDEX IF NOT EXISTS idx_books_pinned ON books(is_pinned DESC, pinned_at D
 CREATE INDEX IF NOT EXISTS idx_sync_queue_status ON sync_queue(status);
 CREATE INDEX IF NOT EXISTS idx_dictionary_created ON dictionary_history(created_at);
 
-CREATE TABLE IF NOT EXISTS folders (
+CREATE TABLE IF NOT EXISTS collections (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   name TEXT NOT NULL UNIQUE,
   created_at INTEGER NOT NULL,
   updated_at INTEGER NOT NULL
 );
 
-CREATE TABLE IF NOT EXISTS book_folder (
+CREATE TABLE IF NOT EXISTS book_collection (
   book_id TEXT NOT NULL REFERENCES books(id) ON DELETE CASCADE,
-  folder_id INTEGER NOT NULL REFERENCES folders(id) ON DELETE CASCADE,
-  PRIMARY KEY (book_id, folder_id)
+  collection_id INTEGER NOT NULL REFERENCES collections(id) ON DELETE CASCADE,
+  PRIMARY KEY (book_id, collection_id)
 );
 
-CREATE INDEX IF NOT EXISTS idx_book_folder_book ON book_folder(book_id);
-CREATE INDEX IF NOT EXISTS idx_book_folder_folder ON book_folder(folder_id);
+CREATE INDEX IF NOT EXISTS idx_book_collection_book ON book_collection(book_id);
+CREATE INDEX IF NOT EXISTS idx_book_collection_collection ON book_collection(collection_id);
 
 CREATE TABLE IF NOT EXISTS highlights (
   id TEXT PRIMARY KEY,

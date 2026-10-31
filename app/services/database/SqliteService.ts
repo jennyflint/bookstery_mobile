@@ -19,8 +19,8 @@ const STORAGE_KEYS = {
   DICTIONARY: 'bookstery_web_dictionary',
   SESSION: 'bookstery_web_session',
   DRIVE_FOLDER_ID: 'bookstery_web_drive_folder_id',
-  FOLDERS: 'bookstery_web_folders',
-  BOOK_FOLDERS: 'bookstery_web_book_folders',
+  COLLECTIONS: 'bookstery_web_collections',
+  BOOK_COLLECTIONS: 'bookstery_web_book_collections',
   HIGHLIGHTS: 'bookstery_web_highlights',
 };
 
@@ -114,6 +114,24 @@ export class SqliteService {
 
       try {
         await this.db.execute(SCHEMA_HIGHLIGHTS);
+      } catch {}
+
+      try {
+        await this.db.execute(`
+          CREATE TABLE IF NOT EXISTS collections (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            name TEXT NOT NULL UNIQUE,
+            created_at INTEGER NOT NULL,
+            updated_at INTEGER NOT NULL
+          );
+          CREATE TABLE IF NOT EXISTS book_collection (
+            book_id TEXT NOT NULL REFERENCES books(id) ON DELETE CASCADE,
+            collection_id INTEGER NOT NULL REFERENCES collections(id) ON DELETE CASCADE,
+            PRIMARY KEY (book_id, collection_id)
+          );
+          CREATE INDEX IF NOT EXISTS idx_book_collection_book ON book_collection(book_id);
+          CREATE INDEX IF NOT EXISTS idx_book_collection_collection ON book_collection(collection_id);
+        `);
       } catch {}
 
       this.isInitialized = true;
@@ -320,13 +338,13 @@ export class SqliteService {
     const books = readStorage<BookRecord[]>(STORAGE_KEYS.BOOKS, []);
     const filtered = books.filter((b) => b.id !== id);
     writeStorage(STORAGE_KEYS.BOOKS, filtered);
-    const bookFolders = readStorage<{ book_id: string; folder_id: number }[]>(
-      STORAGE_KEYS.BOOK_FOLDERS,
+    const bookCollections = readStorage<{ book_id: string; collection_id: number }[]>(
+      STORAGE_KEYS.BOOK_COLLECTIONS,
       [],
     );
     writeStorage(
-      STORAGE_KEYS.BOOK_FOLDERS,
-      bookFolders.filter((bf) => bf.book_id !== id),
+      STORAGE_KEYS.BOOK_COLLECTIONS,
+      bookCollections.filter((bc) => bc.book_id !== id),
     );
   }
 

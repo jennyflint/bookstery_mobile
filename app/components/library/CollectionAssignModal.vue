@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref, watch } from 'vue';
-import { useFolderStore } from '../../stores/folderStore';
+import { useCollectionStore } from '../../stores/collectionStore';
 import type { BookRecord } from '../../types';
 
 interface Props {
@@ -16,21 +16,21 @@ const emit = defineEmits<{
 }>();
 
 const { t } = useI18n();
-const folderStore = useFolderStore();
+const collectionStore = useCollectionStore();
 
-const selectedFolderIds = ref<number[]>([]);
-const newFolderName = ref('');
+const selectedCollectionIds = ref<number[]>([]);
+const newCollectionName = ref('');
 const isSubmitting = ref(false);
 const errorMessage = ref('');
 
-const loadBookFolders = async (): Promise<void> => {
+const loadBookCollections = async (): Promise<void> => {
   if (!props.book) {
-    selectedFolderIds.value = [];
+    selectedCollectionIds.value = [];
     return;
   }
-  await folderStore.fetchFolders();
-  const ids = await folderStore.getBookFolderIds(props.book.id);
-  selectedFolderIds.value = [...ids];
+  await collectionStore.fetchCollections();
+  const ids = await collectionStore.getBookCollectionIds(props.book.id);
+  selectedCollectionIds.value = [...ids];
 };
 
 watch(
@@ -38,34 +38,34 @@ watch(
   async ([isOpen]) => {
     if (isOpen) {
       errorMessage.value = '';
-      newFolderName.value = '';
-      await loadBookFolders();
+      newCollectionName.value = '';
+      await loadBookCollections();
     }
   },
   { immediate: true },
 );
 
-const toggleFolder = (folderId: number): void => {
-  if (selectedFolderIds.value.includes(folderId)) {
-    selectedFolderIds.value = selectedFolderIds.value.filter((id) => id !== folderId);
+const toggleCollection = (collectionId: number): void => {
+  if (selectedCollectionIds.value.includes(collectionId)) {
+    selectedCollectionIds.value = selectedCollectionIds.value.filter((id) => id !== collectionId);
   } else {
-    selectedFolderIds.value.push(folderId);
+    selectedCollectionIds.value.push(collectionId);
   }
 };
 
-const handleCreateFolder = async (): Promise<void> => {
-  const trimmed = newFolderName.value.trim();
+const handleCreateCollection = async (): Promise<void> => {
+  const trimmed = newCollectionName.value.trim();
   if (!trimmed) {
     return;
   }
   errorMessage.value = '';
   isSubmitting.value = true;
   try {
-    const created = await folderStore.createFolder(trimmed);
-    selectedFolderIds.value.push(created.id);
-    newFolderName.value = '';
+    const created = await collectionStore.createCollection(trimmed);
+    selectedCollectionIds.value.push(created.id);
+    newCollectionName.value = '';
   } catch (err) {
-    errorMessage.value = err instanceof Error ? err.message : 'Failed to create folder';
+    errorMessage.value = err instanceof Error ? err.message : 'Failed to create collection';
   } finally {
     isSubmitting.value = false;
   }
@@ -77,11 +77,11 @@ const handleSave = async (): Promise<void> => {
   }
   isSubmitting.value = true;
   try {
-    await folderStore.updateBookFolders(props.book.id, selectedFolderIds.value);
+    await collectionStore.updateBookCollections(props.book.id, selectedCollectionIds.value);
     emit('saved');
     emit('close');
   } catch (err) {
-    errorMessage.value = err instanceof Error ? err.message : 'Failed to assign folders';
+    errorMessage.value = err instanceof Error ? err.message : 'Failed to assign collections';
   } finally {
     isSubmitting.value = false;
   }
@@ -92,8 +92,8 @@ const handleSave = async (): Promise<void> => {
   <Teleport to="body">
     <div
       v-if="props.isOpen"
-      data-testid="folder-assign-modal"
-      class="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm"
+      data-testid="collection-assign-modal"
+      class="backdrop-blur-xs fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4"
       @click.self="emit('close')"
     >
       <div
@@ -102,7 +102,7 @@ const handleSave = async (): Promise<void> => {
         <div class="flex items-center justify-between border-b border-[#C8E695]/50 p-5">
           <div>
             <h3 class="text-lg font-bold text-[#3E5725]">
-              {{ t('folders.manageFolders') }}
+              {{ t('collections.manageCollections') }}
             </h3>
             <p
               v-if="props.book"
@@ -113,7 +113,7 @@ const handleSave = async (): Promise<void> => {
           </div>
           <button
             type="button"
-            data-testid="close-folder-assign-btn"
+            data-testid="close-collection-assign-btn"
             class="rounded-xl p-2 text-[#3E5725]/70 transition-all hover:bg-[#C8E695]/30 hover:text-[#3E5725]"
             @click="emit('close')"
           >
@@ -143,14 +143,14 @@ const handleSave = async (): Promise<void> => {
 
           <div class="space-y-2">
             <label class="text-xs font-bold uppercase tracking-wider text-[#3E5725]/80">
-              {{ t('folders.selectFolders') }}
+              {{ t('collections.selectCollections') }}
             </label>
 
             <div
-              v-if="folderStore.folders.length === 0"
+              v-if="collectionStore.collections.length === 0"
               class="rounded-2xl border border-dashed border-[#C8E695] bg-white/60 p-6 text-center text-xs font-medium text-[#3E5725]/70"
             >
-              {{ t('folders.noFoldersYet') }}
+              {{ t('collections.noCollectionsYet') }}
             </div>
 
             <div
@@ -158,26 +158,26 @@ const handleSave = async (): Promise<void> => {
               class="max-h-56 space-y-1.5 overflow-y-auto pr-1"
             >
               <label
-                v-for="folder in folderStore.folders"
-                :key="folder.id"
+                v-for="collection in collectionStore.collections"
+                :key="collection.id"
                 class="flex cursor-pointer items-center justify-between rounded-2xl border border-[#C8E695]/40 bg-white/80 p-3 transition-all hover:bg-white active:scale-[0.99]"
               >
                 <div class="flex items-center gap-3">
                   <input
                     type="checkbox"
-                    :value="folder.id"
-                    :checked="selectedFolderIds.includes(folder.id)"
+                    :value="collection.id"
+                    :checked="selectedCollectionIds.includes(collection.id)"
                     class="h-4 w-4 rounded text-[#3E5725] accent-[#3E5725] focus:ring-[#C8E695]"
-                    @change="toggleFolder(folder.id)"
+                    @change="toggleCollection(collection.id)"
                   />
                   <span class="text-sm font-semibold text-[#3E5725]">
-                    {{ folder.name }}
+                    {{ collection.name }}
                   </span>
                 </div>
                 <span
                   class="rounded-full bg-[#C8E695]/40 px-2 py-0.5 text-xs font-bold text-[#3E5725]"
                 >
-                  {{ folder.count }}
+                  {{ collection.count }}
                 </span>
               </label>
             </div>
@@ -185,25 +185,25 @@ const handleSave = async (): Promise<void> => {
 
           <div class="border-t border-[#C8E695]/40 pt-2">
             <label class="mb-1.5 block text-xs font-bold text-[#3E5725]/80">
-              {{ t('folders.createNew') }}
+              {{ t('collections.createNew') }}
             </label>
             <div class="flex gap-2">
               <input
-                v-model="newFolderName"
+                v-model="newCollectionName"
                 type="text"
-                data-testid="new-folder-input"
-                :placeholder="t('folders.newFolderPlaceholder')"
+                data-testid="new-collection-input"
+                :placeholder="t('collections.newCollectionPlaceholder')"
                 class="flex-1 rounded-xl border border-[#C8E695] bg-white/90 px-3.5 py-2 text-sm text-[#3E5725] placeholder:text-[#3E5725]/50 focus:outline-none focus:ring-2 focus:ring-[#3E5725]"
-                @keyup.enter="handleCreateFolder"
+                @keyup.enter="handleCreateCollection"
               />
               <button
                 type="button"
-                data-testid="create-folder-submit-btn"
-                :disabled="!newFolderName.trim() || isSubmitting"
+                data-testid="create-collection-submit-btn"
+                :disabled="!newCollectionName.trim() || isSubmitting"
                 class="shrink-0 rounded-xl bg-[#3E5725] px-4 py-2 text-xs font-bold text-white transition-all hover:bg-[#3E5725]/90 active:scale-95 disabled:opacity-40"
-                @click="handleCreateFolder"
+                @click="handleCreateCollection"
               >
-                {{ t('folders.createBtn') }}
+                {{ t('collections.createBtn') }}
               </button>
             </div>
           </div>
@@ -217,16 +217,16 @@ const handleSave = async (): Promise<void> => {
             class="rounded-xl px-4 py-2.5 text-xs font-bold text-[#3E5725] transition-all hover:bg-white/70 active:scale-95"
             @click="emit('close')"
           >
-            {{ t('folders.cancel') }}
+            {{ t('collections.cancel') }}
           </button>
           <button
             type="button"
-            data-testid="save-folder-assign-btn"
+            data-testid="save-collection-assign-btn"
             :disabled="isSubmitting"
             class="rounded-xl bg-[#3E5725] px-5 py-2.5 text-xs font-bold text-white shadow-md transition-all hover:bg-[#3E5725]/90 active:scale-95 disabled:opacity-50"
             @click="handleSave"
           >
-            {{ t('folders.save') }}
+            {{ t('collections.save') }}
           </button>
         </div>
       </div>

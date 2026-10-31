@@ -1,12 +1,12 @@
 <script setup lang="ts">
 import { ref, computed } from 'vue';
 import { useLibraryStore } from '../../stores/libraryStore';
-import { useFolderStore } from '../../stores/folderStore';
-import { useFolderNavigation } from '../../composables/useFolderNavigation';
+import { useCollectionStore } from '../../stores/collectionStore';
+import { useCollectionNavigation } from '../../composables/useCollectionNavigation';
 import type { BookFormat, BookRecord } from '../../types';
 import BookCard from './BookCard.vue';
 import BookActionMenu from './BookActionMenu.vue';
-import FolderAssignModal from './FolderAssignModal.vue';
+import CollectionAssignModal from './CollectionAssignModal.vue';
 
 const emit = defineEmits<{
   (e: 'select-book', book: BookRecord): void;
@@ -15,8 +15,8 @@ const emit = defineEmits<{
 
 const { t } = useI18n();
 const libraryStore = useLibraryStore();
-const folderStore = useFolderStore();
-const { activeFolderId, activeFolderName, selectFolder } = useFolderNavigation();
+const collectionStore = useCollectionStore();
+const { activeCollectionId, activeCollectionName, selectCollection } = useCollectionNavigation();
 
 const selectedMenuBook = ref<BookRecord | null>(null);
 const isActionMenuOpen = ref(false);
@@ -29,7 +29,7 @@ const setFormat = (format: 'all' | BookFormat): void => {
 
 const handleDelete = async (id: string): Promise<void> => {
   await libraryStore.removeBook(id);
-  await folderStore.fetchFolders();
+  await collectionStore.fetchCollections();
 };
 
 const handleOpenMenu = (book: BookRecord): void => {
@@ -42,7 +42,7 @@ const handleCloseMenu = (): void => {
   selectedMenuBook.value = null;
 };
 
-const handleManageFolders = (book: BookRecord): void => {
+const handleManageCollections = (book: BookRecord): void => {
   selectedAssignBook.value = book;
   isAssignModalOpen.value = true;
 };
@@ -52,10 +52,10 @@ const handleCloseAssignModal = (): void => {
   selectedAssignBook.value = null;
 };
 
-const handleFoldersSaved = async (): Promise<void> => {
-  await folderStore.fetchFolders();
-  if (activeFolderId.value !== 'all') {
-    await folderStore.loadFolderBooks(activeFolderId.value);
+const handleCollectionsSaved = async (): Promise<void> => {
+  await collectionStore.fetchCollections();
+  if (activeCollectionId.value !== 'all') {
+    await collectionStore.loadCollectionBooks(activeCollectionId.value);
   }
 };
 
@@ -63,32 +63,32 @@ const handleToggleFinished = async (book: BookRecord): Promise<void> => {
   const isFinished = book.progress_percentage >= 100;
   const newProgress = isFinished ? 0 : 100;
   await libraryStore.updateProgress(book.id, book.locator, newProgress);
-  if (activeFolderId.value !== 'all') {
-    await folderStore.loadFolderBooks(activeFolderId.value);
+  if (activeCollectionId.value !== 'all') {
+    await collectionStore.loadCollectionBooks(activeCollectionId.value);
   }
 };
 
 const handleTogglePin = async (book: BookRecord): Promise<void> => {
   await libraryStore.toggleBookPin(book.id);
-  if (activeFolderId.value !== 'all') {
-    await folderStore.loadFolderBooks(activeFolderId.value);
+  if (activeCollectionId.value !== 'all') {
+    await collectionStore.loadCollectionBooks(activeCollectionId.value);
   }
 };
 
-const handleRemoveFromFolder = async (payload: {
+const handleRemoveFromCollection = async (payload: {
   book: BookRecord;
-  folderId: number;
+  collectionId: number;
 }): Promise<void> => {
-  await folderStore.removeBookFromFolder(payload.book.id, payload.folderId);
-  await folderStore.fetchFolders();
-  if (activeFolderId.value === payload.folderId) {
-    await folderStore.loadFolderBooks(payload.folderId);
+  await collectionStore.removeBookFromCollection(payload.book.id, payload.collectionId);
+  await collectionStore.fetchCollections();
+  if (activeCollectionId.value === payload.collectionId) {
+    await collectionStore.loadCollectionBooks(payload.collectionId);
   }
 };
 
 const displayBooks = computed((): BookRecord[] => {
   const sourceBooks =
-    activeFolderId.value === 'all' ? libraryStore.books : folderStore.currentBooks;
+    activeCollectionId.value === 'all' ? libraryStore.books : collectionStore.currentBooks;
 
   const filtered = sourceBooks.filter((book) => {
     const matchesQuery =
@@ -134,8 +134,8 @@ const unpinnedBooks = computed((): BookRecord[] => {
     class="space-y-6"
   >
     <div
-      v-if="activeFolderId !== 'all'"
-      data-testid="active-folder-banner"
+      v-if="activeCollectionId !== 'all'"
+      data-testid="active-collection-banner"
       class="shadow-xs flex items-center justify-between rounded-2xl border border-[#C8E695]/80 bg-[#F4ECD8] p-3.5 text-[#3E5725]"
     >
       <div class="flex items-center gap-2.5">
@@ -149,10 +149,10 @@ const unpinnedBooks = computed((): BookRecord[] => {
             stroke-linecap="round"
             stroke-linejoin="round"
             stroke-width="2"
-            d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z"
+            d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"
           />
         </svg>
-        <span class="text-sm font-bold">{{ activeFolderName }}</span>
+        <span class="text-sm font-bold">{{ activeCollectionName }}</span>
         <span class="rounded-full bg-[#C8E695] px-2 py-0.5 text-xs font-black">
           {{ displayBooks.length }}
         </span>
@@ -160,11 +160,11 @@ const unpinnedBooks = computed((): BookRecord[] => {
 
       <button
         type="button"
-        data-testid="clear-folder-filter-btn"
+        data-testid="clear-collection-filter-btn"
         class="rounded-xl border border-[#C8E695]/60 bg-white/80 px-3 py-1.5 text-xs font-bold text-[#3E5725] transition-all hover:bg-white active:scale-95"
-        @click="selectFolder('all')"
+        @click="selectCollection('all')"
       >
-        {{ t('folders.allBooks') }}
+        {{ t('collections.allBooks') }}
       </button>
     </div>
 
@@ -368,20 +368,20 @@ const unpinnedBooks = computed((): BookRecord[] => {
     <BookActionMenu
       :is-open="isActionMenuOpen"
       :book="selectedMenuBook"
-      :current-folder-id="activeFolderId"
+      :current-collection-id="activeCollectionId"
       @close="handleCloseMenu"
-      @manage-folders="handleManageFolders"
+      @manage-collections="handleManageCollections"
       @toggle-finished="handleToggleFinished"
       @toggle-pin="handleTogglePin"
-      @remove-from-folder="handleRemoveFromFolder"
+      @remove-from-collection="handleRemoveFromCollection"
       @delete-book="handleDelete($event.id)"
     />
 
-    <FolderAssignModal
+    <CollectionAssignModal
       :is-open="isAssignModalOpen"
       :book="selectedAssignBook"
       @close="handleCloseAssignModal"
-      @saved="handleFoldersSaved"
+      @saved="handleCollectionsSaved"
     />
   </div>
 </template>

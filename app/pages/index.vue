@@ -2,7 +2,7 @@
 import { ref, onMounted } from 'vue';
 import { useRouter } from 'vue-router';
 import { useLibraryStore } from '../stores/libraryStore';
-import { useFolderStore } from '../stores/folderStore';
+import { useCollectionStore } from '../stores/collectionStore';
 import { useAuth } from '../composables/useAuth';
 import { useBookSync } from '../composables/useBookSync';
 import type { BookRecord } from '../types';
@@ -18,7 +18,7 @@ definePageMeta({
 const { t } = useI18n();
 const router = useRouter();
 const libraryStore = useLibraryStore();
-const folderStore = useFolderStore();
+const collectionStore = useCollectionStore();
 const { initAuth } = useAuth();
 const { initSync } = useBookSync();
 const isScannerOpen = ref(false);
@@ -27,7 +27,7 @@ onMounted(async () => {
   await initAuth();
   await initSync();
   await libraryStore.loadBooks();
-  await folderStore.fetchFolders();
+  await collectionStore.fetchCollections();
 });
 
 const handleSelectBook = (book: BookRecord) => {

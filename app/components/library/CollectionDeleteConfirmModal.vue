@@ -1,23 +1,23 @@
 <script setup lang="ts">
-import type { Folder, FolderWithCount } from '../../types';
+import type { Collection, CollectionWithCount } from '../../types';
 
 interface Props {
   readonly isOpen: boolean;
-  readonly folder: Folder | FolderWithCount | null;
+  readonly collection: Collection | CollectionWithCount | null;
 }
 
 const props = defineProps<Props>();
 
 const emit = defineEmits<{
   (e: 'close'): void;
-  (e: 'confirm', folderId: number): void;
+  (e: 'confirm', collectionId: number): void;
 }>();
 
 const { t } = useI18n();
 
 const handleConfirm = (): void => {
-  if (props.folder) {
-    emit('confirm', props.folder.id);
+  if (props.collection) {
+    emit('confirm', props.collection.id);
   }
 };
 </script>
@@ -26,8 +26,8 @@ const handleConfirm = (): void => {
   <Teleport to="body">
     <div
       v-if="props.isOpen"
-      data-testid="folder-delete-confirm-modal"
-      class="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm"
+      data-testid="collection-delete-confirm-modal"
+      class="backdrop-blur-xs fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4"
       @click.self="emit('close')"
     >
       <div
@@ -53,13 +53,13 @@ const handleConfirm = (): void => {
           </div>
           <div>
             <h3 class="text-lg font-bold text-[#3E5725]">
-              {{ t('folders.deleteTitle') }}
+              {{ t('collections.deleteTitle') }}
             </h3>
             <p
-              v-if="props.folder"
+              v-if="props.collection"
               class="max-w-[200px] truncate text-xs font-semibold text-[#3E5725]/75"
             >
-              "{{ props.folder.name }}"
+              "{{ props.collection.name }}"
             </p>
           </div>
         </div>
@@ -67,25 +67,25 @@ const handleConfirm = (): void => {
         <p
           class="mb-6 rounded-2xl border border-[#C8E695]/40 bg-white/70 p-3.5 text-sm font-medium leading-relaxed text-[#3E5725]/90"
         >
-          {{ t('folders.deleteReassurance') }}
+          {{ t('collections.deleteReassurance') }}
         </p>
 
         <div class="flex items-center justify-end gap-3">
           <button
             type="button"
-            data-testid="cancel-delete-folder-btn"
+            data-testid="cancel-delete-collection-btn"
             class="rounded-xl border border-[#C8E695]/40 bg-white/80 px-4 py-2.5 text-xs font-bold text-[#3E5725] transition-all hover:bg-white active:scale-95"
             @click="emit('close')"
           >
-            {{ t('folders.deleteCancel') }}
+            {{ t('collections.deleteCancel') }}
           </button>
           <button
             type="button"
-            data-testid="confirm-delete-folder-btn"
+            data-testid="confirm-delete-collection-btn"
             class="rounded-xl bg-rose-600 px-4 py-2.5 text-xs font-bold text-white shadow-md transition-all hover:bg-rose-700 active:scale-95"
             @click="handleConfirm"
           >
-            {{ t('folders.deleteConfirm') }}
+            {{ t('collections.deleteConfirm') }}
           </button>
         </div>
       </div>

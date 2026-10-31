@@ -1,23 +1,23 @@
 <script setup lang="ts">
 import { computed } from 'vue';
-import type { BookRecord, FolderFilter } from '../../types';
+import type { BookRecord, CollectionFilter } from '../../types';
 
 interface Props {
   readonly isOpen: boolean;
   readonly book: BookRecord | null;
-  readonly currentFolderId?: FolderFilter;
+  readonly currentCollectionId?: CollectionFilter;
 }
 
 const props = withDefaults(defineProps<Props>(), {
-  currentFolderId: 'all',
+  currentCollectionId: 'all',
 });
 
 const emit = defineEmits<{
   (e: 'close'): void;
-  (e: 'manage-folders', book: BookRecord): void;
+  (e: 'manage-collections', book: BookRecord): void;
   (e: 'toggle-finished', book: BookRecord): void;
   (e: 'toggle-pin', book: BookRecord): void;
-  (e: 'remove-from-folder', payload: { book: BookRecord; folderId: number }): void;
+  (e: 'remove-from-collection', payload: { book: BookRecord; collectionId: number }): void;
   (e: 'delete-book', book: BookRecord): void;
 }>();
 
@@ -31,8 +31,8 @@ const isFinished = computed((): boolean => {
   return (props.book?.progress_percentage ?? 0) >= 100;
 });
 
-const isInsideSpecificFolder = computed((): boolean => {
-  return typeof props.currentFolderId === 'number';
+const isInsideSpecificCollection = computed((): boolean => {
+  return typeof props.currentCollectionId === 'number';
 });
 
 const handleTogglePin = (): void => {
@@ -42,9 +42,9 @@ const handleTogglePin = (): void => {
   }
 };
 
-const handleManageFolders = (): void => {
+const handleManageCollections = (): void => {
   if (props.book) {
-    emit('manage-folders', props.book);
+    emit('manage-collections', props.book);
     emit('close');
   }
 };
@@ -56,11 +56,11 @@ const handleToggleFinished = (): void => {
   }
 };
 
-const handleRemoveFromFolder = (): void => {
-  if (props.book && typeof props.currentFolderId === 'number') {
-    emit('remove-from-folder', {
+const handleRemoveFromCollection = (): void => {
+  if (props.book && typeof props.currentCollectionId === 'number') {
+    emit('remove-from-collection', {
       book: props.book,
-      folderId: props.currentFolderId,
+      collectionId: props.currentCollectionId,
     });
     emit('close');
   }
@@ -83,7 +83,7 @@ const handleDeleteBook = (): void => {
     >
       <div
         data-testid="book-action-menu"
-        class="animate-in slide-in-from-bottom duration-250 w-full transform overflow-hidden rounded-t-3xl border border-[#C8E695]/60 bg-[#F4ECD8] text-[#3E5725] shadow-2xl transition-transform sm:max-w-md sm:rounded-3xl"
+        class="animate-in slide-in-from-bottom w-full transform overflow-hidden rounded-t-3xl border border-[#C8E695]/60 bg-[#F4ECD8] text-[#3E5725] shadow-2xl transition-transform duration-200 sm:max-w-md sm:rounded-3xl"
         :style="{ paddingBottom: 'calc(1rem + env(safe-area-inset-bottom, 0px))' }"
       >
         <div class="flex items-center justify-between border-b border-[#C8E695]/40 p-4">
@@ -167,9 +167,9 @@ const handleDeleteBook = (): void => {
 
           <button
             type="button"
-            data-testid="action-manage-folders"
+            data-testid="manage-collections-action"
             class="flex w-full items-center gap-3 rounded-2xl border border-[#C8E695]/30 bg-white/70 px-4 py-3 text-sm font-semibold text-[#3E5725] transition-all hover:bg-white active:scale-[0.99]"
-            @click="handleManageFolders"
+            @click="handleManageCollections"
           >
             <svg
               class="h-5 w-5 text-[#3E5725]"
@@ -181,10 +181,10 @@ const handleDeleteBook = (): void => {
                 stroke-linecap="round"
                 stroke-linejoin="round"
                 stroke-width="2"
-                d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z"
+                d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"
               />
             </svg>
-            <span>{{ t('folders.manageFoldersAction') }}</span>
+            <span>{{ t('collections.manageCollectionsAction') }}</span>
           </button>
 
           <button
@@ -206,15 +206,17 @@ const handleDeleteBook = (): void => {
                 d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"
               />
             </svg>
-            <span>{{ isFinished ? t('folders.markAsUnread') : t('folders.markAsFinished') }}</span>
+            <span>{{
+              isFinished ? t('collections.markAsUnread') : t('collections.markAsFinished')
+            }}</span>
           </button>
 
           <button
-            v-if="isInsideSpecificFolder"
+            v-if="isInsideSpecificCollection"
             type="button"
-            data-testid="action-remove-from-folder"
+            data-testid="remove-from-collection-action"
             class="flex w-full items-center gap-3 rounded-2xl border border-amber-200/50 bg-amber-50/80 px-4 py-3 text-sm font-semibold text-amber-900 transition-all hover:bg-amber-50 active:scale-[0.99]"
-            @click="handleRemoveFromFolder"
+            @click="handleRemoveFromCollection"
           >
             <svg
               class="h-5 w-5 text-amber-700"
@@ -229,7 +231,7 @@ const handleDeleteBook = (): void => {
                 d="M15 12H9m12 0a9 9 0 11-18 0 9 9 0 0118 0z"
               />
             </svg>
-            <span>{{ t('folders.removeFromCurrentFolder') }}</span>
+            <span>{{ t('collections.removeFromCurrentCollection') }}</span>
           </button>
 
           <button

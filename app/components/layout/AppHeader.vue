@@ -5,10 +5,10 @@ import NavigationDrawer from '../navigation/NavigationDrawer.vue';
 import SyncButton from '../common/SyncButton.vue';
 import SyncStatusBadge from '../common/SyncStatusBadge.vue';
 import LanguageSwitcher from '../common/LanguageSwitcher.vue';
-import { useFolderNavigation } from '../../composables/useFolderNavigation';
+import { useCollectionNavigation } from '../../composables/useCollectionNavigation';
 
 const { t } = useI18n();
-const { activeFolderName } = useFolderNavigation();
+const { activeCollectionName } = useCollectionNavigation();
 
 const isDrawerOpen = ref(false);
 
@@ -50,7 +50,7 @@ const closeDrawer = (): void => {
           </svg>
         </button>
 
-        <AppLogo :subtitle="activeFolderName || t('library.title')" />
+        <AppLogo :subtitle="activeCollectionName || t('library.title')" />
       </div>
 
       <div class="flex items-center gap-2">

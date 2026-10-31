@@ -1,6 +1,6 @@
 export * from './auth';
 export * from './sync';
-export * from './folder';
+export * from './collection';
 export * from './highlight';
 export * from './export';
 

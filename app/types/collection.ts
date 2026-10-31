@@ -1,22 +1,22 @@
 import type { BookRecord } from './index';
 
-export interface Folder {
+export interface Collection {
   id: number;
   name: string;
   created_at: number;
   updated_at: number;
 }
 
-export interface FolderWithCount extends Folder {
+export interface CollectionWithCount extends Collection {
   count: number;
   book_count: number;
 }
 
-export interface BookFolder {
+export interface BookCollection {
   book_id: string;
-  folder_id: number;
+  collection_id: number;
 }
 
 export type Book = BookRecord;
 
-export type FolderFilter = number | 'all' | 'uncategorized';
+export type CollectionFilter = number | 'all' | 'uncollected';
