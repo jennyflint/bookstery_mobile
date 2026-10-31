@@ -14,7 +14,8 @@ node_modules
 android/app/build
 ios/App/build
 ios/App/Pods
-
+android/
+ios/
 # Misc
 .DS_Store
 .fleet
