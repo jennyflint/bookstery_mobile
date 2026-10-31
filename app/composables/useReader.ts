@@ -1,14 +1,16 @@
-import { ref } from 'vue';
+import { shallowRef, markRaw } from 'vue';
 import { PdfEngine } from '../services/engines/PdfEngine';
 import { EpubEngine } from '../services/engines/EpubEngine';
 import { Fb2Engine } from '../services/engines/Fb2Engine';
 import type { ReaderEngineInterface, BookRecord, ReaderPaginationMode } from '../types';
 import { useReaderStore } from '../stores/readerStore';
+import { useLibraryStore } from '../stores/libraryStore';
 import { useBookSync } from './useBookSync';
 
 export function useReader() {
-  const activeEngine = ref<ReaderEngineInterface | null>(null);
+  const activeEngine = shallowRef<ReaderEngineInterface | null>(null);
   const readerStore = useReaderStore();
+  const libraryStore = useLibraryStore();
   const { queueProgress } = useBookSync();
 
   const createEngine = (format: string): ReaderEngineInterface => {
@@ -38,19 +40,8 @@ export function useReader() {
     }
 
     try {
-      const engine = createEngine(book.format);
+      const engine = markRaw(createEngine(book.format));
       activeEngine.value = engine;
-
-      engine.onLocationChange = (location) => {
-        readerStore.updateLocation(location);
-        if (readerStore.currentBook) {
-          queueProgress(
-            readerStore.currentBook.id,
-            location.locator,
-            location.progressPercentage,
-          );
-        }
-      };
 
       if (engine.setPaginationMode) {
         await engine.setPaginationMode(readerStore.settings.paginationMode);
@@ -60,7 +51,7 @@ export function useReader() {
         engine.applyTheme(readerStore.currentThemeColors);
       }
 
-      await engine.init(container, fileData);
+      await engine.init(container, fileData, book.locator);
 
       if (engine.applyTheme) {
         engine.applyTheme(readerStore.currentThemeColors);
@@ -70,8 +61,25 @@ export function useReader() {
         await engine.goTo(book.locator);
       }
 
-      const location = engine.getCurrentLocation();
-      readerStore.updateLocation(location);
+      const initialLoc = engine.getCurrentLocation();
+      readerStore.updateLocation(initialLoc);
+
+      // Attach location listener after initial position restoration so start position doesn't overwrite saved locator
+      engine.onLocationChange = (location) => {
+        readerStore.updateLocation(location);
+        if (readerStore.currentBook) {
+          libraryStore.updateProgress(
+            readerStore.currentBook.id,
+            location.locator,
+            location.progressPercentage,
+          );
+          queueProgress(
+            readerStore.currentBook.id,
+            location.locator,
+            location.progressPercentage,
+          );
+        }
+      };
     } finally {
       readerStore.setRendering(false);
     }
@@ -97,6 +105,11 @@ export function useReader() {
       const location = activeEngine.value.getCurrentLocation();
       readerStore.updateLocation(location);
       if (readerStore.currentBook) {
+        await libraryStore.updateProgress(
+          readerStore.currentBook.id,
+          location.locator,
+          location.progressPercentage,
+        );
         await queueProgress(
           readerStore.currentBook.id,
           location.locator,
@@ -116,6 +129,11 @@ export function useReader() {
       const location = activeEngine.value.getCurrentLocation();
       readerStore.updateLocation(location);
       if (readerStore.currentBook) {
+        await libraryStore.updateProgress(
+          readerStore.currentBook.id,
+          location.locator,
+          location.progressPercentage,
+        );
         await queueProgress(
           readerStore.currentBook.id,
           location.locator,
@@ -135,6 +153,11 @@ export function useReader() {
       const location = activeEngine.value.getCurrentLocation();
       readerStore.updateLocation(location);
       if (readerStore.currentBook) {
+        await libraryStore.updateProgress(
+          readerStore.currentBook.id,
+          location.locator,
+          location.progressPercentage,
+        );
         await queueProgress(
           readerStore.currentBook.id,
           location.locator,

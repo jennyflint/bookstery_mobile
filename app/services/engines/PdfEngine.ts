@@ -51,10 +51,12 @@ export class PdfEngine extends BaseEngine {
   private currentScale: number = 1.0;
   private visibilityHandler: (() => void) | null = null;
   private currentColors: { bg: string; text: string } | null = null;
+  private isProgrammaticScroll: boolean = false;
 
   async init(
     container: HTMLElement,
     data: Uint8Array | ArrayBuffer | string | Blob,
+    initialLocator?: string,
   ): Promise<void> {
     this.container = container;
     this.container.innerHTML = '';
@@ -112,12 +114,17 @@ export class PdfEngine extends BaseEngine {
       const loadingTask = pdfjsLib.getDocument(docSource);
       this.pdfDocument = await loadingTask.promise;
       this.totalPagesCount = this.pdfDocument.numPages;
-      this.currentPageNumber = 1;
+
+      const initialPage = initialLocator ? parseInt(initialLocator, 10) : 1;
+      this.currentPageNumber = !isNaN(initialPage) && initialPage >= 1 ? Math.min(initialPage, this.totalPagesCount) : 1;
 
       this.attachVisibilityListener();
 
       if (this.paginationMode === 'scroll') {
         await this.renderScrollMode();
+        if (this.currentPageNumber > 1) {
+          this.scrollToPage(this.currentPageNumber, false);
+        }
       } else {
         await this.renderButtonsMode(this.currentPageNumber);
       }
@@ -153,7 +160,7 @@ export class PdfEngine extends BaseEngine {
     }
 
     if (this.paginationMode === 'scroll') {
-      this.scrollToPage(pageNum);
+      this.scrollToPage(pageNum, false);
     } else {
       await this.renderButtonsMode(pageNum);
     }
@@ -192,8 +199,7 @@ export class PdfEngine extends BaseEngine {
 
     const scrollWrapper = document.createElement('div');
     scrollWrapper.className =
-      'pdf-scroll-container w-full h-full overflow-y-auto overflow-x-hidden flex flex-col items-center py-6 px-2 space-y-6 select-text';
-    scrollWrapper.style.scrollBehavior = 'smooth';
+      'pdf-scroll-container relative w-full h-full overflow-y-auto overflow-x-hidden flex flex-col items-center py-6 px-2 space-y-6 select-text';
     scrollWrapper.style.webkitOverflowScrolling = 'touch';
     this.container.appendChild(scrollWrapper);
     this.scrollContainer = scrollWrapper;
@@ -260,7 +266,7 @@ export class PdfEngine extends BaseEngine {
     const handleScroll = () => {
       if (scrollRaf) cancelAnimationFrame(scrollRaf);
       scrollRaf = requestAnimationFrame(() => {
-        if (!this.scrollContainer) return;
+        if (!this.scrollContainer || this.isProgrammaticScroll) return;
         const containerTop = this.scrollContainer.scrollTop;
         const containerHeight = this.scrollContainer.clientHeight;
         const checkLine = containerTop + containerHeight * 0.35;
@@ -411,17 +417,21 @@ export class PdfEngine extends BaseEngine {
     }
   }
 
-  private scrollToPage(pageNumber: number): void {
+  private scrollToPage(pageNumber: number, smooth: boolean = true): void {
     if (!this.scrollContainer) return;
     const slot = this.scrollContainer.querySelector<HTMLElement>(`#pdf-page-slot-${pageNumber}`);
     if (slot) {
+      this.isProgrammaticScroll = true;
       this.scrollContainer.scrollTo({
-        top: slot.offsetTop - 16,
-        behavior: 'smooth',
+        top: Math.max(0, slot.offsetTop - 16),
+        behavior: smooth ? 'smooth' : 'auto',
       });
       this.currentPageNumber = pageNumber;
       this.location = this.getCurrentLocation();
-      this.onLocationChange?.(this.location);
+      this.renderPageIntoSlot(pageNumber, slot, this.currentScale);
+      setTimeout(() => {
+        this.isProgrammaticScroll = false;
+      }, 200);
     }
   }
 

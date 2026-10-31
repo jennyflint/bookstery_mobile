@@ -67,7 +67,11 @@ export interface ReaderLocation {
 export type ReaderPaginationMode = 'buttons' | 'scroll';
 
 export interface ReaderEngineInterface {
-  init(container: HTMLElement, data: Uint8Array | ArrayBuffer | string | Blob): Promise<void>;
+  init(
+    container: HTMLElement,
+    data: Uint8Array | ArrayBuffer | string | Blob,
+    initialLocator?: string,
+  ): Promise<void>;
   goTo(locator: string): Promise<void>;
   next(): Promise<void>;
   prev(): Promise<void>;

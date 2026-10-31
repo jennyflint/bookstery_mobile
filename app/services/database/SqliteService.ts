@@ -3,30 +3,31 @@ import { Capacitor } from '@capacitor/core';
 import { SCHEMA_V1 } from './migrations';
 import type { BookRecord, DictionaryItem, SyncQueueItem, SyncStatus, UserSession } from '../../types';
 
-const WEB_STORAGE_BOOKS_KEY = 'bookstery_web_books';
+const STORAGE_KEYS = {
+  BOOKS: 'bookstery_web_books',
+  SYNC_QUEUE: 'bookstery_web_sync_queue',
+  DICTIONARY: 'bookstery_web_dictionary',
+  SESSION: 'bookstery_web_session',
+};
 
-function loadWebBooks(): Map<string, BookRecord> {
-  const map = new Map<string, BookRecord>();
+function readStorage<T>(key: string, defaultValue: T): T {
   if (typeof window === 'undefined') {
-    return map;
+    return defaultValue;
   }
   try {
-    const raw = localStorage.getItem(WEB_STORAGE_BOOKS_KEY);
-    if (raw) {
-      const list: BookRecord[] = JSON.parse(raw);
-      list.forEach((b) => map.set(b.id, b));
-    }
+    const raw = localStorage.getItem(key);
+    return raw ? (JSON.parse(raw) as T) : defaultValue;
   } catch {
+    return defaultValue;
   }
-  return map;
 }
 
-function saveWebBooks(books: Map<string, BookRecord>): void {
+function writeStorage<T>(key: string, value: T): void {
   if (typeof window === 'undefined') {
     return;
   }
   try {
-    localStorage.setItem(WEB_STORAGE_BOOKS_KEY, JSON.stringify(Array.from(books.values())));
+    localStorage.setItem(key, JSON.stringify(value));
   } catch {
   }
 }
@@ -36,14 +37,8 @@ export class SqliteService {
   private sqliteConnection: SQLiteConnection | null = null;
   private db: SQLiteDBConnection | null = null;
   private isInitialized: boolean = false;
+  private isNative: boolean = false;
   private readonly dbName: string = 'bookstery_db';
-
-  private inMemoryBooks: Map<string, BookRecord> = loadWebBooks();
-  private inMemoryQueue: SyncQueueItem[] = [];
-  private inMemoryDictionary: DictionaryItem[] = [];
-  private inMemorySession: UserSession | null = null;
-  private queueCounter: number = 1;
-  private dictCounter: number = 1;
 
   static getInstance(): SqliteService {
     if (!SqliteService.instance) {
@@ -57,13 +52,15 @@ export class SqliteService {
       return;
     }
 
-    const platform = Capacitor.getPlatform();
-    if (platform === 'web' && typeof window !== 'undefined' && !('sqliteStorage' in window)) {
+    if (!Capacitor.isNativePlatform()) {
+      // Web environment: persist everything directly into localStorage
+      this.isNative = false;
       this.isInitialized = true;
       return;
     }
 
     try {
+      this.isNative = true;
       this.sqliteConnection = new SQLiteConnection(CapacitorSQLite);
       const isConn = (await this.sqliteConnection.isConnection(this.dbName, false)).result;
 
@@ -82,38 +79,45 @@ export class SqliteService {
       await this.db.open();
       await this.db.execute(SCHEMA_V1);
       this.isInitialized = true;
-    } catch {
+    } catch (err) {
+      console.warn('[SqliteService] Failed to initialize native SQLite, falling back to localStorage:', err);
+      this.isNative = false;
+      this.db = null;
       this.isInitialized = true;
     }
   }
 
   async getAllBooks(): Promise<BookRecord[]> {
-    if (this.db) {
+    if (this.isNative && this.db) {
       try {
         const result = await this.db.query('SELECT * FROM books ORDER BY last_read_at DESC;');
         return (result.values as BookRecord[]) || [];
-      } catch {
+      } catch (err) {
+        console.error('[SqliteService] Error getting books from SQLite:', err);
       }
     }
-    return Array.from(this.inMemoryBooks.values()).sort((a, b) => b.last_read_at - a.last_read_at);
+    const books = readStorage<BookRecord[]>(STORAGE_KEYS.BOOKS, []);
+    return books.sort((a, b) => b.last_read_at - a.last_read_at);
   }
 
   async getBookById(id: string): Promise<BookRecord | null> {
-    if (this.db) {
+    if (this.isNative && this.db) {
       try {
         const result = await this.db.query('SELECT * FROM books WHERE id = ?;', [id]);
         if (result.values && result.values.length > 0) {
           return result.values[0] as BookRecord;
         }
         return null;
-      } catch {
+      } catch (err) {
+        console.error('[SqliteService] Error getting book by id from SQLite:', err);
       }
     }
-    return this.inMemoryBooks.get(id) || null;
+    const books = readStorage<BookRecord[]>(STORAGE_KEYS.BOOKS, []);
+    return books.find((b) => b.id === id) || null;
   }
 
   async upsertBook(book: BookRecord): Promise<void> {
-    if (this.db) {
+    if (this.isNative && this.db) {
       try {
         const query = `
           INSERT INTO books (id, title, author, format, file_path, cover_path, locator, progress_percentage, total_items, last_read_at, updated_at)
@@ -144,16 +148,23 @@ export class SqliteService {
           book.updated_at,
         ]);
         return;
-      } catch {
+      } catch (err) {
+        console.error('[SqliteService] Error upserting book in SQLite:', err);
       }
     }
-    this.inMemoryBooks.set(book.id, { ...book });
-    saveWebBooks(this.inMemoryBooks);
+    const books = readStorage<BookRecord[]>(STORAGE_KEYS.BOOKS, []);
+    const index = books.findIndex((b) => b.id === book.id);
+    if (index !== -1) {
+      books[index] = { ...book };
+    } else {
+      books.push({ ...book });
+    }
+    writeStorage(STORAGE_KEYS.BOOKS, books);
   }
 
   async updateReadingPosition(bookId: string, locator: string, progressPercentage: number): Promise<void> {
     const now = Date.now();
-    if (this.db) {
+    if (this.isNative && this.db) {
       try {
         const query = `
           UPDATE books
@@ -162,46 +173,52 @@ export class SqliteService {
         `;
         await this.db.run(query, [locator, progressPercentage, now, now, bookId]);
         return;
-      } catch {
+      } catch (err) {
+        console.error('[SqliteService] Error updating reading position in SQLite:', err);
       }
     }
-    const book = this.inMemoryBooks.get(bookId);
+    const books = readStorage<BookRecord[]>(STORAGE_KEYS.BOOKS, []);
+    const book = books.find((b) => b.id === bookId);
     if (book) {
       book.locator = locator;
       book.progress_percentage = progressPercentage;
       book.last_read_at = now;
       book.updated_at = now;
-      saveWebBooks(this.inMemoryBooks);
+      writeStorage(STORAGE_KEYS.BOOKS, books);
     }
   }
 
   async deleteBook(id: string): Promise<void> {
-    if (this.db) {
+    if (this.isNative && this.db) {
       try {
         await this.db.run('DELETE FROM books WHERE id = ?;', [id]);
         return;
-      } catch {
+      } catch (err) {
+        console.error('[SqliteService] Error deleting book in SQLite:', err);
       }
     }
-    this.inMemoryBooks.delete(id);
-    saveWebBooks(this.inMemoryBooks);
+    const books = readStorage<BookRecord[]>(STORAGE_KEYS.BOOKS, []);
+    const filtered = books.filter((b) => b.id !== id);
+    writeStorage(STORAGE_KEYS.BOOKS, filtered);
   }
 
   async getPendingSyncQueue(): Promise<SyncQueueItem[]> {
-    if (this.db) {
+    if (this.isNative && this.db) {
       try {
         const result = await this.db.query(
           "SELECT * FROM sync_queue WHERE status = 'pending' ORDER BY updated_at ASC;",
         );
         return (result.values as SyncQueueItem[]) || [];
-      } catch {
+      } catch (err) {
+        console.error('[SqliteService] Error getting pending sync queue from SQLite:', err);
       }
     }
-    return this.inMemoryQueue.filter((item) => item.status === 'pending');
+    const queue = readStorage<SyncQueueItem[]>(STORAGE_KEYS.SYNC_QUEUE, []);
+    return queue.filter((item) => item.status === 'pending');
   }
 
   async enqueueSyncItem(item: Omit<SyncQueueItem, 'id'>): Promise<void> {
-    if (this.db) {
+    if (this.isNative && this.db) {
       try {
         const query = `
           INSERT INTO sync_queue (book_id, locator, progress_percentage, updated_at, status)
@@ -215,53 +232,65 @@ export class SqliteService {
           item.status,
         ]);
         return;
-      } catch {
+      } catch (err) {
+        console.error('[SqliteService] Error enqueuing sync item in SQLite:', err);
       }
     }
-    this.inMemoryQueue.push({
-      id: this.queueCounter++,
+    const queue = readStorage<SyncQueueItem[]>(STORAGE_KEYS.SYNC_QUEUE, []);
+    const maxId = queue.reduce((max, q) => Math.max(max, q.id || 0), 0);
+    queue.push({
+      id: maxId + 1,
       ...item,
     });
+    writeStorage(STORAGE_KEYS.SYNC_QUEUE, queue);
   }
 
   async updateSyncQueueStatus(id: number, status: SyncStatus): Promise<void> {
-    if (this.db) {
+    if (this.isNative && this.db) {
       try {
         await this.db.run('UPDATE sync_queue SET status = ? WHERE id = ?;', [status, id]);
         return;
-      } catch {
+      } catch (err) {
+        console.error('[SqliteService] Error updating sync queue status in SQLite:', err);
       }
     }
-    const item = this.inMemoryQueue.find((q) => q.id === id);
-    if (item) {
-      item.status = status;
+    const queue = readStorage<SyncQueueItem[]>(STORAGE_KEYS.SYNC_QUEUE, []);
+    const target = queue.find((q) => q.id === id);
+    if (target) {
+      target.status = status;
+      writeStorage(STORAGE_KEYS.SYNC_QUEUE, queue);
     }
   }
 
   async clearSyncedQueue(): Promise<void> {
-    if (this.db) {
+    if (this.isNative && this.db) {
       try {
         await this.db.run("DELETE FROM sync_queue WHERE status = 'synced';");
         return;
-      } catch {
+      } catch (err) {
+        console.error('[SqliteService] Error clearing synced queue in SQLite:', err);
       }
     }
-    this.inMemoryQueue = this.inMemoryQueue.filter((item) => item.status !== 'synced');
+    const queue = readStorage<SyncQueueItem[]>(STORAGE_KEYS.SYNC_QUEUE, []);
+    const remaining = queue.filter((item) => item.status !== 'synced');
+    writeStorage(STORAGE_KEYS.SYNC_QUEUE, remaining);
   }
 
   async getDictionaryHistory(): Promise<DictionaryItem[]> {
-    if (this.db) {
+    if (this.isNative && this.db) {
       try {
         const result = await this.db.query('SELECT * FROM dictionary_history ORDER BY created_at DESC;');
         return (result.values as DictionaryItem[]) || [];
-      } catch {
+      } catch (err) {
+        console.error('[SqliteService] Error getting dictionary history from SQLite:', err);
       }
     }
-    return [...this.inMemoryDictionary].sort((a, b) => b.created_at - a.created_at);
+    const list = readStorage<DictionaryItem[]>(STORAGE_KEYS.DICTIONARY, []);
+    return list.sort((a, b) => b.created_at - a.created_at);
   }
 
   async saveDictionaryItem(item: Omit<DictionaryItem, 'id'>): Promise<number> {
-    if (this.db) {
+    if (this.isNative && this.db) {
       try {
         const query = `
           INSERT INTO dictionary_history (book_id, source_text, translated_text, source_lang, target_lang, created_at)
@@ -276,44 +305,52 @@ export class SqliteService {
           item.created_at,
         ]);
         return res.changes?.lastId || 1;
-      } catch {
+      } catch (err) {
+        console.error('[SqliteService] Error saving dictionary item in SQLite:', err);
       }
     }
-    const newId = this.dictCounter++;
-    this.inMemoryDictionary.push({
+    const list = readStorage<DictionaryItem[]>(STORAGE_KEYS.DICTIONARY, []);
+    const maxId = list.reduce((max, d) => Math.max(max, d.id || 0), 0);
+    const newId = maxId + 1;
+    list.unshift({
       id: newId,
       ...item,
     });
+    writeStorage(STORAGE_KEYS.DICTIONARY, list);
     return newId;
   }
 
   async deleteDictionaryItem(id: number): Promise<void> {
-    if (this.db) {
+    if (this.isNative && this.db) {
       try {
         await this.db.run('DELETE FROM dictionary_history WHERE id = ?;', [id]);
         return;
-      } catch {
+      } catch (err) {
+        console.error('[SqliteService] Error deleting dictionary item in SQLite:', err);
       }
     }
-    this.inMemoryDictionary = this.inMemoryDictionary.filter((item) => item.id !== id);
+    const list = readStorage<DictionaryItem[]>(STORAGE_KEYS.DICTIONARY, []);
+    const filtered = list.filter((item) => item.id !== id);
+    writeStorage(STORAGE_KEYS.DICTIONARY, filtered);
   }
 
   async getUserSession(): Promise<UserSession | null> {
-    if (this.db) {
+    if (this.isNative && this.db) {
       try {
         const result = await this.db.query('SELECT * FROM user_session WHERE id = 1;');
         if (result.values && result.values.length > 0) {
           return result.values[0] as UserSession;
         }
         return null;
-      } catch {
+      } catch (err) {
+        console.error('[SqliteService] Error getting user session from SQLite:', err);
       }
     }
-    return this.inMemorySession;
+    return readStorage<UserSession | null>(STORAGE_KEYS.SESSION, null);
   }
 
   async saveUserSession(session: Omit<UserSession, 'id'>): Promise<void> {
-    if (this.db) {
+    if (this.isNative && this.db) {
       try {
         const query = `
           INSERT INTO user_session (id, email, display_name, last_sync_at)
@@ -325,13 +362,15 @@ export class SqliteService {
         `;
         await this.db.run(query, [session.email, session.display_name, session.last_sync_at]);
         return;
-      } catch {
+      } catch (err) {
+        console.error('[SqliteService] Error saving user session in SQLite:', err);
       }
     }
-    this.inMemorySession = {
+    const sessionObj: UserSession = {
       id: 1,
       ...session,
     };
+    writeStorage(STORAGE_KEYS.SESSION, sessionObj);
   }
 
   async close(): Promise<void> {

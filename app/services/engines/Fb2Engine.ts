@@ -10,7 +10,11 @@ export class Fb2Engine extends BaseEngine {
   private scrollContainer: HTMLElement | null = null;
   private scrollHandler: (() => void) | null = null;
 
-  async init(container: HTMLElement, data: Uint8Array | ArrayBuffer | string): Promise<void> {
+  async init(
+    container: HTMLElement,
+    data: Uint8Array | ArrayBuffer | string,
+    initialLocator?: string,
+  ): Promise<void> {
     this.container = container;
     this.container.innerHTML = '';
 
@@ -26,6 +30,10 @@ export class Fb2Engine extends BaseEngine {
     }
 
     this.renderSemanticHtml();
+
+    if (initialLocator) {
+      await this.goTo(initialLocator);
+    }
   }
 
   private async extractXmlString(data: Uint8Array | ArrayBuffer | string): Promise<string> {
@@ -232,15 +240,15 @@ export class Fb2Engine extends BaseEngine {
   }
 
   async goTo(locator: string): Promise<void> {
-    if (!this.scrollContainer) {
+    if (!this.scrollContainer || !locator) {
       return;
     }
 
     const target = this.paragraphElements.find((p) => p.id === locator);
     if (target) {
       this.scrollContainer.scrollTo({
-        top: target.offsetTop - 16,
-        behavior: 'smooth',
+        top: Math.max(0, target.offsetTop - 16),
+        behavior: 'auto',
       });
       const index = this.paragraphElements.indexOf(target);
       if (index !== -1) {

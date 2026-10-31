@@ -13,6 +13,7 @@ export abstract class BaseEngine implements ReaderEngineInterface {
   abstract init(
     container: HTMLElement,
     data: Uint8Array | ArrayBuffer | string | Blob,
+    initialLocator?: string,
   ): Promise<void>;
   abstract goTo(locator: string): Promise<void>;
   abstract next(): Promise<void>;

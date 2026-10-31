@@ -10,7 +10,11 @@ export class EpubEngine extends BaseEngine {
   private currentPercentage: number = 0;
   private currentColors: { bg: string; text: string } | null = null;
 
-  async init(container: HTMLElement, data: Uint8Array | ArrayBuffer | string): Promise<void> {
+  async init(
+    container: HTMLElement,
+    data: Uint8Array | ArrayBuffer | string,
+    initialLocator?: string,
+  ): Promise<void> {
     this.container = container;
     this.container.innerHTML = '';
 
@@ -48,7 +52,12 @@ export class EpubEngine extends BaseEngine {
     } catch {
     }
 
-    await this.rendition.display();
+    if (initialLocator) {
+      this.currentCfi = initialLocator;
+      await this.rendition.display(initialLocator);
+    } else {
+      await this.rendition.display();
+    }
   }
 
   async goTo(locator: string): Promise<void> {
