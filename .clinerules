@@ -1,0 +1,39 @@
+# Bookstery Mobile - Roo Code & Cline Rules
+
+## Project Information
+- Root: `/var/www/bookstery_mobile`
+- Framework: Nuxt 4 (`app/` dir), Vue 3 (`<script setup lang="ts">`), TypeScript, Tailwind CSS, `@nuxtjs/i18n`, Pinia, Capacitor.
+- Domain: Multi-format E-Book Reader & Library (PDF, EPUB, FB2).
+
+## Global Architectural Rules (Mandatory)
+
+1. **English-Only Comments**:
+   - ALL code comments, JSDoc notes, and documentation inside source code MUST be in English.
+   - Non-English comments (Ukrainian, Russian, etc.) are strictly prohibited in `.ts`, `.vue`, `.js`.
+
+2. **Strict TypeScript & Types Centralization**:
+   - Zero tolerance for `any`.
+   - Shared interfaces, types, and enums MUST be defined in and imported from `app/types/` (e.g., `app/types/book.ts`, `app/types/reader.ts`, `app/types/format.ts`).
+   - Do NOT declare complex interfaces inside `.vue` files.
+
+3. **Data, API & JSON Separation**:
+   - `app/components/` must NEVER contain raw JSON payloads, static mock data objects, or direct API endpoint calls.
+   - State & data fetching logic goes into `app/composables/` or `app/stores/`.
+   - Pure TypeScript business logic, external API clients, and JSON serializers go into `app/services/`.
+
+4. **Book Format Processing (PDF, EPUB, FB2)**:
+   - All format parsing, rendering, and TOC extraction must reside in `app/services/format/`.
+   - Provide a unified adapter in `app/services/format/index.ts` conforming to `IBookParser` from `app/types/format.ts`.
+   - UI reader components must be completely agnostic of the underlying format.
+
+5. **Internationalization (i18n)**:
+   - NEVER hardcode user-facing strings in templates.
+   - Always use `@nuxtjs/i18n` (`$t('namespace.key')` or `useI18n()`).
+   - Always register translations in `i18n/locales/uk.json` (mandatory primary) and `i18n/locales/en.json`.
+
+6. **Component Modularity**:
+   - Divide UI into single-responsibility components in `app/components/`:
+     - `ui/`: Base atomic elements (button, input, modal).
+     - `layout/`: App shell, navbar, header, bottom tabs.
+     - `reader/`: Reader viewport, page renderer, TOC, settings bar.
+     - `library/`: Book cards, shelves, filters, search.
