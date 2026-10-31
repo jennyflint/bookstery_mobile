@@ -24,9 +24,9 @@ const handleCopy = async (text: string) => {
 </script>
 
 <template>
-  <div class="min-h-screen bg-zinc-50 flex flex-col justify-between text-zinc-900 pb-20">
+  <div class="min-h-screen app-shell flex flex-col justify-between text-zinc-900 pb-20">
     <header
-      class="sticky top-0 z-30 bg-white/90 backdrop-blur border-b border-zinc-200 px-4 py-3"
+      class="sticky top-0 z-30 app-header bg-white/90 backdrop-blur border-b border-zinc-200 px-4 py-3"
       :style="{ paddingTop: 'calc(0.75rem + env(safe-area-inset-top, 0px))' }"
     >
       <div class="max-w-3xl mx-auto flex items-center justify-between">
@@ -47,7 +47,7 @@ const handleCopy = async (text: string) => {
         <div
           v-for="item in dictionaryStore.items"
           :key="item.id"
-          class="bg-white rounded-2xl border border-zinc-200 p-4 shadow-sm space-y-2"
+          class="app-card bg-white rounded-2xl border border-zinc-200 p-4 shadow-sm space-y-2"
         >
           <div class="flex items-start justify-between gap-4">
             <div class="flex-1 min-w-0">
@@ -100,7 +100,7 @@ const handleCopy = async (text: string) => {
     </main>
 
     <nav
-      class="fixed bottom-0 left-0 right-0 z-40 bg-white/95 backdrop-blur border-t border-zinc-200 px-6 py-2"
+      class="fixed bottom-0 left-0 right-0 z-40 app-nav bg-white/95 backdrop-blur border-t border-zinc-200 px-6 py-2"
       :style="{ paddingBottom: 'calc(0.5rem + env(safe-area-inset-bottom, 0px))' }"
     >
       <div class="max-w-md mx-auto flex items-center justify-around">

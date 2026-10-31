@@ -29,7 +29,7 @@ const formatBadgeClass = (format: string) => {
 <template>
   <div
     data-testid="book-card"
-    class="group relative flex flex-col justify-between bg-white rounded-2xl border border-zinc-200 p-4 shadow-sm hover:shadow-md transition-all cursor-pointer active:scale-[0.98]"
+    class="group relative flex flex-col justify-between app-card bg-white rounded-2xl border border-zinc-200 p-4 shadow-sm hover:shadow-md transition-all cursor-pointer active:scale-[0.98]"
     @click="emit('select', props.book)"
   >
     <div class="flex items-start justify-between gap-2">

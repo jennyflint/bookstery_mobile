@@ -85,7 +85,7 @@ const handleSaveToDictionary = async () => {
           <p class="text-sm text-zinc-800 font-medium select-text leading-relaxed">{{ result.sourceText }}</p>
         </div>
 
-        <div class="bg-indigo-50/50 rounded-2xl p-3 border border-indigo-100">
+        <div class="bg-indigo-50 rounded-2xl p-3 border border-indigo-100">
           <div class="flex items-center justify-between mb-1">
             <p class="text-xs font-medium text-indigo-600">{{ t('translation.translatedText') }}</p>
             <button

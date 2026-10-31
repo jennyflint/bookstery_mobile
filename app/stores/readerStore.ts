@@ -144,5 +144,9 @@ export const useReaderStore = defineStore('reader', {
     setRendering(val: boolean): void {
       this.isRendering = val;
     },
+    resetToDefault(): void {
+      this.settings = { ...DEFAULT_SETTINGS };
+      persistSettings(this.settings);
+    },
   },
 });
