@@ -5,6 +5,7 @@ import { useLibraryStore } from '../stores/libraryStore';
 import { useAuth } from '../composables/useAuth';
 import { useBookSync } from '../composables/useBookSync';
 import type { BookRecord } from '../types';
+import AppLogo from '../components/ui/AppLogo.vue';
 import BookGrid from '../components/library/BookGrid.vue';
 import DeviceScannerModal from '../components/library/DeviceScannerModal.vue';
 import SyncStatusBadge from '../components/common/SyncStatusBadge.vue';
@@ -49,19 +50,7 @@ const handleImported = async () => {
       :style="{ paddingTop: 'calc(0.75rem + env(safe-area-inset-top, 0px))' }"
     >
       <div class="max-w-5xl mx-auto flex items-center justify-between gap-3">
-        <div class="flex items-center gap-3">
-          <div class="w-8 h-8 rounded-xl bg-indigo-600 text-white flex items-center justify-center font-black text-base shadow-md">
-            B
-          </div>
-          <div>
-            <h1 class="font-extrabold text-base tracking-tight text-zinc-900 leading-none">
-              {{ t('app.name') }}
-            </h1>
-            <p class="text-[10px] text-zinc-400 font-medium tracking-wide uppercase mt-0.5">
-              {{ t('library.title') }}
-            </p>
-          </div>
-        </div>
+        <AppLogo :subtitle="t('library.title')" />
 
         <div class="flex items-center gap-2">
           <SyncStatusBadge />

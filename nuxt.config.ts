@@ -7,6 +7,7 @@ export default defineNuxtConfig({
     head: {
       title: 'Bookstery',
       viewport: 'width=device-width, initial-scale=1, viewport-fit=cover',
+      link: [{ rel: 'icon', type: 'image/png', href: '/logo.png' }],
     },
   },
   typescript: {

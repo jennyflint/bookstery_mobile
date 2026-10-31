@@ -8,6 +8,7 @@ import {
   DEFAULT_APP_BUTTON_COLOR,
   DEFAULT_APP_BG_COLOR,
 } from '../stores/appThemeStore';
+import AppLogo from '../components/ui/AppLogo.vue';
 import LanguageSwitcher from '../components/common/LanguageSwitcher.vue';
 import GoogleSignInButton from '../components/auth/GoogleSignInButton.vue';
 import SyncStatusBadge from '../components/common/SyncStatusBadge.vue';
@@ -80,10 +81,8 @@ const handleResetAllToDefault = () => {
       class="sticky top-0 z-30 app-header bg-white/90 backdrop-blur border-b border-zinc-200 px-4 py-3"
       :style="{ paddingTop: 'calc(0.75rem + env(safe-area-inset-top, 0px))' }"
     >
-      <div class="max-w-2xl mx-auto flex items-center justify-between">
-        <h1 class="font-extrabold text-lg tracking-tight text-zinc-900">
-          {{ t('settings.title') }}
-        </h1>
+      <div class="max-w-2xl mx-auto flex items-center justify-between gap-3">
+        <AppLogo :subtitle="t('settings.title')" />
         <SyncStatusBadge />
       </div>
     </header>
@@ -249,13 +248,13 @@ const handleResetAllToDefault = () => {
               borderColor: 'var(--color-app-border)',
             }"
           >
-            <div class="flex items-center gap-2.5">
-              <div
-                class="w-7 h-7 rounded-lg flex items-center justify-center font-black text-xs text-white shadow-xs"
-                :style="{ backgroundColor: appThemeStore.buttonColor }"
+            <div class="flex items-center gap-2.5 logo">
+              <img
+                src="/logo.png"
+                alt="Bookstery"
+                class="w-7 h-7 object-contain select-none"
+                
               >
-                B
-              </div>
               <span class="text-xs font-bold" :style="{ color: 'var(--color-app-text)' }">
                 Bookstery
               </span>
