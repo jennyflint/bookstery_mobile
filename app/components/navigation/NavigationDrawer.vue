@@ -135,16 +135,16 @@ const handleConfirmDelete = async (id: number): Promise<void> => {
     <div
       v-if="props.isOpen"
       data-testid="navigation-drawer-backdrop"
-      class="backdrop-blur-xs fixed inset-0 z-50 bg-black/60 transition-opacity duration-300"
+      class="fixed inset-0 z-50 bg-black/50 transition-opacity duration-300"
       @click="emit('close')"
     >
       <div
         data-testid="navigation-drawer"
-        class="fixed inset-y-0 left-0 flex w-80 max-w-[85vw] select-none flex-col border-r border-[#C8E695]/70 bg-[#F4ECD8] shadow-2xl transition-transform duration-300 ease-out"
+        class="fixed inset-y-0 left-0 flex w-80 max-w-[85vw] select-none flex-col border-r border-gray-200 bg-white shadow-2xl transition-transform duration-300 ease-out"
         @click.stop
       >
         <div
-          class="flex items-center justify-between border-b border-[#C8E695]/60 bg-white/40 p-4"
+          class="flex items-center justify-between border-b border-gray-200 bg-white p-4"
           :style="{ paddingTop: 'calc(0.75rem + env(safe-area-inset-top, 0px))' }"
         >
           <div class="flex items-center gap-2.5">
@@ -154,10 +154,10 @@ const handleConfirmDelete = async (id: number): Promise<void> => {
               class="h-8 w-8 object-contain"
             />
             <div>
-              <h2 class="text-sm font-black leading-none tracking-tight text-[#3E5725]">
+              <h2 class="text-sm font-black leading-none tracking-tight text-gray-900">
                 {{ t('app.name') }}
               </h2>
-              <p class="mt-0.5 text-[10px] font-bold uppercase tracking-wider text-[#3E5725]/70">
+              <p class="mt-0.5 text-[10px] font-bold uppercase tracking-wider text-gray-500">
                 {{ t('collections.libraryCollections') }}
               </p>
             </div>
@@ -166,7 +166,7 @@ const handleConfirmDelete = async (id: number): Promise<void> => {
           <button
             type="button"
             data-testid="close-drawer-btn"
-            class="rounded-xl p-2 text-[#3E5725]/70 transition-all hover:bg-[#C8E695]/40 hover:text-[#3E5725]"
+            class="rounded-xl p-2 text-gray-500 transition-all hover:bg-gray-100 hover:text-gray-900"
             @click="emit('close')"
           >
             <svg
@@ -188,7 +188,7 @@ const handleConfirmDelete = async (id: number): Promise<void> => {
         <div class="flex-1 space-y-4 overflow-y-auto p-3">
           <div
             v-if="errorMessage"
-            class="rounded-2xl border border-rose-200 bg-rose-100 p-3 text-xs font-semibold text-rose-700"
+            class="rounded-2xl border border-rose-200 bg-rose-50 p-3 text-xs font-semibold text-rose-700"
           >
             {{ errorMessage }}
           </div>
@@ -200,7 +200,7 @@ const handleConfirmDelete = async (id: number): Promise<void> => {
             :class="
               activeCollectionId === 'all'
                 ? 'border-[#3E5725] bg-[#3E5725] text-white shadow-sm'
-                : 'border-[#C8E695]/40 bg-white/70 text-[#3E5725] hover:bg-white'
+                : 'border-gray-200 bg-white text-gray-900 hover:bg-gray-50'
             "
             @click="handleSelect('all')"
           >
@@ -225,19 +225,19 @@ const handleConfirmDelete = async (id: number): Promise<void> => {
               :class="
                 activeCollectionId === 'all'
                   ? 'bg-[#C8E695] text-[#3E5725]'
-                  : 'bg-[#C8E695]/40 text-[#3E5725]'
+                  : 'bg-gray-100 text-gray-700'
               "
             >
               {{ totalBooks }}
             </span>
           </button>
 
-          <div class="border-t border-[#C8E695]/40 pt-2">
+          <div class="border-t border-gray-200 pt-2">
             <div class="mb-1 flex items-center justify-between px-2 py-1">
               <button
                 type="button"
                 data-testid="toggle-collections-section-btn"
-                class="flex items-center gap-2 text-xs font-black uppercase tracking-wider text-[#3E5725]/80 transition-colors hover:text-[#3E5725]"
+                class="flex items-center gap-2 text-xs font-black uppercase tracking-wider text-gray-600 transition-colors hover:text-gray-900"
                 @click="isCollectionsOpen = !isCollectionsOpen"
               >
                 <svg
@@ -260,7 +260,7 @@ const handleConfirmDelete = async (id: number): Promise<void> => {
               <button
                 type="button"
                 data-testid="create-collection-btn"
-                class="flex items-center gap-1 rounded-lg p-1 text-xs font-bold text-[#3E5725] transition-all hover:bg-[#C8E695]/50"
+                class="flex items-center gap-1 rounded-lg p-1 text-xs font-bold text-gray-700 transition-all hover:bg-gray-100"
                 :title="t('collections.createCollection')"
                 @click="handleStartCreate"
               >
@@ -286,21 +286,21 @@ const handleConfirmDelete = async (id: number): Promise<void> => {
             >
               <div
                 v-if="isCreating"
-                class="shadow-xs space-y-2 rounded-2xl border border-[#C8E695] bg-white p-2.5"
+                class="space-y-2 rounded-2xl border border-gray-200 bg-gray-50 p-2.5 shadow-sm"
               >
                 <input
                   v-model="newCollectionName"
                   type="text"
                   data-testid="inline-new-collection-input"
                   :placeholder="t('collections.newCollectionPlaceholder')"
-                  class="w-full rounded-xl border border-[#C8E695] bg-[#F4ECD8]/50 px-3 py-1.5 text-xs text-[#3E5725] placeholder:text-[#3E5725]/50 focus:outline-none focus:ring-1 focus:ring-[#3E5725]"
+                  class="w-full rounded-xl border border-gray-300 bg-white px-3 py-1.5 text-xs text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-1 focus:ring-gray-400"
                   @keyup.enter="handleSaveCreate"
                   @keyup.esc="handleCancelCreate"
                 />
                 <div class="flex items-center justify-end gap-2">
                   <button
                     type="button"
-                    class="px-2.5 py-1 text-xs font-semibold text-[#3E5725]/70 hover:text-[#3E5725]"
+                    class="px-2.5 py-1 text-xs font-semibold text-gray-600 hover:text-gray-900"
                     @click="handleCancelCreate"
                   >
                     {{ t('collections.cancel') }}
@@ -325,7 +325,7 @@ const handleConfirmDelete = async (id: number): Promise<void> => {
                 :class="
                   activeCollectionId === collection.id
                     ? 'border-[#3E5725] bg-[#3E5725] text-white shadow-sm'
-                    : 'border-[#C8E695]/30 bg-white/60 text-[#3E5725] hover:bg-white'
+                    : 'border-gray-200 bg-white text-gray-900 hover:bg-gray-50'
                 "
               >
                 <div
@@ -336,7 +336,7 @@ const handleConfirmDelete = async (id: number): Promise<void> => {
                     v-model="editingCollectionName"
                     type="text"
                     :data-testid="`input-rename-collection-${collection.id}`"
-                    class="flex-1 rounded-lg border border-[#3E5725] bg-white px-2 py-1 text-xs text-[#3E5725] focus:outline-none"
+                    class="flex-1 rounded-lg border border-gray-400 bg-white px-2 py-1 text-xs text-gray-900 focus:outline-none"
                     @keyup.enter="handleSaveRename(collection.id)"
                     @keyup.esc="handleCancelRename"
                   />
@@ -409,7 +409,7 @@ const handleConfirmDelete = async (id: number): Promise<void> => {
                       :class="
                         activeCollectionId === collection.id
                           ? 'bg-[#C8E695] text-[#3E5725]'
-                          : 'bg-[#C8E695]/40 text-[#3E5725]'
+                          : 'bg-gray-100 text-gray-700'
                       "
                     >
                       {{ collection.count }}
@@ -422,7 +422,7 @@ const handleConfirmDelete = async (id: number): Promise<void> => {
                       :class="
                         activeCollectionId === collection.id
                           ? 'text-white hover:bg-white/20'
-                          : 'text-[#3E5725] hover:bg-[#C8E695]/40'
+                          : 'text-gray-600 hover:bg-gray-100'
                       "
                       :title="t('collections.renameCollection')"
                       @click.stop="handleStartRename(collection)"
@@ -445,7 +445,7 @@ const handleConfirmDelete = async (id: number): Promise<void> => {
                     <button
                       type="button"
                       :data-testid="`delete-collection-btn-${collection.id}`"
-                      class="rounded-md p-1 text-rose-600 opacity-60 transition-opacity hover:bg-rose-100 hover:opacity-100"
+                      class="rounded-md p-1 text-rose-600 opacity-60 transition-opacity hover:bg-rose-50 hover:opacity-100"
                       :title="t('collections.deleteCollection')"
                       @click.stop="handleOpenDelete(collection)"
                     >
@@ -474,7 +474,7 @@ const handleConfirmDelete = async (id: number): Promise<void> => {
                 :class="
                   activeCollectionId === 'uncollected'
                     ? 'border-[#3E5725] bg-[#3E5725] text-white shadow-sm'
-                    : 'border-[#C8E695]/30 bg-white/60 text-[#3E5725] hover:bg-white'
+                    : 'border-gray-200 bg-white text-gray-900 hover:bg-gray-50'
                 "
                 @click="handleSelect('uncollected')"
               >
@@ -499,7 +499,7 @@ const handleConfirmDelete = async (id: number): Promise<void> => {
                   :class="
                     activeCollectionId === 'uncollected'
                       ? 'bg-[#C8E695] text-[#3E5725]'
-                      : 'bg-[#C8E695]/40 text-[#3E5725]'
+                      : 'bg-gray-100 text-gray-700'
                   "
                 >
                   {{ uncollectedCount }}

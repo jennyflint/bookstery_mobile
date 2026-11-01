@@ -193,12 +193,12 @@ const handleClose = () => {
 <template>
   <div
     v-if="isOpen"
-    class="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm"
+    class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
   >
     <div
-      class="flex max-h-[90vh] w-full max-w-lg flex-col overflow-hidden rounded-3xl border border-zinc-200 bg-[#F4ECD8] shadow-2xl transition-all dark:border-zinc-700 dark:bg-zinc-900"
+      class="flex max-h-[90vh] w-full max-w-lg flex-col overflow-hidden rounded-3xl border border-gray-200 bg-white shadow-xl transition-all dark:border-zinc-700 dark:bg-zinc-900"
     >
-      <div class="flex items-center justify-between border-b border-zinc-200/80 px-6 py-4 dark:border-zinc-800">
+      <div class="flex items-center justify-between border-b border-gray-200 px-6 py-4 dark:border-zinc-800">
         <div class="flex items-center gap-2.5">
           <div class="flex h-9 w-9 items-center justify-center rounded-xl bg-[#C8E695] text-[#3E5725]">
             <svg class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -210,13 +210,13 @@ const handleClose = () => {
               />
             </svg>
           </div>
-          <h3 class="text-base font-bold text-[#3E5725] dark:text-[#C8E695]">
+          <h3 class="text-base font-bold text-gray-900 dark:text-zinc-100">
             {{ t('ai.settingsTitle') }}
           </h3>
         </div>
         <button
           type="button"
-          class="rounded-full p-1.5 text-zinc-500 hover:bg-black/5 dark:text-zinc-400 dark:hover:bg-white/5"
+          class="rounded-full p-1.5 text-gray-400 hover:bg-gray-100 hover:text-gray-700 dark:text-zinc-400 dark:hover:bg-white/5"
           @click="handleClose"
         >
           <svg class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -227,7 +227,7 @@ const handleClose = () => {
 
       <div class="flex-1 space-y-5 overflow-y-auto p-6">
         <div>
-          <label class="mb-2 block text-xs font-bold uppercase tracking-wider text-zinc-600 dark:text-zinc-400">
+          <label class="mb-2 block text-xs font-bold uppercase tracking-wider text-gray-700 dark:text-zinc-400">
             {{ t('ai.provider') }}
           </label>
           <div class="grid grid-cols-2 gap-2">
@@ -238,8 +238,8 @@ const handleClose = () => {
               class="flex items-center justify-center rounded-2xl border p-2.5 text-xs font-bold transition"
               :class="
                 provider === item.id
-                  ? 'border-[#3E5725] bg-[#3E5725] text-[#F4ECD8] shadow-sm dark:border-[#C8E695] dark:bg-[#C8E695] dark:text-[#3E5725]'
-                  : 'border-zinc-300 bg-white/70 text-zinc-700 hover:bg-white dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-300'
+                  ? 'border-[#3E5725] bg-[#3E5725] text-white shadow-sm dark:border-[#C8E695] dark:bg-[#C8E695] dark:text-[#3E5725]'
+                  : 'border-gray-300 bg-white text-gray-700 hover:bg-gray-50 hover:text-gray-900 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-300'
               "
               @click="handleProviderChange(item.id)"
             >
@@ -249,7 +249,7 @@ const handleClose = () => {
         </div>
 
         <div v-if="provider === 'custom'" class="space-y-2">
-          <label class="block text-xs font-bold uppercase tracking-wider text-zinc-600 dark:text-zinc-400">
+          <label class="block text-xs font-bold uppercase tracking-wider text-gray-700 dark:text-zinc-400">
             Quick Endpoints
           </label>
           <div class="flex flex-wrap gap-2">
@@ -257,7 +257,7 @@ const handleClose = () => {
               v-for="ep in CUSTOM_ENDPOINT_PRESETS"
               :key="ep.name"
               type="button"
-              class="rounded-xl border border-[#3E5725]/20 bg-white/60 px-3 py-1 text-xs font-semibold text-[#3E5725] transition hover:bg-[#C8E695]/30 dark:border-[#C8E695]/30 dark:bg-zinc-800 dark:text-[#C8E695]"
+              class="rounded-xl border border-gray-200 bg-gray-50 px-3 py-1 text-xs font-semibold text-gray-800 transition hover:bg-gray-100 dark:border-[#C8E695]/30 dark:bg-zinc-800 dark:text-[#C8E695]"
               @click="applyCustomPreset(ep)"
             >
               {{ ep.name }}
@@ -266,20 +266,20 @@ const handleClose = () => {
         </div>
 
         <div v-if="provider === 'custom' || provider === 'openai'">
-          <label class="mb-1 block text-xs font-bold uppercase tracking-wider text-zinc-600 dark:text-zinc-400">
+          <label class="mb-1 block text-xs font-bold uppercase tracking-wider text-gray-700 dark:text-zinc-400">
             {{ t('ai.baseUrl') }}
           </label>
           <input
             v-model="baseUrl"
             type="text"
             data-testid="ai-baseurl-input"
-            class="w-full rounded-2xl border border-zinc-300 bg-white px-4 py-2.5 text-sm text-zinc-900 outline-none transition focus:border-[#3E5725] focus:ring-2 focus:ring-[#C8E695]/50 dark:border-zinc-700 dark:bg-zinc-800 dark:text-white"
+            class="w-full rounded-2xl border border-gray-300 bg-white px-4 py-2.5 text-sm text-gray-900 outline-none transition focus:border-gray-500 focus:ring-2 focus:ring-gray-200 dark:border-zinc-700 dark:bg-zinc-800 dark:text-white"
             :placeholder="t('ai.baseUrlPlaceholder')"
           />
         </div>
 
         <div>
-          <label class="mb-1 block text-xs font-bold uppercase tracking-wider text-zinc-600 dark:text-zinc-400">
+          <label class="mb-1 block text-xs font-bold uppercase tracking-wider text-gray-700 dark:text-zinc-400">
             {{ t('ai.apiKey') }}
           </label>
           <div class="flex items-center gap-2">
@@ -288,12 +288,12 @@ const handleClose = () => {
                 v-model="apiKey"
                 :type="showKey ? 'text' : 'password'"
                 data-testid="ai-key-input"
-                class="w-full rounded-2xl border border-zinc-300 bg-white px-4 py-2.5 pr-11 text-sm text-zinc-900 outline-none transition focus:border-[#3E5725] focus:ring-2 focus:ring-[#C8E695]/50 dark:border-zinc-700 dark:bg-zinc-800 dark:text-white"
+                class="w-full rounded-2xl border border-gray-300 bg-white px-4 py-2.5 pr-11 text-sm text-gray-900 outline-none transition focus:border-gray-500 focus:ring-2 focus:ring-gray-200 dark:border-zinc-700 dark:bg-zinc-800 dark:text-white"
                 :placeholder="t('ai.apiKeyPlaceholder')"
               />
               <button
                 type="button"
-                class="absolute right-3 top-1/2 -translate-y-1/2 text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200"
+                class="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 dark:hover:text-zinc-200"
                 @click="showKey = !showKey"
               >
                 <svg v-if="!showKey" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -324,7 +324,7 @@ const handleClose = () => {
         </div>
 
         <div>
-          <label class="mb-2 block text-xs font-bold uppercase tracking-wider text-zinc-600 dark:text-zinc-400">
+          <label class="mb-2 block text-xs font-bold uppercase tracking-wider text-gray-700 dark:text-zinc-400">
             {{ t('ai.model') }}
           </label>
           <div class="mb-3 flex flex-wrap gap-2">
@@ -335,8 +335,8 @@ const handleClose = () => {
               class="rounded-xl border px-3 py-1.5 text-xs font-bold transition"
               :class="
                 modelId === preset.id
-                  ? 'border-[#3E5725] bg-[#3E5725] text-[#F4ECD8] dark:border-[#C8E695] dark:bg-[#C8E695] dark:text-[#3E5725]'
-                  : 'border-zinc-300 bg-white/60 text-zinc-700 hover:bg-white dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-300'
+                  ? 'border-[#3E5725] bg-[#3E5725] text-white dark:border-[#C8E695] dark:bg-[#C8E695] dark:text-[#3E5725]'
+                  : 'border-gray-300 bg-white text-gray-700 hover:bg-gray-50 hover:text-gray-900 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-300'
               "
               @click="selectPresetModel(preset.id)"
             >
@@ -345,14 +345,14 @@ const handleClose = () => {
           </div>
 
           <div class="space-y-1.5">
-            <label class="block text-[11px] font-semibold text-zinc-500 dark:text-zinc-400">
+            <label class="block text-[11px] font-semibold text-gray-500 dark:text-zinc-400">
               {{ t('ai.customModelId') }}
             </label>
             <input
               v-model="customModelId"
               type="text"
               data-testid="custom-model-input"
-              class="w-full rounded-2xl border border-zinc-300 bg-white px-4 py-2 text-sm text-zinc-900 outline-none transition focus:border-[#3E5725] focus:ring-2 focus:ring-[#C8E695]/50 dark:border-zinc-700 dark:bg-zinc-800 dark:text-white"
+              class="w-full rounded-2xl border border-gray-300 bg-white px-4 py-2 text-sm text-gray-900 outline-none transition focus:border-gray-500 focus:ring-2 focus:ring-gray-200 dark:border-zinc-700 dark:bg-zinc-800 dark:text-white"
               :placeholder="t('ai.customModelPlaceholder')"
               @input="handleCustomModelInput(($event.target as HTMLInputElement).value)"
             />
@@ -374,13 +374,13 @@ const handleClose = () => {
             </button>
           </div>
 
-          <div v-if="fetchedModels.length > 0" class="mt-2 max-h-32 overflow-y-auto rounded-xl border border-zinc-200 bg-white/80 p-2 dark:border-zinc-700 dark:bg-zinc-800">
+          <div v-if="fetchedModels.length > 0" class="mt-2 max-h-32 overflow-y-auto rounded-xl border border-gray-200 bg-gray-50 p-2 dark:border-zinc-700 dark:bg-zinc-800">
             <div class="flex flex-wrap gap-1.5">
               <button
                 v-for="m in fetchedModels"
                 :key="m"
                 type="button"
-                class="rounded-lg bg-zinc-100 px-2 py-1 text-[11px] font-medium text-zinc-800 transition hover:bg-[#C8E695] dark:bg-zinc-700 dark:text-zinc-200 dark:hover:bg-[#C8E695] dark:hover:text-[#3E5725]"
+                class="rounded-lg border border-gray-200 bg-white px-2 py-1 text-[11px] font-medium text-gray-800 transition hover:bg-gray-100 dark:bg-zinc-700 dark:text-zinc-200 dark:hover:bg-[#C8E695] dark:hover:text-[#3E5725]"
                 @click="selectPresetModel(m)"
               >
                 {{ m }}
@@ -392,7 +392,7 @@ const handleClose = () => {
 
         <div class="grid grid-cols-2 gap-4">
           <div>
-            <div class="mb-1 flex items-center justify-between text-xs font-semibold text-zinc-600 dark:text-zinc-400">
+            <div class="mb-1 flex items-center justify-between text-xs font-semibold text-gray-700 dark:text-zinc-400">
               <span>{{ t('ai.temperature') }}</span>
               <span>{{ temperature }}</span>
             </div>
@@ -407,7 +407,7 @@ const handleClose = () => {
           </div>
 
           <div>
-            <div class="mb-1 flex items-center justify-between text-xs font-semibold text-zinc-600 dark:text-zinc-400">
+            <div class="mb-1 flex items-center justify-between text-xs font-semibold text-gray-700 dark:text-zinc-400">
               <span>{{ t('ai.maxTokens') }}</span>
               <span>{{ maxTokens }}</span>
             </div>
@@ -427,7 +427,7 @@ const handleClose = () => {
             type="button"
             data-testid="test-ai-connection-btn"
             :disabled="isTesting"
-            class="inline-flex w-full items-center justify-center gap-2 rounded-2xl border border-[#3E5725]/30 bg-white/80 py-2.5 text-xs font-bold text-[#3E5725] shadow-sm transition hover:bg-[#C8E695]/30 active:scale-95 disabled:opacity-50 dark:border-[#C8E695]/30 dark:bg-zinc-800 dark:text-[#C8E695]"
+            class="inline-flex w-full items-center justify-center gap-2 rounded-2xl border border-gray-300 bg-gray-50 py-2.5 text-xs font-bold text-gray-800 shadow-sm transition hover:bg-gray-100 active:scale-95 disabled:opacity-50 dark:border-[#C8E695]/30 dark:bg-zinc-800 dark:text-[#C8E695]"
             @click="handleTestConnection"
           >
             <svg v-if="isTesting" class="h-4 w-4 animate-spin text-current" fill="none" viewBox="0 0 24 24">
@@ -456,10 +456,10 @@ const handleClose = () => {
         </div>
       </div>
 
-      <div class="flex items-center justify-end gap-3 border-t border-zinc-200/80 px-6 py-4 dark:border-zinc-800">
+      <div class="flex items-center justify-end gap-3 border-t border-gray-200 px-6 py-4 dark:border-zinc-800">
         <button
           type="button"
-          class="rounded-2xl border border-zinc-300 bg-white/60 px-5 py-2.5 text-xs font-bold text-zinc-700 transition hover:bg-white dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-200"
+          class="rounded-2xl border border-gray-300 bg-white px-5 py-2.5 text-xs font-bold text-gray-700 transition hover:bg-gray-100 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-200"
           @click="handleClose"
         >
           {{ t('ai.cancel') }}
@@ -467,7 +467,7 @@ const handleClose = () => {
         <button
           type="button"
           data-testid="save-ai-settings-btn"
-          class="rounded-2xl bg-[#3E5725] px-6 py-2.5 text-xs font-bold text-[#F4ECD8] shadow-sm transition hover:bg-[#3E5725]/90 active:scale-95 dark:bg-[#C8E695] dark:text-[#3E5725]"
+          class="rounded-2xl bg-[#3E5725] px-6 py-2.5 text-xs font-bold text-white shadow-sm transition hover:bg-[#3E5725]/90 active:scale-95 dark:bg-[#C8E695] dark:text-[#3E5725]"
           @click="handleSave"
         >
           {{ t('ai.save') }}

@@ -503,7 +503,7 @@ const handleResetAllToDefault = () => {
         <button
           type="button"
           data-testid="open-ai-settings-btn"
-          class="rounded-2xl bg-[#3E5725] px-4 py-2 text-xs font-bold text-[#F4ECD8] shadow-sm transition hover:bg-[#3E5725]/90 active:scale-95 dark:bg-[#C8E695] dark:text-[#3E5725]"
+          class="rounded-2xl bg-[#3E5725] px-4 py-2 text-xs font-bold text-white shadow-sm transition hover:bg-[#3E5725]/90 active:scale-95 dark:bg-[#C8E695] dark:text-[#3E5725]"
           @click="aiStore.openSettingsModal"
         >
           {{ t('ai.provider') }}

@@ -86,7 +86,7 @@ const renderMarkdown = (text: string): string => {
     >
       <div
         v-if="aiStore.isSheetOpen"
-        class="fixed inset-x-0 bottom-0 z-50 mx-auto max-h-[85vh] w-full max-w-2xl overflow-hidden rounded-t-[2rem] border-t border-zinc-200 bg-[#F4ECD8] shadow-2xl backdrop-blur-xl dark:border-zinc-800 dark:bg-zinc-900"
+        class="fixed inset-x-0 bottom-0 z-50 mx-auto max-h-[85vh] w-full max-w-2xl overflow-hidden rounded-t-[2rem] border-t border-gray-200 bg-white shadow-2xl dark:border-zinc-800 dark:bg-zinc-900"
         :style="{ paddingBottom: 'calc(1rem + env(safe-area-inset-bottom, 0px))' }"
       >
         <div class="flex items-center justify-center pt-3 pb-1">
@@ -189,7 +189,7 @@ const renderMarkdown = (text: string): string => {
             type="button"
             data-testid="regenerate-ai-btn"
             :disabled="aiStore.isStreaming"
-            class="inline-flex items-center gap-1.5 rounded-xl bg-[#3E5725] px-3.5 py-1.5 text-xs font-bold text-[#F4ECD8] shadow-sm transition hover:bg-[#3E5725]/90 active:scale-95 disabled:opacity-40 dark:bg-[#C8E695] dark:text-[#3E5725]"
+            class="inline-flex items-center gap-1.5 rounded-xl bg-[#3E5725] px-3.5 py-1.5 text-xs font-bold text-white shadow-sm transition hover:bg-[#3E5725]/90 active:scale-95 disabled:opacity-40 dark:bg-[#C8E695] dark:text-[#3E5725]"
             @click="handleRegenerate"
           >
             <svg class="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -203,24 +203,24 @@ const renderMarkdown = (text: string): string => {
 
     <div
       v-if="aiStore.isOnboardingModalOpen"
-      class="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm"
+      class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
     >
-      <div class="w-full max-w-sm rounded-3xl border border-zinc-200 bg-[#F4ECD8] p-6 shadow-2xl dark:border-zinc-700 dark:bg-zinc-900">
+      <div class="w-full max-w-sm rounded-3xl border border-gray-200 bg-white p-6 shadow-2xl dark:border-zinc-700 dark:bg-zinc-900">
         <div class="mb-4 flex h-12 w-12 items-center justify-center rounded-2xl bg-[#C8E695] text-[#3E5725]">
           <svg class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z" />
           </svg>
         </div>
-        <h3 class="mb-2 text-base font-bold text-[#3E5725] dark:text-[#C8E695]">
+        <h3 class="mb-2 text-base font-bold text-gray-900 dark:text-[#C8E695]">
           {{ t('ai.onboardingTitle') }}
         </h3>
-        <p class="mb-6 text-xs leading-relaxed text-zinc-600 dark:text-zinc-400">
+        <p class="mb-6 text-xs leading-relaxed text-gray-600 dark:text-zinc-400">
           {{ t('ai.onboardingSubtitle') }}
         </p>
         <div class="flex flex-col gap-2">
           <button
             type="button"
-            class="w-full rounded-2xl bg-[#3E5725] py-2.5 text-xs font-bold text-[#F4ECD8] shadow-sm transition hover:bg-[#3E5725]/90 active:scale-95 dark:bg-[#C8E695] dark:text-[#3E5725]"
+            class="w-full rounded-2xl bg-[#3E5725] py-2.5 text-xs font-bold text-white shadow-sm transition hover:bg-[#3E5725]/90 active:scale-95 dark:bg-[#C8E695] dark:text-[#3E5725]"
             @click="aiStore.openSettingsModal()"
           >
             {{ t('ai.connectKey') }}

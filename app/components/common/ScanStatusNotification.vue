@@ -60,7 +60,7 @@ const handleDismiss = () => {
       class="fixed bottom-20 left-4 right-4 z-50 mx-auto max-w-md sm:bottom-6 sm:right-6 sm:left-auto"
     >
       <div
-        class="flex items-center justify-between gap-3 rounded-2xl border border-[#3E5725]/30 bg-[#F4ECD8] p-4 shadow-xl backdrop-blur-md dark:border-[#C8E695]/30 dark:bg-zinc-900"
+        class="flex items-center justify-between gap-3 rounded-2xl border border-gray-200 bg-white p-4 shadow-xl dark:border-[#C8E695]/30 dark:bg-zinc-900"
       >
         <div class="flex items-center gap-3">
           <div
@@ -76,7 +76,7 @@ const handleDismiss = () => {
             </svg>
           </div>
           <div>
-            <p class="text-xs font-bold text-[#3E5725] dark:text-[#C8E695]">
+            <p class="text-xs font-bold text-gray-900 dark:text-[#C8E695]">
               {{
                 t('scanner.foundNewBooksNotification', {
                   count: scannerStore.lastScanSummary.newBooksCount,
@@ -89,7 +89,7 @@ const handleDismiss = () => {
         <div class="flex items-center gap-2">
           <button
             type="button"
-            class="rounded-xl bg-[#3E5725] px-3 py-1.5 text-xs font-bold text-[#F4ECD8] shadow-sm transition hover:bg-[#3E5725]/90 active:scale-95 dark:bg-[#C8E695] dark:text-[#3E5725]"
+            class="rounded-xl bg-[#3E5725] px-3 py-1.5 text-xs font-bold text-white shadow-sm transition hover:bg-[#3E5725]/90 active:scale-95 dark:bg-[#C8E695] dark:text-[#3E5725]"
             @click="handleViewBooks"
           >
             {{ t('scanner.viewNewBooks') }}

@@ -103,4 +103,33 @@ describe('AiSettingsModal', () => {
     expect(wrapper.find('[data-testid="delete-ai-key-btn"]').exists()).toBe(false);
     expect((input.element as HTMLInputElement).value).toBe('');
   });
+
+  it('should render modal dialog card with solid white background, gray borders, and shadow-xl', async () => {
+    const wrapper = mount(AiSettingsModal, {
+      props: {
+        isOpen: true,
+      },
+      global: {
+        mocks: {
+          t: (key: string) => key,
+        },
+      },
+    });
+
+    await flushPromises();
+
+    const backdrop = wrapper.find('.fixed.inset-0');
+    expect(backdrop.classes()).toContain('bg-black/50');
+    expect(backdrop.classes().some((c) => c.startsWith('backdrop-blur'))).toBe(false);
+
+    const dialogCard = wrapper.find('.max-w-lg');
+    expect(dialogCard.classes()).toContain('bg-white');
+    expect(dialogCard.classes()).toContain('border-gray-200');
+    expect(dialogCard.classes()).toContain('shadow-xl');
+    expect(dialogCard.classes()).not.toContain('bg-[#F4ECD8]');
+
+    const keyInput = wrapper.find('[data-testid="ai-key-input"]');
+    expect(keyInput.classes()).toContain('bg-white');
+    expect(keyInput.classes()).toContain('border-gray-300');
+  });
 });

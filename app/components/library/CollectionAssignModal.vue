@@ -93,20 +93,20 @@ const handleSave = async (): Promise<void> => {
     <div
       v-if="props.isOpen"
       data-testid="collection-assign-modal"
-      class="backdrop-blur-xs fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4"
+      class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
       @click.self="emit('close')"
     >
       <div
-        class="animate-in fade-in zoom-in-95 flex max-h-[90vh] w-full max-w-md transform flex-col overflow-hidden rounded-3xl border border-[#C8E695]/60 bg-[#F4ECD8] text-[#3E5725] shadow-2xl transition-all duration-200"
+        class="animate-in fade-in zoom-in-95 flex max-h-[90vh] w-full max-w-md transform flex-col overflow-hidden rounded-3xl border border-gray-200 bg-white text-gray-900 shadow-2xl transition-all duration-200"
       >
-        <div class="flex items-center justify-between border-b border-[#C8E695]/50 p-5">
+        <div class="flex items-center justify-between border-b border-gray-200 bg-white p-5">
           <div>
-            <h3 class="text-lg font-bold text-[#3E5725]">
+            <h3 class="text-lg font-bold text-gray-900">
               {{ t('collections.manageCollections') }}
             </h3>
             <p
               v-if="props.book"
-              class="max-w-[280px] truncate text-xs text-[#3E5725]/75"
+              class="max-w-[280px] truncate text-xs text-gray-500"
             >
               {{ props.book.title }}
             </p>
@@ -114,7 +114,7 @@ const handleSave = async (): Promise<void> => {
           <button
             type="button"
             data-testid="close-collection-assign-btn"
-            class="rounded-xl p-2 text-[#3E5725]/70 transition-all hover:bg-[#C8E695]/30 hover:text-[#3E5725]"
+            class="rounded-xl p-2 text-gray-400 transition-all hover:bg-gray-100 hover:text-gray-700"
             @click="emit('close')"
           >
             <svg
@@ -136,19 +136,19 @@ const handleSave = async (): Promise<void> => {
         <div class="flex-1 space-y-4 overflow-y-auto p-5">
           <div
             v-if="errorMessage"
-            class="rounded-xl border border-rose-200 bg-rose-100/90 p-3 text-xs font-semibold text-rose-700"
+            class="rounded-xl border border-rose-200 bg-rose-50 p-3 text-xs font-semibold text-rose-700"
           >
             {{ errorMessage }}
           </div>
 
           <div class="space-y-2">
-            <label class="text-xs font-bold uppercase tracking-wider text-[#3E5725]/80">
+            <label class="text-xs font-bold uppercase tracking-wider text-gray-700">
               {{ t('collections.selectCollections') }}
             </label>
 
             <div
               v-if="collectionStore.collections.length === 0"
-              class="rounded-2xl border border-dashed border-[#C8E695] bg-white/60 p-6 text-center text-xs font-medium text-[#3E5725]/70"
+              class="rounded-2xl border border-dashed border-gray-300 bg-gray-50 p-6 text-center text-xs font-medium text-gray-500"
             >
               {{ t('collections.noCollectionsYet') }}
             </div>
@@ -160,22 +160,22 @@ const handleSave = async (): Promise<void> => {
               <label
                 v-for="collection in collectionStore.collections"
                 :key="collection.id"
-                class="flex cursor-pointer items-center justify-between rounded-2xl border border-[#C8E695]/40 bg-white/80 p-3 transition-all hover:bg-white active:scale-[0.99]"
+                class="flex cursor-pointer items-center justify-between rounded-2xl border border-gray-200 bg-gray-50 p-3 transition-all hover:bg-gray-100 active:scale-[0.99]"
               >
                 <div class="flex items-center gap-3">
                   <input
                     type="checkbox"
                     :value="collection.id"
                     :checked="selectedCollectionIds.includes(collection.id)"
-                    class="h-4 w-4 rounded text-[#3E5725] accent-[#3E5725] focus:ring-[#C8E695]"
+                    class="h-4 w-4 rounded text-[#3E5725] accent-[#3E5725] focus:ring-gray-300"
                     @change="toggleCollection(collection.id)"
                   />
-                  <span class="text-sm font-semibold text-[#3E5725]">
+                  <span class="text-sm font-semibold text-gray-900">
                     {{ collection.name }}
                   </span>
                 </div>
                 <span
-                  class="rounded-full bg-[#C8E695]/40 px-2 py-0.5 text-xs font-bold text-[#3E5725]"
+                  class="rounded-full bg-gray-200/80 px-2 py-0.5 text-xs font-bold text-gray-700"
                 >
                   {{ collection.count }}
                 </span>
@@ -183,8 +183,8 @@ const handleSave = async (): Promise<void> => {
             </div>
           </div>
 
-          <div class="border-t border-[#C8E695]/40 pt-2">
-            <label class="mb-1.5 block text-xs font-bold text-[#3E5725]/80">
+          <div class="border-t border-gray-200 pt-2">
+            <label class="mb-1.5 block text-xs font-bold text-gray-700">
               {{ t('collections.createNew') }}
             </label>
             <div class="flex gap-2">
@@ -193,7 +193,7 @@ const handleSave = async (): Promise<void> => {
                 type="text"
                 data-testid="new-collection-input"
                 :placeholder="t('collections.newCollectionPlaceholder')"
-                class="flex-1 rounded-xl border border-[#C8E695] bg-white/90 px-3.5 py-2 text-sm text-[#3E5725] placeholder:text-[#3E5725]/50 focus:outline-none focus:ring-2 focus:ring-[#3E5725]"
+                class="flex-1 rounded-xl border border-gray-300 bg-white px-3.5 py-2 text-sm text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-gray-300"
                 @keyup.enter="handleCreateCollection"
               />
               <button
@@ -210,11 +210,11 @@ const handleSave = async (): Promise<void> => {
         </div>
 
         <div
-          class="flex items-center justify-end gap-3 border-t border-[#C8E695]/50 bg-white/40 p-4"
+          class="flex items-center justify-end gap-3 border-t border-gray-200 bg-white p-4"
         >
           <button
             type="button"
-            class="rounded-xl px-4 py-2.5 text-xs font-bold text-[#3E5725] transition-all hover:bg-white/70 active:scale-95"
+            class="rounded-xl border border-gray-300 bg-white px-4 py-2.5 text-xs font-bold text-gray-700 transition-all hover:bg-gray-100 active:scale-95"
             @click="emit('close')"
           >
             {{ t('collections.cancel') }}

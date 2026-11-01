@@ -279,7 +279,7 @@ const formatRelativeTime = (timestamp: number | null): string => {
           type="button"
           data-testid="manual-scan-btn"
           :disabled="scannerStore.isScanning || !scannerStore.hasActiveDirectories"
-          class="inline-flex items-center gap-2 rounded-2xl bg-[#3E5725] px-4 py-2.5 text-xs font-bold text-[#F4ECD8] shadow-sm transition hover:bg-[#3E5725]/90 disabled:opacity-50 active:scale-95 dark:bg-[#C8E695] dark:text-[#3E5725]"
+          class="inline-flex items-center gap-2 rounded-2xl bg-[#3E5725] px-4 py-2.5 text-xs font-bold text-white shadow-sm transition hover:bg-[#3E5725]/90 disabled:opacity-50 active:scale-95 dark:bg-[#C8E695] dark:text-[#3E5725]"
           @click="handleScanNow"
         >
           <svg
@@ -349,7 +349,7 @@ const formatRelativeTime = (timestamp: number | null): string => {
         <div
           v-for="dir in scannerStore.directories"
           :key="dir.id"
-          class="flex items-center justify-between rounded-2xl border border-zinc-100 bg-[#F4ECD8]/40 p-3.5 transition hover:bg-[#F4ECD8]/60 dark:border-zinc-800 dark:bg-zinc-800/40"
+          class="flex items-center justify-between rounded-2xl border border-zinc-200 bg-zinc-50 p-3.5 transition hover:bg-zinc-100 dark:border-zinc-800 dark:bg-zinc-800/40"
         >
           <div class="flex items-center gap-3 overflow-hidden pr-2">
             <div

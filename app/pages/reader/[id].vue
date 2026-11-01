@@ -382,7 +382,7 @@ defineExpose({
     >
       <div
         v-if="aiStore.showInactivityBanner"
-        class="fixed top-16 left-4 right-4 z-40 mx-auto max-w-lg rounded-2xl border border-[#3E5725]/30 bg-[#F4ECD8] p-3.5 shadow-xl backdrop-blur-md dark:border-[#C8E695]/30 dark:bg-zinc-900"
+        class="fixed top-16 left-4 right-4 z-40 mx-auto max-w-lg rounded-2xl border border-gray-200 bg-white p-3.5 shadow-xl dark:border-[#C8E695]/30 dark:bg-zinc-900"
       >
         <div class="flex items-center justify-between gap-3">
           <div class="flex items-center gap-2.5">
@@ -392,10 +392,10 @@ defineExpose({
               </svg>
             </div>
             <div>
-              <p class="text-xs font-bold text-[#3E5725] dark:text-[#C8E695]">
+              <p class="text-xs font-bold text-gray-900 dark:text-[#C8E695]">
                 {{ t('ai.inactivityCatchupTitle') }}
               </p>
-              <p class="text-[11px] text-zinc-600 dark:text-zinc-400">
+              <p class="text-[11px] text-gray-600 dark:text-zinc-400">
                 {{ t('ai.inactivityCatchupMessage') }}
               </p>
             </div>
@@ -403,7 +403,7 @@ defineExpose({
           <div class="flex items-center gap-1.5">
             <button
               type="button"
-              class="rounded-xl bg-[#3E5725] px-3 py-1.5 text-xs font-bold text-[#F4ECD8] shadow-sm transition hover:bg-[#3E5725]/90 active:scale-95 dark:bg-[#C8E695] dark:text-[#3E5725]"
+              class="rounded-xl bg-[#3E5725] px-3 py-1.5 text-xs font-bold text-white shadow-sm transition hover:bg-[#3E5725]/90 active:scale-95 dark:bg-[#C8E695] dark:text-[#3E5725]"
               @click="triggerChapterTldr(); aiStore.dismissInactivityBanner()"
             >
               {{ t('ai.viewCatchup') }}
