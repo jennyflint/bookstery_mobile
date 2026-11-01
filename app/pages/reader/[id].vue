@@ -128,10 +128,24 @@ onMounted(async () => {
   if (viewportRef.value?.containerRef) {
     let rawData: Uint8Array | ArrayBuffer | string = '';
     try {
-      const fileRes = await Filesystem.readFile({
-        path: book.file_path,
-        directory: Directory.Data,
-      });
+      let fileRes;
+      try {
+        fileRes = await Filesystem.readFile({
+          path: book.file_path,
+          directory: Directory.Data,
+        });
+      } catch {
+        try {
+          fileRes = await Filesystem.readFile({
+            path: book.file_path,
+            directory: Directory.Documents,
+          });
+        } catch {
+          fileRes = await Filesystem.readFile({
+            path: book.file_path,
+          });
+        }
+      }
 
       if (typeof fileRes.data === 'string') {
         const base64Clean = fileRes.data.includes(',') ? fileRes.data.split(',')[1] : fileRes.data;

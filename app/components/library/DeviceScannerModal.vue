@@ -1,5 +1,7 @@
 <script setup lang="ts">
 import { ref } from 'vue';
+import { Capacitor } from '@capacitor/core';
+import { FilePicker } from '@capawesome/capacitor-file-picker';
 import { useDeviceScanner } from '../../composables/useDeviceScanner';
 
 defineProps<{
@@ -20,6 +22,7 @@ const {
   scanDevice,
   importFiles,
   importFromBlob,
+  importNativeFiles,
   clearDuplicateNotice,
 } = useDeviceScanner();
 
@@ -62,6 +65,60 @@ const handleImportSelected = async () => {
 
 const triggerFileInput = () => {
   fileInputRef.value?.click();
+};
+
+const handleImportClick = async () => {
+  dismissDuplicateNotice();
+  if (Capacitor.isNativePlatform()) {
+    try {
+      const result = await FilePicker.pickFiles({
+        types: [
+          'application/pdf',
+          'application/epub+zip',
+          'application/x-fictionbook+xml',
+          'application/zip',
+          'application/octet-stream',
+          '*/*',
+        ],
+        limit: 0,
+        readData: true,
+      });
+
+      if (result && result.files && result.files.length > 0) {
+        const importRes = await importNativeFiles(result.files);
+        if (importRes.importedCount > 0) {
+          emit('imported');
+          if (importRes.duplicates.length === 0) {
+            emit('close');
+          } else {
+            duplicateMessage.value = t('scanner.duplicateDetected', {
+              title: importRes.duplicates.join(', '),
+            });
+          }
+        } else if (importRes.duplicates.length > 0) {
+          duplicateMessage.value = t('scanner.duplicateDetected', {
+            title: importRes.duplicates.join(', '),
+          });
+        }
+        return;
+      }
+    } catch (pickerErr: unknown) {
+      const err = pickerErr as { message?: string; name?: string };
+      const msg = (err?.message || '').toLowerCase();
+      if (
+        msg.includes('cancel') ||
+        msg.includes('abort') ||
+        msg.includes('dismiss') ||
+        err?.name === 'AbortError'
+      ) {
+        return;
+      }
+      triggerFileInput();
+      return;
+    }
+  }
+
+  triggerFileInput();
 };
 
 const handleFileChosen = async (event: Event) => {
@@ -160,7 +217,7 @@ const handleFileChosen = async (event: Event) => {
           <button
             type="button"
             class="py-3 px-4 rounded-xl bg-zinc-100 hover:bg-zinc-200 text-zinc-800 font-semibold text-sm transition-all flex items-center gap-2"
-            @click="triggerFileInput"
+            @click="handleImportClick"
           >
             <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />

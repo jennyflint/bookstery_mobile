@@ -2,9 +2,39 @@ import { ref } from 'vue';
 import { Directory, Filesystem } from '@capacitor/filesystem';
 import { DeviceFileScannerService } from '../services/scanner/DeviceFileScannerService';
 import { FileHashService } from '../services/scanner/FileHashService';
+import { AutoScanService } from '../services/scanner/AutoScanService';
+import { ScanDirectoryRepository } from '../services/database/ScanDirectoryRepository';
 import { CoverGenerationQueueService } from '../services/covers/CoverGenerationQueueService';
 import { useLibraryStore } from '../stores/libraryStore';
 import type { AddBookResult, BookRecord, ImportFilesResult, ScannedFile } from '../types';
+
+/**
+ * Memory-safe conversion of Blob or File to Base64 without string iteration spikes
+ */
+async function blobToBase64(blob: Blob): Promise<string> {
+  if (typeof FileReader !== 'undefined') {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        const dataUrl = reader.result as string;
+        const base64 = dataUrl.includes(',') ? dataUrl.split(',')[1] : dataUrl;
+        resolve(base64);
+      };
+      reader.onerror = reject;
+      reader.readAsDataURL(blob);
+    });
+  }
+
+  const arrayBuffer = await blob.arrayBuffer();
+  const bytes = new Uint8Array(arrayBuffer);
+  let binary = '';
+  const chunkSize = 8192;
+  for (let i = 0; i < bytes.length; i += chunkSize) {
+    const chunk = bytes.subarray(i, i + chunkSize);
+    binary += String.fromCharCode(...chunk);
+  }
+  return btoa(binary);
+}
 
 export function useDeviceScanner() {
   const isScanning = ref(false);
@@ -23,6 +53,17 @@ export function useDeviceScanner() {
       const documentsFiles = await scannerService.scanDirectory('', Directory.Documents);
       const dataFiles = await scannerService.scanDirectory('', Directory.Data);
       const combined = [...documentsFiles, ...dataFiles];
+
+      try {
+        const repo = ScanDirectoryRepository.getInstance();
+        const activeDirs = await repo.getActiveDirectories();
+        const autoScanner = AutoScanService.getInstance();
+        for (const dir of activeDirs) {
+          const { path, directory } = autoScanner.resolveDirectoryTarget(dir.uri);
+          const dirFiles = await scannerService.scanDirectory(path, directory);
+          combined.push(...dirFiles);
+        }
+      } catch {}
 
       const uniqueMap = new Map<string, ScannedFile>();
       for (const f of combined) {
@@ -69,24 +110,37 @@ export function useDeviceScanner() {
             if (addResult.success) {
               importedCount++;
 
-              const fileData = await Filesystem.readFile({
-                path: file.path,
-                directory: Directory.Documents,
-              });
+              let fileContent: string | ArrayBuffer | Uint8Array | Blob | undefined;
+              try {
+                const readRes = await Filesystem.readFile({
+                  path: imported.file_path,
+                  directory: Directory.Data,
+                });
+                fileContent = readRes.data;
+              } catch {
+                try {
+                  const readRes = await Filesystem.readFile({
+                    path: file.path,
+                    directory: Directory.Documents,
+                  });
+                  fileContent = readRes.data;
+                } catch {}
+              }
 
-              coverQueue.enqueue(imported.id, imported.format, fileData.data).then((coverPath) => {
-                if (coverPath) {
-                  libraryStore.updateCover(imported.id, coverPath);
-                }
-              });
+              if (fileContent) {
+                coverQueue.enqueue(imported.id, imported.format, fileContent).then((coverPath) => {
+                  if (coverPath) {
+                    libraryStore.updateCover(imported.id, coverPath);
+                  }
+                });
+              }
             } else if (addResult.isDuplicate) {
               duplicateCount++;
             }
           } else {
             duplicateCount++;
           }
-        } catch {
-        }
+        } catch {}
         scanProgress.value = Math.round(((i + 1) / files.length) * 100);
       }
       return { importedCount, duplicateCount };
@@ -110,13 +164,7 @@ export function useDeviceScanner() {
       }
 
       const arrayBuffer = await file.arrayBuffer();
-      const uint8 = new Uint8Array(arrayBuffer);
-
-      let binaryString = '';
-      for (let i = 0; i < uint8.length; i++) {
-        binaryString += String.fromCharCode(uint8[i]);
-      }
-      const base64 = btoa(binaryString);
+      const base64 = await blobToBase64(file);
 
       const hash = await FileHashService.calculateSha256(base64);
       const existingByHash = libraryStore.findDuplicate({ id: hash });
@@ -125,33 +173,158 @@ export function useDeviceScanner() {
         return { success: false, isDuplicate: true, book: existingByHash };
       }
 
-      const tempPath = `${file.name}`;
-      await Filesystem.writeFile({
-        path: tempPath,
-        data: base64,
-        directory: Directory.Documents,
-      });
-
-      const imported = await scannerService.importBookFile(tempPath, Directory.Documents, libraryStore.books);
-      if (imported) {
-        const addResult = await libraryStore.addBook(imported);
-        if (!addResult.success && addResult.isDuplicate) {
-          duplicateNotice.value = imported.title;
-          return { success: false, isDuplicate: true, book: addResult.book };
-        }
-
-        const coverPath = await coverQueue.enqueue(imported.id, imported.format, arrayBuffer);
-        if (coverPath) {
-          imported.cover_path = coverPath;
-          await libraryStore.updateCover(imported.id, coverPath);
-        }
-        return { success: true, book: imported };
+      const format = scannerService.determineFormat(file.name);
+      if (!format) {
+        duplicateNotice.value = candidateTitle;
+        return { success: false, isDuplicate: false };
       }
 
-      duplicateNotice.value = candidateTitle;
-      return { success: false, isDuplicate: true };
+      const destinationPath = `books/${hash}_${file.name}`;
+      await Filesystem.writeFile({
+        path: destinationPath,
+        data: base64,
+        directory: Directory.Data,
+        recursive: true,
+      });
+
+      const initialLocator = format === 'pdf' ? '1' : format === 'fb2' ? 'fb2-p-0' : '';
+      const now = Date.now();
+
+      const bookRecord: BookRecord = {
+        id: hash,
+        title: candidateTitle,
+        author: null,
+        format,
+        file_path: destinationPath,
+        cover_path: null,
+        locator: initialLocator,
+        progress_percentage: 0,
+        total_items: 0,
+        last_read_at: now,
+        updated_at: now,
+        file_size: file.size,
+        file_hash: hash,
+      };
+
+      const addResult = await libraryStore.addBook(bookRecord);
+      if (!addResult.success && addResult.isDuplicate) {
+        duplicateNotice.value = bookRecord.title;
+        return { success: false, isDuplicate: true, book: addResult.book };
+      }
+
+      try {
+        const coverPath = await coverQueue.enqueue(bookRecord.id, bookRecord.format, arrayBuffer);
+        if (coverPath) {
+          bookRecord.cover_path = coverPath;
+          await libraryStore.updateCover(bookRecord.id, coverPath);
+        }
+      } catch {}
+
+      return { success: true, book: bookRecord };
     } finally {
       isScanning.value = false;
+    }
+  };
+
+  const importNativeFiles = async (
+    files: Array<{ name: string; path?: string; data?: string; size?: number }>,
+  ): Promise<{ importedCount: number; duplicates: string[] }> => {
+    isScanning.value = true;
+    scanProgress.value = 0;
+    let importedCount = 0;
+    const duplicates: string[] = [];
+
+    try {
+      await libraryStore.loadBooks();
+
+      for (let i = 0; i < files.length; i++) {
+        const f = files[i];
+        const fileName = f.name;
+        const candidateTitle = fileName.replace(/\.[^/.]+$/, '').replace(/_/g, ' ');
+
+        const existingByTitle = libraryStore.findDuplicate({ title: candidateTitle });
+        if (existingByTitle) {
+          duplicates.push(candidateTitle);
+          scanProgress.value = Math.round(((i + 1) / files.length) * 100);
+          continue;
+        }
+
+        let base64Data = f.data;
+        if (!base64Data && f.path) {
+          try {
+            const readRes = await Filesystem.readFile({ path: f.path });
+            base64Data = typeof readRes.data === 'string' ? readRes.data : '';
+          } catch {}
+        }
+
+        if (!base64Data) {
+          scanProgress.value = Math.round(((i + 1) / files.length) * 100);
+          continue;
+        }
+
+        const hash = await FileHashService.calculateSha256(base64Data);
+        const existingByHash = libraryStore.findDuplicate({ id: hash });
+        if (existingByHash) {
+          duplicates.push(existingByHash.title);
+          scanProgress.value = Math.round(((i + 1) / files.length) * 100);
+          continue;
+        }
+
+        const format = scannerService.determineFormat(fileName);
+        if (!format) {
+          scanProgress.value = Math.round(((i + 1) / files.length) * 100);
+          continue;
+        }
+
+        const destinationPath = `books/${hash}_${fileName}`;
+        await Filesystem.writeFile({
+          path: destinationPath,
+          data: base64Data,
+          directory: Directory.Data,
+          recursive: true,
+        });
+
+        const initialLocator = format === 'pdf' ? '1' : format === 'fb2' ? 'fb2-p-0' : '';
+        const now = Date.now();
+
+        const bookRecord: BookRecord = {
+          id: hash,
+          title: candidateTitle,
+          author: null,
+          format,
+          file_path: destinationPath,
+          cover_path: null,
+          locator: initialLocator,
+          progress_percentage: 0,
+          total_items: 0,
+          last_read_at: now,
+          updated_at: now,
+          file_size: f.size || base64Data.length,
+          file_hash: hash,
+        };
+
+        const addResult = await libraryStore.addBook(bookRecord);
+        if (addResult.success) {
+          importedCount++;
+          coverQueue
+            .enqueue(bookRecord.id, bookRecord.format, base64Data)
+            .then((coverPath) => {
+              if (coverPath) {
+                libraryStore.updateCover(bookRecord.id, coverPath);
+              }
+            })
+            .catch(() => {});
+        } else if (addResult.isDuplicate) {
+          duplicates.push(candidateTitle);
+        }
+
+        scanProgress.value = Math.round(((i + 1) / files.length) * 100);
+      }
+
+      return { importedCount, duplicates };
+    } finally {
+      isScanning.value = false;
+      scanProgress.value = 0;
     }
   };
 
@@ -172,6 +345,7 @@ export function useDeviceScanner() {
     importFiles,
     importBook,
     importFromBlob,
+    importNativeFiles,
     clearDuplicateNotice,
   };
 }

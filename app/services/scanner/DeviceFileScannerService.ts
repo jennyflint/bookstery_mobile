@@ -85,7 +85,7 @@ export class DeviceFileScannerService {
 
   async importBookFile(
     sourcePath: string,
-    sourceDirectory: Directory,
+    sourceDirectory: Directory = Directory.Documents,
     existingBooksOrIds: Set<string> | BookRecord[],
   ): Promise<BookRecord | null> {
     const fileName = sourcePath.split('/').pop() || 'book';
@@ -102,10 +102,24 @@ export class DeviceFileScannerService {
       return null;
     }
 
-    const fileData = await Filesystem.readFile({
-      path: sourcePath,
-      directory: sourceDirectory,
-    });
+    let fileData;
+    try {
+      fileData = await Filesystem.readFile({
+        path: sourcePath,
+        directory: sourceDirectory,
+      });
+    } catch {
+      try {
+        fileData = await Filesystem.readFile({
+          path: sourcePath,
+          directory: Directory.Data,
+        });
+      } catch {
+        fileData = await Filesystem.readFile({
+          path: sourcePath,
+        });
+      }
+    }
 
     const rawString = typeof fileData.data === 'string' ? fileData.data : '';
     const hash = await FileHashService.calculateSha256(rawString);

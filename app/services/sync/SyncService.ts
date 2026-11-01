@@ -18,7 +18,10 @@ export class SyncService {
     this.sqliteService = sqliteService || SqliteService.getInstance();
     this.authService = authService || GoogleAuthService.getInstance();
     this.folderService = folderService || GoogleDriveFolderService.getInstance();
-    this.queueService = new SyncQueueService(this.sqliteService, this.authService, this.folderService);
+    this.queueService =
+      sqliteService || authService || folderService
+        ? new SyncQueueService(this.sqliteService, this.authService, this.folderService)
+        : SyncQueueService.getInstance();
   }
 
   static getInstance(): SyncService {

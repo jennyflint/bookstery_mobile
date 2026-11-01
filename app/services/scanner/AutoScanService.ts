@@ -268,12 +268,23 @@ export class AutoScanService {
           file.format === 'pdf' ? '1' : file.format === 'fb2' ? 'fb2-p-0' : '';
         const now = Date.now();
 
+        // Copy file into Directory.Data sandbox so reader engine can reliably open it
+        const destinationPath = `books/${hash}_${file.name}`;
+        try {
+          await Filesystem.writeFile({
+            path: destinationPath,
+            data: fileContent as string,
+            directory: Directory.Data,
+            recursive: true,
+          });
+        } catch {}
+
         const newBook: BookRecord = {
           id: hash,
           title,
           author: null,
           format: file.format,
-          file_path: file.path,
+          file_path: destinationPath,
           cover_path: null,
           locator: initialLocator,
           progress_percentage: 0,
@@ -288,7 +299,8 @@ export class AutoScanService {
 
         await this.sqliteService.upsertBook(newBook);
         existingById.set(newBook.id, newBook);
-        existingByPath.set(newBook.file_path, newBook);
+        existingByPath.set(file.path, newBook);
+        existingByPath.set(destinationPath, newBook);
 
         try {
           await this.coverQueue.enqueue(newBook.id, newBook.format, fileContent);
@@ -321,12 +333,34 @@ export class AutoScanService {
         : currentSubPath
       : basePath;
 
+    let readResult: { files: Array<{ name: string; type: string; size?: number; mtime?: number; uri?: string }> } | null = null;
     try {
-      const readResult = await Filesystem.readdir({
+      readResult = await Filesystem.readdir({
         path: targetPath,
         directory,
       });
+    } catch {
+      if (normalized.startsWith('content://') || normalized.startsWith('file://')) {
+        try {
+          readResult = await Filesystem.readdir({
+            path: normalized,
+          });
+        } catch {}
+      }
+      if (!readResult && directory) {
+        try {
+          readResult = await Filesystem.readdir({
+            path: targetPath,
+          });
+        } catch {}
+      }
+    }
 
+    if (!readResult || !readResult.files) {
+      return results;
+    }
+
+    try {
       const isContentUri = dirUri.startsWith('content://');
 
       for (const entry of readResult.files) {
@@ -404,7 +438,14 @@ export class AutoScanService {
         });
         return fallback.data;
       }
-      throw err;
+      try {
+        const fallback = await Filesystem.readFile({
+          path: filePath,
+        });
+        return fallback.data;
+      } catch {
+        throw err;
+      }
     }
   }
 
