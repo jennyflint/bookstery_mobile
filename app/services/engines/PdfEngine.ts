@@ -48,6 +48,72 @@ const FIT_MARGIN_PX = 32;
 const RESIZE_DEBOUNCE_MS = 150;
 const LAYOUT_WAIT_TIMEOUT_MS = 500;
 const CANCEL_SETTLE_TIMEOUT_MS = 250;
+const RAPID_NAV_DEBOUNCE_MS = 130;
+const MAX_CACHE_WINDOW_RADIUS = 5;
+
+export interface CachedPageRender {
+  pageNumber: number;
+  canvas: HTMLCanvasElement;
+  scale: number;
+  cssWidth: number;
+  cssHeight: number;
+  dpr: number;
+}
+
+export class PdfPageCache {
+  private cache = new Map<number, CachedPageRender>();
+  private readonly maxWindowRadius = MAX_CACHE_WINDOW_RADIUS;
+
+  get(pageNumber: number, scale: number): CachedPageRender | undefined {
+    const entry = this.cache.get(pageNumber);
+    if (!entry) return undefined;
+    if (Math.abs(entry.scale - scale) > 0.001) {
+      return undefined;
+    }
+    // Refresh LRU order
+    this.cache.delete(pageNumber);
+    this.cache.set(pageNumber, entry);
+    return entry;
+  }
+
+  set(entry: CachedPageRender): void {
+    if (this.cache.has(entry.pageNumber)) {
+      this.evictEntry(entry.pageNumber);
+    }
+    this.cache.set(entry.pageNumber, entry);
+  }
+
+  has(pageNumber: number, scale: number): boolean {
+    return this.get(pageNumber, scale) !== undefined;
+  }
+
+  evictOutsideWindow(currentPage: number): void {
+    const minPage = currentPage - this.maxWindowRadius;
+    const maxPage = currentPage + this.maxWindowRadius;
+    Array.from(this.cache.keys()).forEach((pageNum) => {
+      if (pageNum < minPage || pageNum > maxPage) {
+        this.evictEntry(pageNum);
+      }
+    });
+  }
+
+  private evictEntry(pageNumber: number): void {
+    const entry = this.cache.get(pageNumber);
+    if (entry) {
+      // Zero dimensions to quickly release backing store GPU/RAM in mobile WebKit/Blink
+      entry.canvas.width = 0;
+      entry.canvas.height = 0;
+      this.cache.delete(pageNumber);
+    }
+  }
+
+  clear(): void {
+    Array.from(this.cache.keys()).forEach((pageNum) => {
+      this.evictEntry(pageNum);
+    });
+    this.cache.clear();
+  }
+}
 
 export class PdfEngine extends BaseEngine {
   private pdfDocument: pdfjsLib.PDFDocumentProxy | null = null;
@@ -75,6 +141,16 @@ export class PdfEngine extends BaseEngine {
   private lastLayoutSize: { width: number; height: number } | null = null;
   private renderGeneration: number = 0;
   private basePageSize: { width: number; height: number } | null = null;
+  private pageSizeCache = new Map<number, { width: number; height: number }>();
+  private pageCache = new PdfPageCache();
+  private activePreloadJob: { cancel: () => void } | null = null;
+  private lastNavTimestamp: number = 0;
+  private rapidNavDebounceTimer: ReturnType<typeof setTimeout> | null = null;
+  private pendingDebounceResolvers: Array<() => void> = [];
+  private isPageTurnInProgress: boolean = false;
+  private isTouchActive: boolean = false;
+  private touchStartListener: (() => void) | null = null;
+  private touchEndListener: (() => void) | null = null;
 
   private getClampedDpr(): number {
     const rawDpr = typeof window !== 'undefined' ? window.devicePixelRatio || 1 : 1;
@@ -140,6 +216,15 @@ export class PdfEngine extends BaseEngine {
     });
   }
 
+  private isGestureActive(): boolean {
+    if (this.isTouchActive) return true;
+    const gestureState = this.gestureController?.getState();
+    if (gestureState && (gestureState.isPinching || gestureState.isPanning || gestureState.isAnimating)) {
+      return true;
+    }
+    return false;
+  }
+
   private observeContainerResize(): void {
     this.disconnectResizeObserver();
     if (!this.container || typeof ResizeObserver === 'undefined') {
@@ -148,10 +233,21 @@ export class PdfEngine extends BaseEngine {
     this.lastLayoutSize = { width: this.container.clientWidth, height: this.container.clientHeight };
     this.resizeObserver = new ResizeObserver(() => {
       if (!this.container) return;
+      // Disable ResizeObserver re-render loops while a page turn or touch gesture is actively in progress or when zoomed in
+      const gestureScale = this.gestureController?.getState().scale ?? 1.0;
+      if (
+        this.isPageTurnInProgress ||
+        this.isGestureActive() ||
+        this.zoomScale > 1.0 ||
+        gestureScale > 1.0
+      ) {
+        return;
+      }
       const next = { width: this.container.clientWidth, height: this.container.clientHeight };
       const prev = this.lastLayoutSize;
       if (next.width <= 0 || next.height <= 0) return;
-      if (prev && Math.abs(next.width - prev.width) < 2 && Math.abs(next.height - prev.height) < 2) {
+      // Ignore sub-pixel fluctuations (< 3px) to prevent jitter from 1px scrollbar or touch fluctuations
+      if (prev && Math.abs(next.width - prev.width) < 3 && Math.abs(next.height - prev.height) < 3) {
         return;
       }
       if (this.resizeTimer) clearTimeout(this.resizeTimer);
@@ -228,10 +324,20 @@ export class PdfEngine extends BaseEngine {
     const zoomableContainer = container as ZoomableContainerElement;
     zoomableContainer.__readerSetZoom = (scale: number) => this.setZoom(scale);
     zoomableContainer.__readerResetZoom = () => this.resetZoom();
-    // Scroll mode stacks many pages, so gestures only scale them with CSS there.
-    zoomableContainer.__readerCanRenderZoom = () => this.paginationMode !== 'scroll';
+    // Visual viewport zoom is purely CSS transformed without engine re-rendering
+    zoomableContainer.__readerCanRenderZoom = () => false;
     zoomableContainer.__readerGetContentSize = () =>
       this.paginationMode === 'scroll' ? null : this.basePageSize;
+
+    this.touchStartListener = () => {
+      this.isTouchActive = true;
+    };
+    this.touchEndListener = () => {
+      this.isTouchActive = false;
+    };
+    container.addEventListener('touchstart', this.touchStartListener, { passive: true });
+    container.addEventListener('touchend', this.touchEndListener, { passive: true });
+    container.addEventListener('touchcancel', this.touchEndListener, { passive: true });
 
     if (!container.closest('[data-testid="reader-viewport"]')) {
       this.gestureController?.destroy();
@@ -243,7 +349,7 @@ export class PdfEngine extends BaseEngine {
         doubleTapScale: 2.5,
         doubleTapDelayMs: 300,
         debounceMs: 200,
-        onZoomRender: (scale: number) => this.setZoom(scale),
+        isRenderZoomSupported: () => false,
         onSwipeNext: () => {
           void this.next();
         },
@@ -256,7 +362,7 @@ export class PdfEngine extends BaseEngine {
     initPdfWorker();
 
     let rawBytes: Uint8Array | null = null;
-    let docSource: pdfjsLib.DocumentInitParameters | string;
+    let docSource: Parameters<typeof pdfjsLib.getDocument>[0];
 
     if (data instanceof Uint8Array) {
       rawBytes = data;
@@ -306,6 +412,18 @@ export class PdfEngine extends BaseEngine {
       const loadingTask = pdfjsLib.getDocument(docSource);
       this.pdfDocument = await loadingTask.promise;
       this.totalPagesCount = this.pdfDocument.numPages;
+
+      const firstPage = await this.pdfDocument.getPage(1);
+      const initialViewport = firstPage.getViewport({ scale: 1 });
+      this.basePageSize = {
+        width: Math.floor(initialViewport.width),
+        height: Math.floor(initialViewport.height),
+      };
+      this.pageSizeCache.set(1, this.basePageSize);
+      try {
+        firstPage.cleanup();
+      } catch {
+      }
 
       const initialPage = initialLocator ? parseInt(initialLocator, 10) : 1;
       this.currentPageNumber = !isNaN(initialPage) && initialPage >= 1 ? Math.min(initialPage, this.totalPagesCount) : 1;
@@ -358,7 +476,7 @@ export class PdfEngine extends BaseEngine {
     if (this.paginationMode === 'scroll') {
       this.scrollToPage(pageNum, false);
     } else {
-      await this.renderButtonsMode(pageNum);
+      await this.handleButtonsNavigation(pageNum);
     }
   }
 
@@ -369,6 +487,7 @@ export class PdfEngine extends BaseEngine {
     }
     const clampedZoom = Math.min(Math.max(zoom, 0.5), 4.0);
     this.zoomScale = clampedZoom;
+    this.pageCache.clear();
 
     if (this.paginationMode === 'scroll') {
       return;
@@ -391,6 +510,9 @@ export class PdfEngine extends BaseEngine {
     const wasZoomed = this.zoomScale !== 1.0;
     this.zoomScale = 1.0;
     this.currentScale = this.baseScale;
+    if (wasZoomed) {
+      this.pageCache.clear();
+    }
     this.gestureController?.resetZoom(true);
     (this.container as ZoomableContainerElement | null)?.__onEngineResetZoom?.();
 
@@ -433,7 +555,9 @@ export class PdfEngine extends BaseEngine {
     const scrollWrapper = document.createElement('div');
     scrollWrapper.className =
       'pdf-scroll-container relative w-full h-full overflow-y-auto overflow-x-hidden flex flex-col items-center py-6 px-2 space-y-6 select-text';
-    scrollWrapper.style.webkitOverflowScrolling = 'touch';
+    (scrollWrapper.style as any).webkitOverflowScrolling = 'touch';
+    scrollWrapper.style.contain = 'paint';
+    scrollWrapper.style.willChange = 'scroll-position';
     this.container.appendChild(scrollWrapper);
     this.scrollContainer = scrollWrapper;
 
@@ -461,7 +585,12 @@ export class PdfEngine extends BaseEngine {
       pageSlot.className =
         'pdf-page-slot relative flex justify-center items-center bg-white shadow-md rounded-md overflow-hidden transition-all';
       pageSlot.style.width = `${expectedWidth}px`;
+      pageSlot.style.height = `${expectedHeight}px`;
       pageSlot.style.minHeight = `${expectedHeight}px`;
+      pageSlot.style.maxHeight = `${expectedHeight}px`;
+      pageSlot.style.contain = 'layout paint';
+      pageSlot.style.backfaceVisibility = 'hidden';
+      (pageSlot.style as any).webkitBackfaceVisibility = 'hidden';
 
       const placeholder = document.createElement('div');
       placeholder.className =
@@ -515,7 +644,9 @@ export class PdfEngine extends BaseEngine {
         const containerHeight = this.scrollContainer.clientHeight;
         const checkLine = containerTop + containerHeight * 0.35;
 
-        const slots = this.scrollContainer.querySelectorAll<HTMLElement>('.pdf-page-slot');
+        const slots = Array.from(
+          this.scrollContainer.querySelectorAll<HTMLElement>('.pdf-page-slot'),
+        );
         for (const slot of slots) {
           const top = slot.offsetTop;
           const bottom = top + slot.offsetHeight;
@@ -576,47 +707,35 @@ export class PdfEngine extends BaseEngine {
         this.activeSlotRenderTasks.delete(pageNumber);
       }
 
+      const cssWidth = Math.floor(viewport.width);
+      const cssHeight = Math.floor(viewport.height);
+      const bufferWidth = Math.floor(cssWidth * dpr);
+      const bufferHeight = Math.floor(cssHeight * dpr);
+
+      // Lock slot dimensions so geometry never collapses
       slot.style.position = 'relative';
-      slot.style.width = `${Math.floor(viewport.width)}px`;
-      slot.style.height = `${Math.floor(viewport.height)}px`;
-      slot.style.minHeight = `${Math.floor(viewport.height)}px`;
-      slot.innerHTML = '';
+      slot.style.width = `${cssWidth}px`;
+      slot.style.height = `${cssHeight}px`;
+      slot.style.minHeight = `${cssHeight}px`;
+      slot.style.maxHeight = `${cssHeight}px`;
 
-      const canvas = document.createElement('canvas');
-      canvas.className = 'pdf-canvas block bg-white';
-      canvas.width = Math.floor(viewport.width * dpr);
-      canvas.height = Math.floor(viewport.height * dpr);
-      canvas.style.width = `${Math.floor(viewport.width)}px`;
-      canvas.style.height = `${Math.floor(viewport.height)}px`;
-      canvas.style.display = 'block';
-      canvas.style.pointerEvents = 'none';
+      // Offscreen buffer canvas for double-buffered rendering
+      const offscreenCanvas = document.createElement('canvas');
+      offscreenCanvas.width = bufferWidth;
+      offscreenCanvas.height = bufferHeight;
+      const offscreenContext = offscreenCanvas.getContext('2d', { alpha: false });
 
-      const canvasContext = canvas.getContext('2d', { alpha: false });
-
-      if (!canvasContext) {
+      if (!offscreenContext) {
         pageProxy.cleanup();
         return;
       }
 
-      canvasContext.imageSmoothingEnabled = true;
-      canvasContext.imageSmoothingQuality = 'high';
-
-      slot.appendChild(canvas);
-      if (this.currentColors) {
-        this.applySlotTheme(slot);
-        this.applyCanvasTheme(canvas);
-      }
-
-      const textLayerDiv = document.createElement('div');
-      textLayerDiv.className = 'textLayer pdf-text-layer';
-      textLayerDiv.style.width = `${Math.floor(viewport.width)}px`;
-      textLayerDiv.style.height = `${Math.floor(viewport.height)}px`;
-      textLayerDiv.style.setProperty('--scale-factor', String(viewport.scale));
-      slot.appendChild(textLayerDiv);
+      offscreenContext.imageSmoothingEnabled = true;
+      offscreenContext.imageSmoothingQuality = 'high';
 
       const transform = dpr !== 1 ? [dpr, 0, 0, dpr, 0, 0] : undefined;
       const renderContext = {
-        canvasContext,
+        canvasContext: offscreenContext,
         transform,
         viewport,
       };
@@ -629,6 +748,38 @@ export class PdfEngine extends BaseEngine {
       if (this.activeSlotRenderTasks.get(pageNumber) === renderTask) {
         this.activeSlotRenderTasks.delete(pageNumber);
       }
+
+      // Atomically swap rendered buffer onto visible canvas
+      slot.innerHTML = '';
+
+      const visibleCanvas = document.createElement('canvas');
+      visibleCanvas.className = 'pdf-canvas block bg-white';
+      visibleCanvas.width = bufferWidth;
+      visibleCanvas.height = bufferHeight;
+      visibleCanvas.style.width = `${cssWidth}px`;
+      visibleCanvas.style.height = `${cssHeight}px`;
+      visibleCanvas.style.display = 'block';
+      visibleCanvas.style.pointerEvents = 'none';
+
+      const visibleCtx = visibleCanvas.getContext('2d', { alpha: false });
+      if (visibleCtx) {
+        visibleCtx.imageSmoothingEnabled = true;
+        visibleCtx.imageSmoothingQuality = 'high';
+        visibleCtx.drawImage(offscreenCanvas, 0, 0);
+      }
+
+      slot.appendChild(visibleCanvas);
+      if (this.currentColors) {
+        this.applySlotTheme(slot);
+        this.applyCanvasTheme(visibleCanvas);
+      }
+
+      const textLayerDiv = document.createElement('div');
+      textLayerDiv.className = 'textLayer pdf-text-layer';
+      textLayerDiv.style.width = `${cssWidth}px`;
+      textLayerDiv.style.height = `${cssHeight}px`;
+      textLayerDiv.style.setProperty('--scale-factor', String(viewport.scale));
+      slot.appendChild(textLayerDiv);
 
       try {
         const textContent = await pageProxy.getTextContent();
@@ -747,16 +898,72 @@ export class PdfEngine extends BaseEngine {
     }
   }
 
-  private async renderButtonsMode(
-    pageNumber: number,
-    zoom: number = 1,
-    swapWhenReady: boolean = false,
-  ): Promise<void> {
-    if (!this.pdfDocument || !this.container) return;
-    this.cleanupScroll();
-    const generation = ++this.renderGeneration;
+  private async handleButtonsNavigation(pageNumber: number): Promise<void> {
+    const now = Date.now();
+    const timeSinceLastNav = now - this.lastNavTimestamp;
+    this.lastNavTimestamp = now;
 
-    await this.cancelActiveRender();
+    this.currentPageNumber = pageNumber;
+    this.location = this.getCurrentLocation();
+    this.onLocationChange?.(this.location);
+
+    this.cancelPreload();
+
+    // 1. Check LRU cache for 0ms page turn
+    if (this.pageCache.has(pageNumber, this.currentScale)) {
+      if (this.rapidNavDebounceTimer) {
+        clearTimeout(this.rapidNavDebounceTimer);
+        this.rapidNavDebounceTimer = null;
+        const resolvers = this.pendingDebounceResolvers;
+        this.pendingDebounceResolvers = [];
+        resolvers.forEach((r) => r());
+      }
+      await this.cancelActiveRender();
+      this.displayCachedPage(pageNumber);
+      this.pageCache.evictOutsideWindow(pageNumber);
+      this.scheduleWindowPreload(pageNumber, this.currentScale);
+      return;
+    }
+
+    // 2. Rapid navigation check: debounce if user is quickly flipping/scrubbing
+    const isRapid = timeSinceLastNav < RAPID_NAV_DEBOUNCE_MS || this.activeRenderTask !== null;
+
+    if (isRapid) {
+      this.showButtonsPlaceholder(pageNumber);
+      await this.cancelActiveRender();
+
+      if (this.rapidNavDebounceTimer) {
+        clearTimeout(this.rapidNavDebounceTimer);
+        this.rapidNavDebounceTimer = null;
+        // Resolve previously superseded navigation promises
+        const resolvers = this.pendingDebounceResolvers;
+        this.pendingDebounceResolvers = [];
+        resolvers.forEach((r) => r());
+      }
+
+      await new Promise<void>((resolve) => {
+        this.pendingDebounceResolvers.push(resolve);
+        this.rapidNavDebounceTimer = setTimeout(async () => {
+          this.rapidNavDebounceTimer = null;
+          try {
+            await this.renderButtonsMode(pageNumber);
+          } finally {
+            const resolvers = this.pendingDebounceResolvers;
+            this.pendingDebounceResolvers = [];
+            resolvers.forEach((r) => r());
+          }
+        }, RAPID_NAV_DEBOUNCE_MS);
+      });
+      return;
+    }
+
+    // 3. Normal navigation: render target page
+    await this.renderButtonsMode(pageNumber);
+  }
+
+  private displayCachedPage(pageNumber: number): void {
+    const cached = this.pageCache.get(pageNumber, this.currentScale);
+    if (!cached || !this.container) return;
 
     if (this.currentPageProxy) {
       try {
@@ -767,152 +974,439 @@ export class PdfEngine extends BaseEngine {
     }
 
     this.currentPageNumber = pageNumber;
-    const pageProxy = await this.pdfDocument.getPage(pageNumber);
+    const { pageWrapper, visibleCanvas, textLayerDiv } = this.ensureButtonsDomStructure(
+      cached.cssWidth,
+      cached.cssHeight,
+    );
 
-    await this.cancelActiveRender();
-
-    if (this.currentPageProxy) {
-      try {
-        this.currentPageProxy.cleanup();
-      } catch {
-      }
-    }
-    this.currentPageProxy = pageProxy;
-
-    // Zoom re-renders keep the old page on screen until the new canvas is ready, avoiding a blank flash.
-    if (!swapWhenReady) {
-      this.container.innerHTML = '';
+    const placeholder = pageWrapper.querySelector<HTMLElement>('.pdf-page-placeholder');
+    if (placeholder) {
+      placeholder.style.display = 'none';
     }
 
-    const viewportContainer = document.createElement('div');
-    viewportContainer.className =
-      'pdf-page-container relative flex justify-center items-center select-text w-full h-full overflow-hidden';
-
-    const canvas = document.createElement('canvas');
-    canvas.className = 'pdf-canvas block shadow-md rounded bg-white';
-    const canvasContext = canvas.getContext('2d', { alpha: false });
-
-    if (!canvasContext) {
-      throw new Error('Failed to obtain 2D canvas context for PDF rendering');
+    if (visibleCanvas.width !== cached.canvas.width || visibleCanvas.height !== cached.canvas.height) {
+      visibleCanvas.width = cached.canvas.width;
+      visibleCanvas.height = cached.canvas.height;
     }
+    visibleCanvas.style.width = `${cached.cssWidth}px`;
+    visibleCanvas.style.height = `${cached.cssHeight}px`;
 
-    canvasContext.imageSmoothingEnabled = true;
-    canvasContext.imageSmoothingQuality = 'high';
-
-    this.baseScale = this.computeFitScale(pageProxy);
-    const targetScale = this.baseScale * zoom;
-    this.currentScale = targetScale;
-    const baseViewport = pageProxy.getViewport({ scale: this.baseScale });
-    this.basePageSize = {
-      width: Math.floor(baseViewport.width),
-      height: Math.floor(baseViewport.height),
-    };
-    const viewport = pageProxy.getViewport({ scale: targetScale });
-    const dpr = this.getCanvasSafeDpr(viewport.width, viewport.height);
-
-    // Wrapper, canvas and text layer share the exact logical size; only the canvas buffer is scaled by DPR.
-    const cssWidth = Math.floor(viewport.width);
-    const cssHeight = Math.floor(viewport.height);
-
-    const pageWrapper = document.createElement('div');
-    pageWrapper.className = 'pdf-page-wrapper relative shadow-md rounded overflow-hidden select-text';
-    pageWrapper.style.position = 'relative';
-    pageWrapper.style.flex = 'none';
-    pageWrapper.style.width = `${cssWidth}px`;
-    pageWrapper.style.height = `${cssHeight}px`;
-
-    canvas.width = Math.floor(cssWidth * dpr);
-    canvas.height = Math.floor(cssHeight * dpr);
-    canvas.style.width = `${cssWidth}px`;
-    canvas.style.height = `${cssHeight}px`;
-    canvas.style.maxWidth = 'none';
-    canvas.style.maxHeight = 'none';
-    canvas.style.display = 'block';
-    canvas.style.pointerEvents = 'none';
-    canvasContext.setTransform(1, 0, 0, 1, 0, 0);
-    canvasContext.clearRect(0, 0, canvas.width, canvas.height);
-
-    pageWrapper.appendChild(canvas);
-    if (this.currentColors) {
-      this.applySlotTheme(viewportContainer);
-      this.applyCanvasTheme(canvas);
+    const ctx = visibleCanvas.getContext('2d', { alpha: false });
+    if (ctx) {
+      ctx.imageSmoothingEnabled = true;
+      ctx.imageSmoothingQuality = 'high';
+      ctx.drawImage(cached.canvas, 0, 0);
     }
+    this.applyCanvasTheme(visibleCanvas);
 
-    const textLayerDiv = document.createElement('div');
-    textLayerDiv.className = 'textLayer pdf-text-layer';
-    textLayerDiv.style.width = `${cssWidth}px`;
-    textLayerDiv.style.height = `${cssHeight}px`;
-    textLayerDiv.style.setProperty('--scale-factor', String(viewport.scale));
-    pageWrapper.appendChild(textLayerDiv);
+    pageWrapper.style.width = `${cached.cssWidth}px`;
+    pageWrapper.style.height = `${cached.cssHeight}px`;
+    pageWrapper.style.minWidth = `${cached.cssWidth}px`;
+    pageWrapper.style.minHeight = `${cached.cssHeight}px`;
+    pageWrapper.style.maxWidth = `${cached.cssWidth}px`;
+    pageWrapper.style.maxHeight = `${cached.cssHeight}px`;
 
-    viewportContainer.appendChild(pageWrapper);
+    textLayerDiv.style.width = `${cached.cssWidth}px`;
+    textLayerDiv.style.height = `${cached.cssHeight}px`;
+    textLayerDiv.style.setProperty('--scale-factor', String(cached.scale));
 
-    // Mouse wheel navigation in buttons mode
-    const handleWheel = (event: WheelEvent) => {
-      if (this.wheelThrottle) return;
-      if (event.deltaY > 30) {
-        this.wheelThrottle = true;
-        setTimeout(() => {
-          this.wheelThrottle = false;
-        }, 350);
-        this.next();
-      } else if (event.deltaY < -30) {
-        this.wheelThrottle = true;
-        setTimeout(() => {
-          this.wheelThrottle = false;
-        }, 350);
-        this.prev();
-      }
-    };
-    viewportContainer.addEventListener('wheel', handleWheel, { passive: true });
-
-    if (!swapWhenReady) {
-      this.container.appendChild(viewportContainer);
-    }
-
-    const transform = dpr !== 1 ? [dpr, 0, 0, dpr, 0, 0] : undefined;
-    const renderContext = {
-      canvasContext,
-      transform,
-      viewport,
-    };
-
-    const renderTask = this.currentPageProxy.render(renderContext);
-    this.activeRenderTask = renderTask;
-
-    try {
-      await renderTask.promise;
-    } catch (err: unknown) {
-      const error = err as { name?: string };
-      if (error && error.name === 'RenderingCancelledException') {
-        return;
-      }
-      console.error('[PdfEngine] Error during canvas rendering:', err);
-      throw err;
-    } finally {
-      if (this.activeRenderTask === renderTask) {
-        this.activeRenderTask = null;
-      }
-    }
-
-    if (generation !== this.renderGeneration || !this.container) {
-      return;
-    }
-
-    if (swapWhenReady) {
-      this.container.innerHTML = '';
-      this.container.appendChild(viewportContainer);
-    }
-
-    const textLayerPromise = this.renderButtonsTextLayer(pageProxy, textLayerDiv, viewport);
-    // The swap and the gesture controller's CSS reset must happen in the same frame, so
-    // zoom re-renders do not wait for the (invisible) text layer.
-    if (!swapWhenReady) {
-      await textLayerPromise;
-    }
+    void this.updateCachedTextLayer(pageNumber, textLayerDiv, cached.scale);
+    this.restoreHighlightsForPage(pageNumber, pageWrapper);
 
     this.location = this.getCurrentLocation();
     this.onLocationChange?.(this.location);
+  }
+
+  private async updateCachedTextLayer(
+    pageNumber: number,
+    textLayerDiv: HTMLElement,
+    scale: number,
+  ): Promise<void> {
+    if (!this.pdfDocument) return;
+    try {
+      const pageProxy = await this.pdfDocument.getPage(pageNumber);
+      const viewport = pageProxy.getViewport({ scale });
+      await this.renderButtonsTextLayer(pageProxy, textLayerDiv, viewport);
+      pageProxy.cleanup();
+    } catch {
+    }
+  }
+
+  private showButtonsPlaceholder(pageNumber: number): void {
+    if (!this.container) return;
+    const baseSize = this.pageSizeCache.get(pageNumber) || this.basePageSize;
+    const cssWidth = baseSize
+      ? Math.floor(baseSize.width * this.currentScale)
+      : Math.floor(this.container.clientWidth || 320);
+    const cssHeight = baseSize
+      ? Math.floor(baseSize.height * this.currentScale)
+      : Math.floor(this.container.clientHeight || 480);
+
+    const { pageWrapper } = this.ensureButtonsDomStructure(cssWidth, cssHeight);
+    let placeholder = pageWrapper.querySelector<HTMLElement>('.pdf-page-placeholder');
+    if (!placeholder) {
+      placeholder = document.createElement('div');
+      placeholder.className =
+        'pdf-page-placeholder absolute inset-0 text-zinc-300 text-sm font-semibold flex items-center justify-center bg-white/50 backdrop-blur-[1px] pointer-events-none transition-opacity duration-150';
+      placeholder.style.zIndex = '5';
+      pageWrapper.appendChild(placeholder);
+    }
+    placeholder.style.display = 'flex';
+    placeholder.textContent = `${pageNumber} / ${this.totalPagesCount}`;
+  }
+
+  private cancelPreload(): void {
+    if (this.activePreloadJob) {
+      this.activePreloadJob.cancel();
+      this.activePreloadJob = null;
+    }
+  }
+
+  private scheduleWindowPreload(currentPage: number, scale: number): void {
+    this.cancelPreload();
+
+    if (!this.pdfDocument || this.paginationMode === 'scroll') return;
+
+    // Sliding window around current page: [currentPage - 2, currentPage + 3]
+    const priorityOffsets = [1, -1, 2, 3, -2];
+    const pagesToPreload: number[] = [];
+
+    for (const offset of priorityOffsets) {
+      const pageNum = currentPage + offset;
+      if (pageNum >= 1 && pageNum <= this.totalPagesCount && !this.pageCache.has(pageNum, scale)) {
+        pagesToPreload.push(pageNum);
+      }
+    }
+
+    if (pagesToPreload.length === 0) return;
+
+    const scheduleCallback =
+      typeof window !== 'undefined' && 'requestIdleCallback' in window
+        ? (cb: () => void) => (window as any).requestIdleCallback(cb, { timeout: 1000 })
+        : (cb: () => void) => setTimeout(cb, 150);
+
+    let isCancelled = false;
+    let activePreloadTask: pdfjsLib.RenderTask | null = null;
+
+    this.activePreloadJob = {
+      cancel: () => {
+        isCancelled = true;
+        if (activePreloadTask) {
+          try {
+            activePreloadTask.cancel();
+          } catch {
+          }
+        }
+      },
+    };
+
+    const processNext = async (index: number) => {
+      if (isCancelled || index >= pagesToPreload.length || !this.pdfDocument) return;
+      const pageNum = pagesToPreload[index];
+
+      try {
+        const pageProxy = await this.pdfDocument.getPage(pageNum);
+        if (isCancelled) {
+          pageProxy.cleanup();
+          return;
+        }
+
+        const viewport = pageProxy.getViewport({ scale });
+        const dpr = this.getCanvasSafeDpr(viewport.width, viewport.height);
+        const cssWidth = Math.floor(viewport.width);
+        const cssHeight = Math.floor(viewport.height);
+        const bufferWidth = Math.floor(cssWidth * dpr);
+        const bufferHeight = Math.floor(cssHeight * dpr);
+
+        const offscreenCanvas = document.createElement('canvas');
+        offscreenCanvas.width = bufferWidth;
+        offscreenCanvas.height = bufferHeight;
+        const offCtx = offscreenCanvas.getContext('2d', { alpha: false });
+
+        if (!offCtx) {
+          pageProxy.cleanup();
+          return;
+        }
+
+        offCtx.imageSmoothingEnabled = true;
+        offCtx.imageSmoothingQuality = 'high';
+
+        const transform = dpr !== 1 ? [dpr, 0, 0, dpr, 0, 0] : undefined;
+        const renderTask = pageProxy.render({
+          canvasContext: offCtx,
+          transform,
+          viewport,
+        });
+        activePreloadTask = renderTask;
+
+        await renderTask.promise;
+        activePreloadTask = null;
+
+        if (!isCancelled) {
+          this.pageCache.set({
+            pageNumber: pageNum,
+            canvas: offscreenCanvas,
+            scale,
+            cssWidth,
+            cssHeight,
+            dpr,
+          });
+        }
+
+        pageProxy.cleanup();
+      } catch {
+        // Ignored for background preloading
+      }
+
+      if (!isCancelled && index + 1 < pagesToPreload.length) {
+        scheduleCallback(() => void processNext(index + 1));
+      }
+    };
+
+    scheduleCallback(() => void processNext(0));
+  }
+
+  private ensureButtonsDomStructure(
+    cssWidth: number,
+    cssHeight: number,
+  ): {
+    viewportContainer: HTMLElement;
+    pageWrapper: HTMLElement;
+    visibleCanvas: HTMLCanvasElement;
+    textLayerDiv: HTMLElement;
+  } {
+    let viewportContainer = this.container!.querySelector<HTMLElement>('.pdf-page-container');
+    let pageWrapper = viewportContainer?.querySelector<HTMLElement>('.pdf-page-wrapper');
+    let visibleCanvas = pageWrapper?.querySelector<HTMLCanvasElement>('.pdf-canvas');
+    let textLayerDiv = pageWrapper?.querySelector<HTMLElement>('.textLayer');
+
+    if (!viewportContainer || !pageWrapper || !visibleCanvas || !textLayerDiv) {
+      this.container!.innerHTML = '';
+
+      viewportContainer = document.createElement('div');
+      viewportContainer.className =
+        'pdf-page-container relative flex justify-center items-center select-text w-full h-full overflow-hidden';
+      viewportContainer.style.contain = 'layout paint';
+      viewportContainer.style.willChange = 'transform';
+      viewportContainer.style.backfaceVisibility = 'hidden';
+      (viewportContainer.style as any).webkitBackfaceVisibility = 'hidden';
+      viewportContainer.style.transform = 'translateZ(0)';
+
+      pageWrapper = document.createElement('div');
+      pageWrapper.className = 'pdf-page-wrapper relative shadow-md rounded overflow-hidden select-text';
+      pageWrapper.style.position = 'relative';
+      pageWrapper.style.flex = 'none';
+      pageWrapper.style.contain = 'layout paint';
+      pageWrapper.style.backfaceVisibility = 'hidden';
+      (pageWrapper.style as any).webkitBackfaceVisibility = 'hidden';
+      pageWrapper.style.transform = 'translateZ(0)';
+
+      visibleCanvas = document.createElement('canvas');
+      visibleCanvas.className = 'pdf-canvas block shadow-md rounded bg-white';
+      visibleCanvas.style.maxWidth = 'none';
+      visibleCanvas.style.maxHeight = 'none';
+      visibleCanvas.style.display = 'block';
+      visibleCanvas.style.pointerEvents = 'none';
+
+      textLayerDiv = document.createElement('div');
+      textLayerDiv.className = 'textLayer pdf-text-layer';
+
+      pageWrapper.appendChild(visibleCanvas);
+      pageWrapper.appendChild(textLayerDiv);
+      viewportContainer.appendChild(pageWrapper);
+
+      // Mouse wheel navigation in buttons mode
+      const handleWheel = (event: WheelEvent) => {
+        if (this.wheelThrottle) return;
+        if (event.deltaY > 30) {
+          this.wheelThrottle = true;
+          setTimeout(() => {
+            this.wheelThrottle = false;
+          }, 350);
+          void this.next();
+        } else if (event.deltaY < -30) {
+          this.wheelThrottle = true;
+          setTimeout(() => {
+            this.wheelThrottle = false;
+          }, 350);
+          void this.prev();
+        }
+      };
+      viewportContainer.addEventListener('wheel', handleWheel, { passive: true });
+
+      this.container!.appendChild(viewportContainer);
+    }
+
+    pageWrapper.style.width = `${cssWidth}px`;
+    pageWrapper.style.height = `${cssHeight}px`;
+    pageWrapper.style.minWidth = `${cssWidth}px`;
+    pageWrapper.style.minHeight = `${cssHeight}px`;
+    pageWrapper.style.maxWidth = `${cssWidth}px`;
+    pageWrapper.style.maxHeight = `${cssHeight}px`;
+
+    if (this.currentColors) {
+      this.applySlotTheme(viewportContainer);
+      this.applyCanvasTheme(visibleCanvas);
+    }
+
+    return { viewportContainer, pageWrapper, visibleCanvas, textLayerDiv };
+  }
+
+  private async renderButtonsMode(
+    pageNumber: number,
+    zoom: number = 1,
+    swapWhenReady: boolean = false,
+  ): Promise<void> {
+    if (!this.pdfDocument || !this.container) return;
+    this.cleanupScroll();
+    const generation = ++this.renderGeneration;
+    this.isPageTurnInProgress = true;
+
+    try {
+      await this.cancelActiveRender();
+
+      if (this.currentPageProxy) {
+        try {
+          this.currentPageProxy.cleanup();
+        } catch {
+        }
+        this.currentPageProxy = null;
+      }
+
+      this.currentPageNumber = pageNumber;
+      const pageProxy = await this.pdfDocument.getPage(pageNumber);
+
+      await this.cancelActiveRender();
+
+      this.currentPageProxy = pageProxy;
+
+      this.baseScale = this.computeFitScale(pageProxy);
+      const targetScale = this.baseScale * zoom;
+      this.currentScale = targetScale;
+      const baseViewport = pageProxy.getViewport({ scale: this.baseScale });
+      this.basePageSize = {
+        width: Math.floor(baseViewport.width),
+        height: Math.floor(baseViewport.height),
+      };
+      this.pageSizeCache.set(pageNumber, this.basePageSize);
+
+      const viewport = pageProxy.getViewport({ scale: targetScale });
+      const dpr = this.getCanvasSafeDpr(viewport.width, viewport.height);
+
+      const cssWidth = Math.floor(viewport.width);
+      const cssHeight = Math.floor(viewport.height);
+      const bufferWidth = Math.floor(cssWidth * dpr);
+      const bufferHeight = Math.floor(cssHeight * dpr);
+
+      const { viewportContainer, pageWrapper, visibleCanvas, textLayerDiv } =
+        this.ensureButtonsDomStructure(cssWidth, cssHeight);
+
+      // Render onto an offscreen buffer canvas first (double buffering)
+      const offscreenCanvas = document.createElement('canvas');
+      offscreenCanvas.width = bufferWidth;
+      offscreenCanvas.height = bufferHeight;
+      const offscreenContext = offscreenCanvas.getContext('2d', { alpha: false });
+
+      if (!offscreenContext) {
+        throw new Error('Failed to obtain 2D canvas context for PDF rendering');
+      }
+
+      offscreenContext.imageSmoothingEnabled = true;
+      offscreenContext.imageSmoothingQuality = 'high';
+
+      const transform = dpr !== 1 ? [dpr, 0, 0, dpr, 0, 0] : undefined;
+      const renderContext = {
+        canvasContext: offscreenContext,
+        transform,
+        viewport,
+      };
+
+      const renderTask = this.currentPageProxy.render(renderContext);
+      this.activeRenderTask = renderTask;
+
+      try {
+        await renderTask.promise;
+      } catch (err: unknown) {
+        const error = err as { name?: string };
+        if (error && error.name === 'RenderingCancelledException') {
+          return;
+        }
+        console.error('[PdfEngine] Error during canvas rendering:', err);
+        throw err;
+      } finally {
+        if (this.activeRenderTask === renderTask) {
+          this.activeRenderTask = null;
+        }
+      }
+
+      if (generation !== this.renderGeneration || !this.container) {
+        return;
+      }
+
+      const placeholder = pageWrapper.querySelector<HTMLElement>('.pdf-page-placeholder');
+      if (placeholder) {
+        placeholder.style.display = 'none';
+      }
+
+      // Store in LRU cache
+      this.pageCache.set({
+        pageNumber,
+        canvas: offscreenCanvas,
+        scale: targetScale,
+        cssWidth,
+        cssHeight,
+        dpr,
+      });
+
+      // Atomically swap rendered buffer onto visible canvas
+      const atomicSwap = () => {
+        if (visibleCanvas.width !== bufferWidth || visibleCanvas.height !== bufferHeight) {
+          visibleCanvas.width = bufferWidth;
+          visibleCanvas.height = bufferHeight;
+        }
+        visibleCanvas.style.width = `${cssWidth}px`;
+        visibleCanvas.style.height = `${cssHeight}px`;
+
+        const visibleContext = visibleCanvas.getContext('2d', { alpha: false });
+        if (visibleContext) {
+          visibleContext.imageSmoothingEnabled = true;
+          visibleContext.imageSmoothingQuality = 'high';
+          visibleContext.drawImage(offscreenCanvas, 0, 0);
+        }
+        this.applyCanvasTheme(visibleCanvas);
+
+        pageWrapper.style.width = `${cssWidth}px`;
+        pageWrapper.style.height = `${cssHeight}px`;
+        pageWrapper.style.minWidth = `${cssWidth}px`;
+        pageWrapper.style.minHeight = `${cssHeight}px`;
+        pageWrapper.style.maxWidth = `${cssWidth}px`;
+        pageWrapper.style.maxHeight = `${cssHeight}px`;
+      };
+
+      if (typeof requestAnimationFrame === 'function') {
+        requestAnimationFrame(atomicSwap);
+      }
+      atomicSwap();
+
+      textLayerDiv.style.width = `${cssWidth}px`;
+      textLayerDiv.style.height = `${cssHeight}px`;
+      textLayerDiv.style.setProperty('--scale-factor', String(viewport.scale));
+
+      const textLayerPromise = this.renderButtonsTextLayer(pageProxy, textLayerDiv, viewport);
+      if (!swapWhenReady) {
+        await textLayerPromise;
+      }
+
+      this.restoreHighlightsForPage(pageNumber, pageWrapper);
+
+      this.location = this.getCurrentLocation();
+      this.onLocationChange?.(this.location);
+
+      this.pageCache.evictOutsideWindow(pageNumber);
+      this.scheduleWindowPreload(pageNumber, targetScale);
+    } finally {
+      this.isPageTurnInProgress = false;
+    }
   }
 
   private async renderButtonsTextLayer(
@@ -1229,6 +1723,22 @@ export class PdfEngine extends BaseEngine {
   }
 
   override destroy(): void {
+    if (this.rapidNavDebounceTimer) {
+      clearTimeout(this.rapidNavDebounceTimer);
+      this.rapidNavDebounceTimer = null;
+    }
+    this.cancelPreload();
+    this.pageCache.clear();
+    this.pageSizeCache.clear();
+
+    if (this.container && this.touchStartListener && this.touchEndListener) {
+      this.container.removeEventListener('touchstart', this.touchStartListener);
+      this.container.removeEventListener('touchend', this.touchEndListener);
+      this.container.removeEventListener('touchcancel', this.touchEndListener);
+      this.touchStartListener = null;
+      this.touchEndListener = null;
+    }
+
     this.clearTtsHighlight();
     this.detachVisibilityListener();
     this.disconnectResizeObserver();
@@ -1245,6 +1755,7 @@ export class PdfEngine extends BaseEngine {
       delete zoomableContainer.__readerResetZoom;
       delete zoomableContainer.__readerCanRenderZoom;
       delete zoomableContainer.__readerGetContentSize;
+      this.container.innerHTML = '';
     }
 
     if (this.activeRenderTask) {

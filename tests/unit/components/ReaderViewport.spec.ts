@@ -68,7 +68,7 @@ describe('ReaderViewport Component', () => {
     expect(['#000000', 'rgb(0, 0, 0)']).toContain(element.style.backgroundColor);
   });
 
-  it('should perform two-phase pinch scaling (real-time CSS transform during touchmove, debounced re-render and CSS scale reset on touchend)', async () => {
+  it('should perform pure GPU CSS transform scaling without triggering engine re-renders on pinch zoom', async () => {
     const onZoomRender = vi.fn().mockResolvedValue(undefined);
     const wrapper = mount(ReaderViewport, {
       props: { onZoomRender },
@@ -125,12 +125,12 @@ describe('ReaderViewport Component', () => {
     expect(targetEl.style.transform).toContain('scale(4)');
     expect(onZoomRender).not.toHaveBeenCalled();
 
-    // Advance 200ms debounce timer -> triggers high-res render and resets CSS scale to 1
-    await vi.advanceTimersByTimeAsync(200);
+    // Advance debounce timer -> pure GPU CSS transform remains applied; engine re-render is not triggered
+    await vi.advanceTimersByTimeAsync(300);
     await wrapper.vm.$nextTick();
 
-    expect(onZoomRender).toHaveBeenCalledWith(4);
-    expect(targetEl.style.transform).toContain('scale(1)');
+    expect(onZoomRender).not.toHaveBeenCalled();
+    expect(targetEl.style.transform).toContain('scale(4)');
   });
 
   it('should pan with boundary constraints when zoomed in and swipe to turn pages at scale 1.0', async () => {

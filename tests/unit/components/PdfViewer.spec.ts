@@ -57,4 +57,23 @@ describe('PdfViewer Component', () => {
     expect(wrapper.find('[data-testid="default-canvas-slot"]').exists()).toBe(false);
     expect(wrapper.find('[data-testid="pdf-reflow-view"]').exists()).toBe(true);
   });
+
+  it('should apply CSS containment and GPU stability styles on the root container', () => {
+    const wrapper = mount(PdfViewer, {
+      global: {
+        plugins: [pinia],
+        mocks: {
+          $t: (k: string) => k,
+        },
+      },
+      slots: {
+        default: '<div data-testid="default-canvas-slot">Canvas Content</div>',
+      },
+    });
+
+    const rootEl = wrapper.find('[data-testid="pdf-viewer"]').element as HTMLElement;
+    expect(rootEl.style.contain).toContain('layout');
+    expect(rootEl.style.backfaceVisibility).toBe('hidden');
+    expect(rootEl.style.willChange).toBe('transform');
+  });
 });

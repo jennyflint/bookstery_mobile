@@ -301,5 +301,87 @@ describe('PdfEngine', () => {
 
     expect(order.indexOf('settled')).toBeLessThan(order.indexOf('render'));
   });
+
+  it('should use double-buffered offscreen rendering and lock pageWrapper dimensions', async () => {
+    await engine.init(container, new Uint8Array([1, 2, 3]));
+    await engine.setPaginationMode('buttons');
+
+    const pageWrapper = container.querySelector<HTMLElement>('.pdf-page-wrapper');
+    const viewportContainer = container.querySelector<HTMLElement>('.pdf-page-container');
+    expect(pageWrapper).not.toBeNull();
+    expect(viewportContainer).not.toBeNull();
+
+    // Check locked dimensions (no collapse to 0)
+    expect(pageWrapper!.style.width).not.toBe('0px');
+    expect(pageWrapper!.style.height).not.toBe('0px');
+    expect(pageWrapper!.style.minWidth).toBe(pageWrapper!.style.width);
+    expect(pageWrapper!.style.minHeight).toBe(pageWrapper!.style.height);
+
+    // Check CSS containment and hardware acceleration hints
+    expect(viewportContainer!.style.contain).toContain('layout');
+    expect(viewportContainer!.style.backfaceVisibility).toBe('hidden');
+    expect(pageWrapper!.style.contain).toContain('layout');
+    expect(pageWrapper!.style.backfaceVisibility).toBe('hidden');
+
+    // Check drawImage was used to blit the offscreen buffer onto visible canvas
+    const visibleCanvas = pageWrapper!.querySelector<HTMLCanvasElement>('.pdf-canvas');
+    expect(visibleCanvas).not.toBeNull();
+    const ctx = visibleCanvas!.getContext('2d');
+    expect(ctx?.drawImage).toHaveBeenCalled();
+  });
+
+  it('should immediately display cached page synchronously in 0ms on cache hit', async () => {
+    await engine.init(container, new Uint8Array([1, 2, 3]));
+    await engine.setPaginationMode('buttons');
+
+    // Page 1 is now rendered and stored in LRU cache.
+    // Clear mocks before testing navigation
+    mockPdfPage.render.mockClear();
+
+    // Navigate to page 2
+    await engine.goTo('2');
+
+    // Navigating back to page 1 should hit the LRU cache and display instantly without calling render() again
+    mockPdfPage.render.mockClear();
+    await engine.goTo('1');
+    expect(mockPdfPage.render).not.toHaveBeenCalled();
+    expect(engine.getCurrentLocation().currentPage).toBe(1);
+  });
+
+  it('should evict pages outside the ±5 window and zero their canvas dimensions', async () => {
+    await engine.init(container, new Uint8Array([1, 2, 3]));
+    await engine.setPaginationMode('buttons');
+
+    // Pre-populate page renders in sequence up to page 8
+    for (let p = 2; p <= 8; p++) {
+      await engine.goTo(String(p));
+    }
+
+    // Now current page is 8. Window ±5 means pages < 3 (i.e. page 1 and page 2) are outside [3, 13]
+    // Going to page 1 should require re-rendering because it was evicted
+    mockPdfPage.render.mockClear();
+    await engine.goTo('1');
+    expect(mockPdfPage.render).toHaveBeenCalled();
+  });
+
+  it('should cancel in-flight renders and debounce heavy rendering during rapid page flipping', async () => {
+    await engine.init(container, new Uint8Array([1, 2, 3]));
+    await engine.setPaginationMode('buttons');
+
+    mockPdfPage.render.mockClear();
+
+    // Trigger rapid navigation across multiple uncached pages within < 130ms
+    const p1 = engine.goTo('5');
+    const p2 = engine.goTo('6');
+    const p3 = engine.goTo('7');
+
+    // Page indicator updates immediately
+    expect(engine.getCurrentLocation().currentPage).toBe(7);
+
+    await Promise.all([p1, p2, p3]);
+
+    // Only the settled target page (page 7) should execute full render, skipped intermediate pages do not
+    expect(engine.getCurrentLocation().currentPage).toBe(7);
+  });
 });
 

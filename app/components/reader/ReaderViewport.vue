@@ -43,20 +43,10 @@ const {
     if (readerStore.currentBook?.format === 'pdf' && readerStore.isReflowMode) return null;
     return containerRef.value?.__readerGetContentSize?.() ?? null;
   },
-  isRenderZoomSupported: () => {
-    // The PDF reflow layer is plain HTML text: it can only be scaled with CSS.
-    if (readerStore.currentBook?.format === 'pdf' && readerStore.isReflowMode) return false;
-    const container = containerRef.value;
-    if (container?.__readerCanRenderZoom) return container.__readerCanRenderZoom();
-    return !!props.onZoomRender || !!container?.__readerSetZoom;
-  },
-  onZoomRender: async (targetScale: number) => {
-    if (props.onZoomRender) {
-      await props.onZoomRender(targetScale);
-    } else if (containerRef.value?.__readerSetZoom) {
-      await containerRef.value.__readerSetZoom(targetScale);
-    }
-  },
+  // Visual viewport zoom is decoupled from engine re-rendering across all formats.
+  // Zoom gestures scale content purely via GPU-accelerated CSS transform without re-rendering.
+  isRenderZoomSupported: () => false,
+  onZoomRender: undefined,
   onSwipeNext: () => {
     // A horizontal drag while extending a text selection must not turn the page.
     if (shouldIgnoreReaderTap()) return;
@@ -74,6 +64,7 @@ onMounted(() => {
       resetZoom(true);
     };
     containerRef.value.__readerBindTouchSource = bindTouchSource;
+    containerRef.value.__readerCanRenderZoom = () => false;
   }
 });
 

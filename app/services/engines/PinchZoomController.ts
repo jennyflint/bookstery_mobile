@@ -202,10 +202,16 @@ export class PinchZoomController {
 
   private scheduleHighResRender(targetScale: number, delayMs: number = this.debounceMs): void {
     this.clearDebounceTimer();
+    // Pure GPU CSS transform zoom across all book formats:
+    // Engines are never re-rendered during or after zoom gestures unless render zoom is explicitly supported.
+    if (!this.isRenderZoomSupported || !this.isRenderZoomSupported()) {
+      this.isAnimating = false;
+      this.applyTransform();
+      return;
+    }
     this.debounceTimer = setTimeout(async () => {
       this.debounceTimer = null;
-      // Engines that cannot re-render at a new scale (EPUB, FB2) keep the CSS transform scale.
-      if (this.isRenderZoomSupported && !this.isRenderZoomSupported()) {
+      if (!this.isRenderZoomSupported || !this.isRenderZoomSupported()) {
         this.isAnimating = false;
         this.applyTransform();
         return;
@@ -352,7 +358,9 @@ export class PinchZoomController {
         this.translateY = Math.round(clamped.y);
         this.cssScale = Number((this.scale / this.renderedScale).toFixed(4));
         this.applyTransform();
-        this.scheduleHighResRender(this.scale);
+        if (this.isRenderZoomSupported?.()) {
+          this.scheduleHighResRender(this.scale);
+        }
 
         if (e.touches.length === 1 && this.scale > 1.0) {
           this.touchStartX = e.touches[0].clientX;
@@ -417,7 +425,9 @@ export class PinchZoomController {
       this.translateY = Math.round(clamped.y);
       this.cssScale = Number((this.scale / this.renderedScale).toFixed(4));
       this.applyTransform();
-      this.scheduleHighResRender(this.scale);
+      if (this.isRenderZoomSupported?.()) {
+        this.scheduleHighResRender(this.scale);
+      }
     }
     this.isPanning = false;
   }
@@ -430,7 +440,14 @@ export class PinchZoomController {
       this.translateY = 0;
       this.cssScale = Number((1.0 / this.renderedScale).toFixed(4));
       this.applyTransform();
-      this.scheduleHighResRender(1.0, this.getAnimatedRenderDelay());
+      if (this.isRenderZoomSupported?.()) {
+        this.scheduleHighResRender(1.0, this.getAnimatedRenderDelay());
+      } else {
+        setTimeout(() => {
+          this.isAnimating = false;
+          this.applyTransform();
+        }, ZOOM_ANIMATION_MS);
+      }
     } else {
       const targetScale = this.doubleTapScale;
       const { width, height, left, top } = this.getViewportDimensions();
@@ -445,7 +462,14 @@ export class PinchZoomController {
       this.translateY = Math.round(clamped.y);
       this.cssScale = Number((targetScale / this.renderedScale).toFixed(4));
       this.applyTransform();
-      this.scheduleHighResRender(targetScale, this.getAnimatedRenderDelay());
+      if (this.isRenderZoomSupported?.()) {
+        this.scheduleHighResRender(targetScale, this.getAnimatedRenderDelay());
+      } else {
+        setTimeout(() => {
+          this.isAnimating = false;
+          this.applyTransform();
+        }, ZOOM_ANIMATION_MS);
+      }
     }
   }
 
@@ -467,7 +491,7 @@ export class PinchZoomController {
     this.isAnimating = false;
     this.didGestureMove = false;
     this.applyTransform();
-    if (wasZoomed && !skipRenderCallback) {
+    if (wasZoomed && !skipRenderCallback && this.isRenderZoomSupported?.()) {
       this.onZoomRender?.(1.0);
     }
   }
