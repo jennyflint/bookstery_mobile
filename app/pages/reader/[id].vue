@@ -211,6 +211,7 @@ onUnmounted(async () => {
   } catch {}
   activeEngine.value?.clearTtsHighlight?.();
   await disableKeepAwake();
+  readerStore.clearReflowCache();
   closeBook();
 });
 
@@ -245,6 +246,7 @@ const handleCloseReader = async (): Promise<void> => {
     }
 
     // 2. Resource cleanup
+    readerStore.clearReflowCache();
     closeBook();
 
     // 3. Route navigation fallback
@@ -454,6 +456,7 @@ defineExpose({
   <div class="fixed inset-0 w-full h-full overflow-hidden bg-black select-text">
     <ReaderViewport
       ref="viewportRef"
+      :active-engine="activeEngine"
       @center-tap="handleCenterTap"
       @next="handleNextPage"
       @prev="handlePrevPage"

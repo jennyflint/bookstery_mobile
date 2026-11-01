@@ -3,6 +3,8 @@ import * as pdfjsLib from 'pdfjs-dist';
 import pdfWorkerUrl from 'pdfjs-dist/build/pdf.worker.min.js?url';
 import { BaseEngine } from './BaseEngine';
 import { PinchZoomController } from './PinchZoomController';
+import { useReaderStore } from '../../stores/readerStore';
+import { extractReflowBlocks } from '../../utils/pdfReflowParser';
 import type {
   HighlightRecord,
   ReaderLocation,
@@ -939,8 +941,44 @@ export class PdfEngine extends BaseEngine {
     svg.appendChild(rect);
   }
 
+  getPdfDocument(): pdfjsLib.PDFDocumentProxy | null {
+    return this.pdfDocument;
+  }
+
+  async getPageProxy(pageNumber: number): Promise<pdfjsLib.PDFPageProxy | null> {
+    if (!this.pdfDocument) return null;
+    return await this.pdfDocument.getPage(pageNumber);
+  }
+
+  getCurrentPageProxy(): pdfjsLib.PDFPageProxy | null {
+    return this.currentPageProxy;
+  }
+
+  getCurrentPageNumber(): number {
+    return this.currentPageNumber;
+  }
+
   async getCurrentPageText(): Promise<string> {
     const pageNum = this.currentPageNumber;
+    try {
+      const readerStore = useReaderStore();
+      if (readerStore.isReflowMode) {
+        const cached = readerStore.getCachedReflowBlocks(pageNum);
+        if (cached && cached.length > 0) {
+          return cached.map((b) => b.text).join('\n\n');
+        }
+        if (this.pdfDocument) {
+          const pageProxy = await this.pdfDocument.getPage(pageNum);
+          const blocks = await extractReflowBlocks(pageProxy, pageNum);
+          if (blocks.length > 0) {
+            readerStore.setCachedReflowBlocks(pageNum, blocks);
+            return blocks.map((b) => b.text).join('\n\n');
+          }
+        }
+      }
+    } catch {
+    }
+
     try {
       if (this.pdfDocument) {
         const pageProxy = await this.pdfDocument.getPage(pageNum);

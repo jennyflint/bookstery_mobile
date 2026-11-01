@@ -2,10 +2,12 @@
 import { ref, computed, watch, onMounted } from 'vue';
 import { useReaderStore } from '../../stores/readerStore';
 import { usePinchZoom } from '../../composables/usePinchZoom';
+import PdfViewer from './PdfViewer.vue';
 import type { ZoomableContainerElement } from '../../types';
 
 const props = defineProps<{
   onZoomRender?: (scale: number) => Promise<void> | void;
+  activeEngine?: any;
 }>();
 
 const emit = defineEmits<{
@@ -124,6 +126,21 @@ defineExpose({
       class="w-full h-full flex flex-col items-center justify-center overflow-auto"
       :style="containerTransformStyle"
     />
+
+    <!-- Reflow Mode Layer for PDF -->
+    <div
+      v-if="readerStore.currentBook?.format === 'pdf' && readerStore.isReflowMode"
+      data-testid="reflow-viewport-layer"
+      class="absolute inset-0 z-20 w-full h-full"
+    >
+      <PdfViewer
+        :active-engine="props.activeEngine"
+        :page-number="readerStore.currentPage"
+        @next="emit('next')"
+        @prev="emit('prev')"
+        @center-tap="emit('center-tap')"
+      />
+    </div>
 
     <div
       v-if="readerStore.isRendering"

@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { useReaderStore } from '../../stores/readerStore';
 import { useTtsStore } from '../../stores/ttsStore';
-import SyncStatusBadge from '../common/SyncStatusBadge.vue';
+import ReaderHeader from './ReaderHeader.vue';
 import ReaderProgressBar from './ReaderProgressBar.vue';
 
 const emit = defineEmits<{
@@ -30,80 +30,14 @@ const ttsStore = useTtsStore();
       leave-from-class="translate-y-0 opacity-100"
       leave-to-class="-translate-y-full opacity-0"
     >
-      <header
+      <ReaderHeader
         v-if="!readerStore.isImmersiveMode"
-        class="pointer-events-auto flex items-center justify-between px-4 py-3 bg-white/95 backdrop-blur border-b border-zinc-200 shadow-sm"
-        :style="{ paddingTop: 'calc(0.75rem + env(safe-area-inset-top, 0px))' }"
-      >
-        <button
-          type="button"
-          data-testid="reader-back-btn"
-          aria-label="Back"
-          class="p-2 rounded-xl text-zinc-600 hover:bg-zinc-100 active:scale-95 transition-all"
-          @click="emit('back')"
-        >
-          <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
-          </svg>
-        </button>
-
-        <h2 class="text-sm font-bold text-zinc-800 truncate max-w-[200px] text-center">
-          {{ readerStore.currentBook?.title || 'Bookstery' }}
-        </h2>
-
-        <div class="flex items-center gap-1.5">
-          <SyncStatusBadge />
-          <button
-            type="button"
-            data-testid="tts-read-aloud-btn"
-            class="p-2 rounded-xl text-zinc-600 hover:bg-zinc-100 active:scale-95 transition-all"
-            :class="{ 'text-indigo-600 bg-indigo-50 font-bold': ttsStore.isActive }"
-            :title="t('tts.readAloud')"
-            @click="emit('toggle-tts')"
-          >
-            <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path
-                stroke-linecap="round"
-                stroke-linejoin="round"
-                stroke-width="2"
-                d="M15.536 8.464a5 5 0 010 7.072m2.828-9.9a9 9 0 010 12.728M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z"
-              />
-            </svg>
-          </button>
-          <button
-            type="button"
-            data-testid="chapter-tldr-action"
-            class="p-2 rounded-xl text-[#3E5725] bg-[#C8E695]/30 hover:bg-[#C8E695]/60 active:scale-95 transition-all dark:text-[#C8E695] dark:bg-[#C8E695]/20"
-            :title="t('ai.chapterTldr')"
-            @click="emit('chapter-tldr')"
-          >
-            <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z" />
-            </svg>
-          </button>
-          <button
-            type="button"
-            data-testid="open-notes-drawer-btn"
-            class="p-2 rounded-xl text-zinc-600 hover:bg-zinc-100 active:scale-95 transition-all"
-            :title="t('highlights.notesTitle')"
-            @click="emit('open-notes')"
-          >
-            <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 20H5a2 2 0 01-2-2V6a2 2 0 012-2h10a2 2 0 012 2v1m2 13a2 2 0 01-2-2V7m2 13a2 2 0 002-2V9a2 2 0 00-2-2h-2m-4-3H9M7 16h6M7 8h6v4H7V8z" />
-            </svg>
-          </button>
-          <button
-            type="button"
-            class="p-2 rounded-xl text-zinc-600 hover:bg-zinc-100 active:scale-95 transition-all"
-            :title="t('reader.settings')"
-            @click="emit('open-settings')"
-          >
-            <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4" />
-            </svg>
-          </button>
-        </div>
-      </header>
+        @back="emit('back')"
+        @open-settings="emit('open-settings')"
+        @open-notes="emit('open-notes')"
+        @chapter-tldr="emit('chapter-tldr')"
+        @toggle-tts="emit('toggle-tts')"
+      />
     </transition>
 
     <transition

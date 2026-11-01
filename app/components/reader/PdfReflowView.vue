@@ -1,0 +1,353 @@
+<script setup lang="ts">
+import { ref, computed, watch, onMounted, nextTick } from 'vue';
+import type { PDFDocumentProxy, PDFPageProxy } from 'pdfjs-dist';
+import { useReaderStore } from '../../stores/readerStore';
+import { extractReflowBlocks } from '../../utils/pdfReflowParser';
+import type { ReflowBlock } from '../../types/reflow';
+
+const props = defineProps<{
+  pdfDocument?: PDFDocumentProxy | null;
+  activeEngine?: {
+    getPdfDocument?: () => PDFDocumentProxy | null;
+    getPageProxy?: (page: number) => Promise<PDFPageProxy | null>;
+  } | null;
+  pageNumber?: number;
+}>();
+
+const emit = defineEmits<{
+  (e: 'next'): void;
+  (e: 'prev'): void;
+  (e: 'center-tap'): void;
+}>();
+
+const { t } = useI18n();
+const readerStore = useReaderStore();
+
+const scrollContainerRef = ref<HTMLElement | null>(null);
+const fallbackCanvasRef = ref<HTMLCanvasElement | null>(null);
+
+const blocks = ref<ReflowBlock[]>([]);
+const isLoading = ref<boolean>(false);
+const isScannedFallback = ref<boolean>(false);
+
+const activePageNumber = computed<number>(() => {
+  return props.pageNumber ?? readerStore.currentPage ?? 1;
+});
+
+const themeClass = computed<string>(() => {
+  switch (readerStore.reflowTheme) {
+    case 'sepia':
+      return 'bg-[#f8f1e3] text-[#433422]';
+    case 'dark':
+      return 'bg-gray-900 text-gray-100';
+    case 'light':
+    default:
+      return 'bg-white text-gray-900';
+  }
+});
+
+const typographyStyle = computed(() => {
+  const family =
+    readerStore.reflowFontFamily === 'sans'
+      ? 'ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif'
+      : readerStore.reflowFontFamily === 'mono'
+      ? 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace'
+      : 'ui-serif, Georgia, Cambria, "Times New Roman", Times, serif';
+
+  return {
+    fontSize: `${readerStore.reflowFontSize}px`,
+    lineHeight: `${readerStore.reflowLineHeight}`,
+    fontFamily: family,
+  };
+});
+
+const heading2Style = computed(() => ({
+  fontSize: `${Math.round(readerStore.reflowFontSize * 1.35)}px`,
+  lineHeight: '1.25',
+}));
+
+const heading3Style = computed(() => ({
+  fontSize: `${Math.round(readerStore.reflowFontSize * 1.15)}px`,
+  lineHeight: '1.3',
+}));
+
+async function resolvePageProxy(pageNumber: number): Promise<PDFPageProxy | null> {
+  if (props.pdfDocument) {
+    return await props.pdfDocument.getPage(pageNumber);
+  }
+  if (props.activeEngine?.getPageProxy) {
+    return await props.activeEngine.getPageProxy(pageNumber);
+  }
+  if (props.activeEngine?.getPdfDocument) {
+    const doc = props.activeEngine.getPdfDocument();
+    if (doc) {
+      return await doc.getPage(pageNumber);
+    }
+  }
+  return null;
+}
+
+async function renderFallback(pageProxy: PDFPageProxy): Promise<void> {
+  await nextTick();
+  if (!fallbackCanvasRef.value) return;
+
+  try {
+    const canvas = fallbackCanvasRef.value;
+    const containerWidth = scrollContainerRef.value?.clientWidth || window.innerWidth || 360;
+    const unscaledViewport = pageProxy.getViewport({ scale: 1.0 });
+    const targetScale = Math.min((containerWidth - 32) / unscaledViewport.width, 2.0);
+    const viewport = pageProxy.getViewport({ scale: Math.max(targetScale, 0.5) });
+
+    canvas.width = viewport.width;
+    canvas.height = viewport.height;
+    canvas.style.width = `${viewport.width}px`;
+    canvas.style.height = `${viewport.height}px`;
+
+    const ctx = canvas.getContext('2d');
+    if (ctx) {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      await pageProxy.render({ canvasContext: ctx, viewport }).promise;
+    }
+  } catch (renderErr) {
+    console.warn('[PdfReflowView] Fallback canvas rendering failed:', renderErr);
+  }
+}
+
+async function loadPage(pageNumber: number): Promise<void> {
+  // Scroll to top upon page transition
+  if (scrollContainerRef.value) {
+    scrollContainerRef.value.scrollTop = 0;
+  }
+
+  // 1. Check in-memory cache
+  const cached = readerStore.getCachedReflowBlocks(pageNumber);
+  if (cached) {
+    blocks.value = cached;
+    isScannedFallback.value = cached.length === 0;
+    if (isScannedFallback.value) {
+      const pageProxy = await resolvePageProxy(pageNumber);
+      if (pageProxy) {
+        await renderFallback(pageProxy);
+      }
+    }
+    return;
+  }
+
+  isLoading.value = true;
+  isScannedFallback.value = false;
+
+  try {
+    const pageProxy = await resolvePageProxy(pageNumber);
+    if (!pageProxy) {
+      blocks.value = [];
+      isScannedFallback.value = true;
+      return;
+    }
+
+    const extracted = await extractReflowBlocks(pageProxy, pageNumber);
+    readerStore.setCachedReflowBlocks(pageNumber, extracted);
+    blocks.value = extracted;
+
+    if (extracted.length === 0) {
+      isScannedFallback.value = true;
+      await renderFallback(pageProxy);
+    }
+  } catch (err) {
+    console.error('[PdfReflowView] Failed to extract reflow text for page', pageNumber, err);
+    blocks.value = [];
+    isScannedFallback.value = true;
+  } finally {
+    isLoading.value = false;
+  }
+}
+
+// Horizontal swipe gesture detection
+let touchStartX = 0;
+let touchStartY = 0;
+let touchStartTime = 0;
+
+function handleTouchStart(e: TouchEvent): void {
+  if (e.touches.length === 1) {
+    touchStartX = e.touches[0].clientX;
+    touchStartY = e.touches[0].clientY;
+    touchStartTime = Date.now();
+  }
+}
+
+function handleTouchEnd(e: TouchEvent): void {
+  // Do not navigate if user has selected text
+  const selection = typeof window !== 'undefined' ? window.getSelection()?.toString() : '';
+  if (selection && selection.length > 0) {
+    return;
+  }
+
+  if (e.changedTouches.length === 1) {
+    const dx = e.changedTouches[0].clientX - touchStartX;
+    const dy = e.changedTouches[0].clientY - touchStartY;
+    const elapsed = Date.now() - touchStartTime;
+
+    // Must be predominantly horizontal swipe
+    if (Math.abs(dx) > 60 && Math.abs(dx) > Math.abs(dy) * 1.5 && elapsed < 800) {
+      if (dx < 0) {
+        emit('next');
+      } else {
+        emit('prev');
+      }
+    }
+  }
+}
+
+function handleContainerClick(e: MouseEvent): void {
+  // Ignore clicks inside buttons or interactive elements
+  const target = e.target as HTMLElement | null;
+  if (target?.closest('button') || target?.closest('a')) {
+    return;
+  }
+
+  // Check if text was selected
+  const selection = typeof window !== 'undefined' ? window.getSelection()?.toString() : '';
+  if (selection && selection.length > 0) {
+    return;
+  }
+
+  const width = window.innerWidth;
+  const clickX = e.clientX;
+  // Center 60% of screen triggers center tap for overlay toggle
+  if (clickX > width * 0.2 && clickX < width * 0.8) {
+    emit('center-tap');
+  }
+}
+
+watch(
+  () => activePageNumber.value,
+  (newPage) => {
+    void loadPage(newPage);
+  },
+);
+
+onMounted(() => {
+  void loadPage(activePageNumber.value);
+});
+</script>
+
+<template>
+  <div
+    ref="scrollContainerRef"
+    data-testid="pdf-reflow-view"
+    class="relative w-full h-full overflow-y-auto overflow-x-hidden select-text transition-colors duration-200"
+    :class="themeClass"
+    :style="typographyStyle"
+    @touchstart="handleTouchStart"
+    @touchend="handleTouchEnd"
+    @click="handleContainerClick"
+  >
+    <div class="px-5 py-6 max-w-prose mx-auto select-text min-h-full flex flex-col justify-between">
+      <!-- Loading indicator -->
+      <div
+        v-if="isLoading"
+        data-testid="reflow-loading-spinner"
+        class="py-16 flex flex-col items-center justify-center gap-3 text-current/70"
+      >
+        <div class="w-8 h-8 rounded-full border-2 border-current border-t-transparent animate-spin" />
+        <span class="text-xs font-semibold">{{ t('reader.loading') }}</span>
+      </div>
+
+      <!-- Scanned / Image-Only Fallback -->
+      <div
+        v-else-if="isScannedFallback"
+        data-testid="reflow-fallback-container"
+        class="flex flex-col items-center justify-center py-4 select-text"
+      >
+        <div
+          data-testid="scanned-page-fallback-banner"
+          class="w-full mb-4 rounded-xl p-3 bg-amber-500/10 border border-amber-500/20 text-amber-700 dark:text-amber-300 text-xs flex items-center gap-2"
+        >
+          <svg class="w-4 h-4 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+          </svg>
+          <span>{{ t('reader.scannedPageFallback') }}</span>
+        </div>
+
+        <canvas
+          ref="fallbackCanvasRef"
+          data-testid="reflow-fallback-canvas"
+          class="shadow-md rounded max-w-full block bg-white"
+        />
+      </div>
+
+      <!-- Reconstructed Reflow Blocks -->
+      <article
+        v-else
+        data-testid="reflow-content"
+        class="select-text prose prose-zinc max-w-none"
+      >
+        <template v-for="block in blocks" :key="block.id">
+          <h2
+            v-if="block.type === 'h2'"
+            data-testid="reflow-h2"
+            class="font-bold mb-4 mt-6 tracking-tight select-text"
+            :style="heading2Style"
+          >
+            {{ block.text }}
+          </h2>
+
+          <h3
+            v-else-if="block.type === 'h3'"
+            data-testid="reflow-h3"
+            class="font-bold mb-3 mt-4 tracking-normal select-text"
+            :style="heading3Style"
+          >
+            {{ block.text }}
+          </h3>
+
+          <p
+            v-else
+            data-testid="reflow-p"
+            class="mb-4 text-justify select-text"
+          >
+            {{ block.text }}
+          </p>
+        </template>
+      </article>
+
+      <!-- Bottom Page Navigation Controls -->
+      <div
+        data-testid="reflow-bottom-nav"
+        class="mt-8 pt-6 border-t border-current/10 flex items-center justify-between text-sm select-none"
+      >
+        <button
+          type="button"
+          data-testid="reflow-prev-page-btn"
+          class="px-4 py-2 rounded-xl bg-current/10 hover:bg-current/15 active:scale-95 transition-all disabled:opacity-30 disabled:pointer-events-none font-medium text-xs flex items-center gap-1.5"
+          :disabled="readerStore.currentPage <= 1"
+          @click.stop="emit('prev')"
+        >
+          <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
+          </svg>
+          <span>{{ t('reader.previous') }}</span>
+        </button>
+
+        <span
+          data-testid="reflow-page-indicator"
+          class="text-xs opacity-70 font-semibold"
+        >
+          {{ t('reader.page') }} {{ readerStore.currentPage }} {{ t('reader.of') }} {{ readerStore.totalPages }}
+        </span>
+
+        <button
+          type="button"
+          data-testid="reflow-next-page-btn"
+          class="px-4 py-2 rounded-xl bg-current/10 hover:bg-current/15 active:scale-95 transition-all disabled:opacity-30 disabled:pointer-events-none font-medium text-xs flex items-center gap-1.5"
+          :disabled="readerStore.currentPage >= readerStore.totalPages"
+          @click.stop="emit('next')"
+        >
+          <span>{{ t('reader.next') }}</span>
+          <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
+          </svg>
+        </button>
+      </div>
+    </div>
+  </div>
+</template>

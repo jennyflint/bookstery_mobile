@@ -9,6 +9,7 @@ export * from './scanner';
 export * from './ai';
 export * from './sort';
 export * from './tts';
+export * from './reflow';
 
 export type BookFormat = 'pdf' | 'epub' | 'fb2';
 
