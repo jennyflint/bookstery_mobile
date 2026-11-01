@@ -1,5 +1,6 @@
 import { Filesystem, Directory } from '@capacitor/filesystem';
 import { Capacitor } from '@capacitor/core';
+import { StorageAccess } from './StorageAccess';
 import { FileHashService } from './FileHashService';
 import { ScanDirectoryRepository, normalizeDirectoryUri } from '../database/ScanDirectoryRepository';
 import { SqliteService } from '../database/SqliteService';
@@ -83,15 +84,38 @@ export class AutoScanService {
     return null;
   }
 
-  async ensureFilesystemPermissions(): Promise<boolean> {
+  /**
+   * Android 11+ needs "All files access" to read documents from shared storage; older
+   * versions use the regular storage runtime permission. When `requestIfMissing` is false
+   * the user is never prompted (used by background scans).
+   */
+  async ensureFilesystemPermissions(requestIfMissing: boolean = true): Promise<boolean> {
     try {
       if (!Capacitor.isNativePlatform()) {
         return true;
       }
 
+      try {
+        const access = await StorageAccess.getStatus();
+        if (access.allFilesAccessRequired) {
+          if (access.granted) {
+            return true;
+          }
+          if (requestIfMissing) {
+            await StorageAccess.openAllFilesAccessSettings();
+          }
+          return false;
+        }
+      } catch {
+        // Native bridge missing (older build): fall back to the Filesystem plugin.
+      }
+
       const status = await Filesystem.checkPermissions();
       if (status.publicStorage === 'granted') {
         return true;
+      }
+      if (!requestIfMissing) {
+        return false;
       }
 
       const requestResult = await Filesystem.requestPermissions();
@@ -136,7 +160,7 @@ export class AutoScanService {
   async scanAllActiveDirectories(
     onProgress?: (scannedFilesCount: number, currentFileName: string) => void,
   ): Promise<ScanResultSummary> {
-    const hasPermission = await this.ensureFilesystemPermissions();
+    const hasPermission = await this.ensureFilesystemPermissions(false);
     if (!hasPermission) {
       return this.createEmptySummary();
     }

@@ -62,6 +62,10 @@ export function usePinchZoom(
     return controller?.didInteractRecently() ?? false;
   };
 
+  const bindTouchSource = (doc: Document, frame: HTMLElement): (() => void) => {
+    return controller?.bindExternalTouchSource(doc, frame) ?? ((): void => undefined);
+  };
+
   onMounted(() => {
     initController();
   });
@@ -84,5 +88,6 @@ export function usePinchZoom(
     isAnimating,
     resetZoom,
     didInteractRecently,
+    bindTouchSource,
   };
 }

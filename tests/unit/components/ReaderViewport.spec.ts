@@ -265,5 +265,66 @@ describe('ReaderViewport Component', () => {
     expect(vm.translateX).toBe(0);
     expect(vm.translateY).toBe(0);
   });
-});
 
+  it('should keep the CSS zoom applied for engines that cannot re-render at a new scale (EPUB/FB2)', async () => {
+    const wrapper = mount(ReaderViewport);
+    const viewportEl = wrapper.find('[data-testid="reader-viewport"]').element as HTMLElement;
+    const targetEl = wrapper.find('[data-testid="reader-gesture-target"]').element as HTMLElement;
+
+    vi.spyOn(viewportEl, 'getBoundingClientRect').mockReturnValue({
+      width: 400, height: 800, left: 0, top: 0, right: 400, bottom: 800, x: 0, y: 0,
+      toJSON: () => ({}),
+    });
+
+    viewportEl.dispatchEvent(
+      createTouchEvent('touchstart', [
+        { clientX: 200, clientY: 350 },
+        { clientX: 200, clientY: 450 },
+      ]),
+    );
+    viewportEl.dispatchEvent(
+      createTouchEvent('touchmove', [
+        { clientX: 200, clientY: 300 },
+        { clientX: 200, clientY: 500 },
+      ]),
+    );
+    viewportEl.dispatchEvent(createTouchEvent('touchend', []));
+    await vi.advanceTimersByTimeAsync(300);
+    await wrapper.vm.$nextTick();
+
+    expect((wrapper.vm as unknown as { scale: number }).scale).toBe(2);
+    expect(targetEl.style.transform).toContain('scale(2)');
+  });
+
+  it('should zoom on double-tap forwarded from an iframe touch source', async () => {
+    const wrapper = mount(ReaderViewport);
+    const viewportEl = wrapper.find('[data-testid="reader-viewport"]').element as HTMLElement;
+    const targetEl = wrapper.find('[data-testid="reader-gesture-target"]').element as HTMLElement;
+    const vm = wrapper.vm as unknown as { scale: number };
+
+    vi.spyOn(viewportEl, 'getBoundingClientRect').mockReturnValue({
+      width: 400, height: 800, left: 0, top: 0, right: 400, bottom: 800, x: 0, y: 0,
+      toJSON: () => ({}),
+    });
+
+    const frame = document.createElement('iframe');
+    targetEl.appendChild(frame);
+    const frameDoc = document.implementation.createHTMLDocument('chapter');
+    const bind = (targetEl as unknown as {
+      __readerBindTouchSource: (d: Document, f: HTMLElement) => () => void;
+    }).__readerBindTouchSource;
+    bind(frameDoc, frame);
+
+    const tap = (): void => {
+      frameDoc.dispatchEvent(createTouchEvent('touchstart', [{ clientX: 100, clientY: 200 }]));
+      frameDoc.dispatchEvent(
+        createTouchEvent('touchend', [], [{ clientX: 100, clientY: 200 }]),
+      );
+    };
+    tap();
+    await vi.advanceTimersByTimeAsync(100);
+    tap();
+
+    expect(vm.scale).toBe(2.5);
+  });
+});

@@ -14,6 +14,7 @@ import type {
   HighlightRecord,
   ReaderLocation,
   ReaderPaginationMode,
+  ZoomableContainerElement,
 } from '../../types';
 
 export class EpubEngine extends BaseEngine {
@@ -164,6 +165,12 @@ export class EpubEngine extends BaseEngine {
       }
 
       this.injectFontSizeToDoc(doc, this.currentFontSize);
+
+      // Pinch/pan/double-tap zoom: iframe touches must reach the viewport's gesture controller.
+      if (iframe) {
+        doc.documentElement.style.touchAction = 'pan-x pan-y';
+        (this.container as ZoomableContainerElement | null)?.__readerBindTouchSource?.(doc, iframe);
+      }
 
       // Primary selection trigger: the iframe's own `selectionchange` (never bubbles to the parent).
       let debounceTimer: ReturnType<typeof setTimeout> | null = null;

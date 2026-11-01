@@ -19,6 +19,7 @@ export const useScannerStore = defineStore('scanner', {
     currentCheckingFile: '',
     showNotification: false,
     isInitialized: false,
+    permissionDenied: false,
   }),
 
   getters: {
@@ -80,15 +81,15 @@ export const useScannerStore = defineStore('scanner', {
       if (this.settings.auto_scan_on_startup === 0 || !this.hasActiveDirectories) {
         return null;
       }
-      return this.executeScan();
+      return this.executeScan(false);
     },
 
     async runManualScan(): Promise<ScanResultSummary> {
       await this.init();
-      return this.executeScan();
+      return this.executeScan(true);
     },
 
-    async executeScan(): Promise<ScanResultSummary> {
+    async executeScan(interactive: boolean = true): Promise<ScanResultSummary> {
       if (this.isScanning) {
         return (
           this.lastScanSummary || {
@@ -108,6 +109,21 @@ export const useScannerStore = defineStore('scanner', {
 
       try {
         const scanner = AutoScanService.getInstance();
+
+        // Without storage access every folder read fails silently, so surface it instead of scanning.
+        const hasAccess = await scanner.ensureFilesystemPermissions(interactive);
+        this.permissionDenied = !hasAccess;
+        if (!hasAccess) {
+          return {
+            scannedFilesCount: 0,
+            newBooksCount: 0,
+            updatedBooksCount: 0,
+            skippedBooksCount: 0,
+            failedCount: 0,
+            newBookIds: [],
+          };
+        }
+
         const summary = await scanner.scanAllActiveDirectories((count, fileName) => {
           this.currentCheckedCount = count;
           this.currentCheckingFile = fileName;

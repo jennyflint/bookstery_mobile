@@ -132,6 +132,7 @@
     "selectFromDevice": "Pick Folder from Device",
     "confirmAddFolder": "Add Folder",
     "folderExistsError": "This folder is already added to auto-scan.",
+    "storagePermissionError": "No access to device files. Enable \"All files access\" for Bookstery in Android settings, then scan again.",
     "folderAccessError": "Cannot access this folder. Please verify the folder exists and has read permissions.",
     "folderPathRequired": "Please enter a valid folder path.",
     "foundNewBooksNotification": "Found {count} new books in your library",

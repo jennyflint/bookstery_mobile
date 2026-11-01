@@ -112,6 +112,8 @@ export interface PinchZoomOptions {
   doubleTapDelayMs?: number;
   debounceMs?: number;
   onZoomRender?: (scale: number) => Promise<void> | void;
+  /** When it returns false, the gesture scale stays applied as a CSS transform instead of being re-rendered. */
+  isRenderZoomSupported?: () => boolean;
   onSwipeNext?: () => void;
   onSwipePrev?: () => void;
 }
@@ -120,6 +122,8 @@ export interface ZoomableContainerElement extends HTMLElement {
   __readerSetZoom?: (scale: number) => Promise<void>;
   __readerResetZoom?: () => void;
   __onEngineResetZoom?: () => void;
+  /** Lets engines that render inside iframes forward the iframe's touches to the pinch controller. */
+  __readerBindTouchSource?: (doc: Document, frame: HTMLElement) => () => void;
 }
 
 export interface ReaderSettings {

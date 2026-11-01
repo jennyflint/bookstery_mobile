@@ -31,12 +31,14 @@ const {
   isAnimating,
   resetZoom,
   didInteractRecently,
+  bindTouchSource,
 } = usePinchZoom(viewportWrapperRef, containerRef, {
   minScale: 1.0,
   maxScale: 4.0,
   doubleTapScale: 2.5,
   doubleTapDelayMs: 300,
   debounceMs: 200,
+  isRenderZoomSupported: () => !!props.onZoomRender || !!containerRef.value?.__readerSetZoom,
   onZoomRender: async (targetScale: number) => {
     if (props.onZoomRender) {
       await props.onZoomRender(targetScale);
@@ -60,6 +62,7 @@ onMounted(() => {
     containerRef.value.__onEngineResetZoom = () => {
       resetZoom(true);
     };
+    containerRef.value.__readerBindTouchSource = bindTouchSource;
   }
 });
 

@@ -11,6 +11,19 @@ export interface PinchZoomStateSnapshot {
   isAnimating: boolean;
 }
 
+export interface GestureTouchPoint {
+  clientX: number;
+  clientY: number;
+}
+
+/** Minimal touch event shape, so events forwarded from iframes can be coordinate-mapped. */
+export interface GestureTouchEvent {
+  touches: ArrayLike<GestureTouchPoint>;
+  changedTouches?: ArrayLike<GestureTouchPoint>;
+  cancelable: boolean;
+  preventDefault: () => void;
+}
+
 export interface PinchZoomControllerConfig extends PinchZoomOptions {
   wrapper: HTMLElement;
   target?: HTMLElement;
@@ -28,6 +41,7 @@ export class PinchZoomController {
   private onZoomRender?: (scale: number) => Promise<void> | void;
   private onSwipeNext?: () => void;
   private onSwipePrev?: () => void;
+  private isRenderZoomSupported?: () => boolean;
   private onStateChange?: (state: PinchZoomStateSnapshot) => void;
 
   private scale: number = 1.0;
@@ -61,6 +75,7 @@ export class PinchZoomController {
   private boundTouchMove: (e: TouchEvent) => void;
   private boundTouchEnd: (e: TouchEvent) => void;
   private boundTouchCancel: (e: TouchEvent) => void;
+  private externalSourceDisposers: Array<() => void> = [];
 
   constructor(config: PinchZoomControllerConfig) {
     this.wrapper = config.wrapper;
@@ -73,6 +88,7 @@ export class PinchZoomController {
     this.onZoomRender = config.onZoomRender;
     this.onSwipeNext = config.onSwipeNext;
     this.onSwipePrev = config.onSwipePrev;
+    this.isRenderZoomSupported = config.isRenderZoomSupported;
     this.onStateChange = config.onStateChange;
 
     this.boundTouchStart = this.handleTouchStart.bind(this);
@@ -179,6 +195,12 @@ export class PinchZoomController {
     this.clearDebounceTimer();
     this.debounceTimer = setTimeout(async () => {
       this.debounceTimer = null;
+      // Engines that cannot re-render at a new scale (EPUB, FB2) keep the CSS transform scale.
+      if (this.isRenderZoomSupported && !this.isRenderZoomSupported()) {
+        this.isAnimating = false;
+        this.applyTransform();
+        return;
+      }
       try {
         await this.onZoomRender?.(targetScale);
       } finally {
@@ -190,7 +212,7 @@ export class PinchZoomController {
     }, this.debounceMs);
   }
 
-  private startPinch(t1: Touch, t2: Touch): void {
+  private startPinch(t1: GestureTouchPoint, t2: GestureTouchPoint): void {
     this.clearDebounceTimer();
     this.isPinching = true;
     this.isPanning = false;
@@ -206,7 +228,7 @@ export class PinchZoomController {
     this.pinchStartTranslateY = this.translateY;
   }
 
-  private handleTouchStart(e: TouchEvent): void {
+  private handleTouchStart(e: GestureTouchEvent): void {
     if (e.touches.length === 2) {
       if (e.cancelable) {
         e.preventDefault();
@@ -235,7 +257,7 @@ export class PinchZoomController {
     }
   }
 
-  private handleTouchMove(e: TouchEvent): void {
+  private handleTouchMove(e: GestureTouchEvent): void {
     if (e.touches.length === 2) {
       if (e.cancelable) {
         e.preventDefault();
@@ -309,7 +331,7 @@ export class PinchZoomController {
     }
   }
 
-  private handleTouchEnd(e: TouchEvent): void {
+  private handleTouchEnd(e: GestureTouchEvent): void {
     if (this.isPinching) {
       if (e.touches.length < 2) {
         this.isPinching = false;
@@ -436,7 +458,56 @@ export class PinchZoomController {
     }
   }
 
+  /**
+   * Routes touches from a same-origin iframe document into this controller. Iframe touch
+   * events never reach the wrapper, so pinch, pan and double-tap would otherwise be dead
+   * over EPUB content. Coordinates are mapped into the top-level viewport.
+   */
+  public bindExternalTouchSource(doc: Document, frame: HTMLElement): () => void {
+    const mapPoints = (list: ArrayLike<GestureTouchPoint> | undefined): GestureTouchPoint[] => {
+      const rect = frame.getBoundingClientRect();
+      const ratio = frame.offsetWidth > 0 && rect.width > 0 ? rect.width / frame.offsetWidth : 1;
+      return Array.from(list ?? [], (t) => ({
+        clientX: rect.left + t.clientX * ratio,
+        clientY: rect.top + t.clientY * ratio,
+      }));
+    };
+
+    const forward =
+      (handler: (e: GestureTouchEvent) => void) =>
+      (e: TouchEvent): void => {
+        handler({
+          touches: mapPoints(e.touches),
+          changedTouches: mapPoints(e.changedTouches),
+          cancelable: e.cancelable,
+          preventDefault: () => e.preventDefault(),
+        });
+      };
+
+    const onStart = forward(this.handleTouchStart.bind(this));
+    const onMove = forward(this.handleTouchMove.bind(this));
+    const onEnd = forward(this.handleTouchEnd.bind(this));
+    const onCancel = (): void => this.handleTouchCancel();
+
+    const options: AddEventListenerOptions = { passive: false };
+    doc.addEventListener('touchstart', onStart, options);
+    doc.addEventListener('touchmove', onMove, options);
+    doc.addEventListener('touchend', onEnd, options);
+    doc.addEventListener('touchcancel', onCancel, options);
+
+    const dispose = (): void => {
+      doc.removeEventListener('touchstart', onStart);
+      doc.removeEventListener('touchmove', onMove);
+      doc.removeEventListener('touchend', onEnd);
+      doc.removeEventListener('touchcancel', onCancel);
+    };
+    this.externalSourceDisposers.push(dispose);
+    return dispose;
+  }
+
   public destroy(): void {
+    this.externalSourceDisposers.forEach((dispose) => dispose());
+    this.externalSourceDisposers = [];
     this.clearDebounceTimer();
     this.wrapper.removeEventListener('touchstart', this.boundTouchStart);
     this.wrapper.removeEventListener('touchmove', this.boundTouchMove);

@@ -123,7 +123,10 @@ const handleAddFolder = async () => {
     const scanner = AutoScanService.getInstance();
     const isAccessible = await scanner.validateDirectoryAccess(selectedPath);
     if (!isAccessible) {
-      errorMessage.value = t('scanner.folderAccessError');
+      const hasStorageAccess = await scanner.ensureFilesystemPermissions(false);
+      errorMessage.value = hasStorageAccess
+        ? t('scanner.folderAccessError')
+        : t('scanner.storagePermissionError');
       return;
     }
 
@@ -321,6 +324,13 @@ const formatRelativeTime = (timestamp: number | null): string => {
             {{ t('scanner.scanNow') }}
           </span>
         </button>
+      </div>
+
+      <div
+        v-if="scannerStore.permissionDenied"
+        class="mt-4 rounded-2xl bg-red-50 p-3 text-xs font-medium text-red-600 dark:bg-red-950/30 dark:text-red-400"
+      >
+        {{ t('scanner.storagePermissionError') }}
       </div>
 
       <div
