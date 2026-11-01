@@ -168,4 +168,17 @@ describe('PdfEngine', () => {
       });
     }
   });
+
+  it('should support high-DPI zoom re-rendering and automatically reset zoom on page change', async () => {
+    await engine.init(container, new Uint8Array([1, 2, 3]));
+    await engine.setPaginationMode('buttons');
+
+    await engine.setZoom(2.5);
+    expect(mockPdfPage.getViewport).toHaveBeenLastCalledWith({ scale: 2.5 });
+
+    const resetSpy = vi.spyOn(engine, 'resetZoom');
+    await engine.next();
+    expect(resetSpy).toHaveBeenCalled();
+    expect(engine.getZoom()).toBe(1);
+  });
 });

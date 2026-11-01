@@ -69,8 +69,28 @@ export interface ReaderEngineInterface {
     highlights: HighlightRecord[],
     onHighlightClick?: (highlight: HighlightRecord) => void,
   ): void;
+  setZoom?(scale: number): Promise<void>;
+  getZoom?(): number;
+  resetZoom?(): void;
   onLocationChange?: (location: ReaderLocation) => void;
   destroy(): void;
+}
+
+export interface PinchZoomOptions {
+  minScale?: number;
+  maxScale?: number;
+  doubleTapScale?: number;
+  doubleTapDelayMs?: number;
+  debounceMs?: number;
+  onZoomRender?: (scale: number) => Promise<void> | void;
+  onSwipeNext?: () => void;
+  onSwipePrev?: () => void;
+}
+
+export interface ZoomableContainerElement extends HTMLElement {
+  __readerSetZoom?: (scale: number) => Promise<void>;
+  __readerResetZoom?: () => void;
+  __onEngineResetZoom?: () => void;
 }
 
 export interface ReaderSettings {

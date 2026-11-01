@@ -192,6 +192,8 @@ const handleCloseTranslation = () => {
     <ReaderViewport
       ref="viewportRef"
       @center-tap="handleCenterTap"
+      @next="nextPage"
+      @prev="prevPage"
     />
 
     <ReaderOverlayControls

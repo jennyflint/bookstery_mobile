@@ -2,7 +2,13 @@ import * as pdfjsLib from 'pdfjs-dist';
 // @ts-expect-error Vite URL import for pdf.worker
 import pdfWorkerUrl from 'pdfjs-dist/build/pdf.worker.min.js?url';
 import { BaseEngine } from './BaseEngine';
-import type { HighlightRecord, ReaderLocation, ReaderPaginationMode } from '../../types';
+import { PinchZoomController } from './PinchZoomController';
+import type {
+  HighlightRecord,
+  ReaderLocation,
+  ReaderPaginationMode,
+  ZoomableContainerElement,
+} from '../../types';
 
 interface TextContentItem {
   str: string;
@@ -48,7 +54,10 @@ export class PdfEngine extends BaseEngine {
   private activeSlotRenderTasks = new Map<number, pdfjsLib.RenderTask>();
   private wheelThrottle = false;
   private scrollCleanupListener: (() => void) | null = null;
+  private baseScale: number = 1.0;
   private currentScale: number = 1.0;
+  private zoomScale: number = 1.0;
+  private gestureController: PinchZoomController | null = null;
   private visibilityHandler: (() => void) | null = null;
   private currentColors: { bg: string; text: string } | null = null;
   private isProgrammaticScroll: boolean = false;
@@ -65,6 +74,30 @@ export class PdfEngine extends BaseEngine {
   ): Promise<void> {
     this.container = container;
     this.container.innerHTML = '';
+
+    const zoomableContainer = container as ZoomableContainerElement;
+    zoomableContainer.__readerSetZoom = (scale: number) => this.setZoom(scale);
+    zoomableContainer.__readerResetZoom = () => this.resetZoom();
+
+    if (!container.closest('[data-testid="reader-viewport"]')) {
+      this.gestureController?.destroy();
+      this.gestureController = new PinchZoomController({
+        wrapper: container,
+        target: container,
+        minScale: 1.0,
+        maxScale: 4.0,
+        doubleTapScale: 2.5,
+        doubleTapDelayMs: 300,
+        debounceMs: 200,
+        onZoomRender: (scale: number) => this.setZoom(scale),
+        onSwipeNext: () => {
+          void this.next();
+        },
+        onSwipePrev: () => {
+          void this.prev();
+        },
+      });
+    }
 
     initPdfWorker();
 
@@ -143,6 +176,7 @@ export class PdfEngine extends BaseEngine {
     if (this.paginationMode === mode && this.container?.children.length) {
       return;
     }
+    this.resetZoom(true);
     this.paginationMode = mode;
     this.cleanupScroll();
 
@@ -164,10 +198,51 @@ export class PdfEngine extends BaseEngine {
       return;
     }
 
+    this.resetZoom(true);
+
     if (this.paginationMode === 'scroll') {
       this.scrollToPage(pageNum, false);
     } else {
       await this.renderButtonsMode(pageNum);
+    }
+  }
+
+  override async setZoom(scale: number): Promise<void> {
+    if (!this.pdfDocument || !this.container) {
+      return;
+    }
+    const clampedScale = Math.min(Math.max(scale, 1.0), 4.0);
+    this.zoomScale = clampedScale;
+    this.currentScale = clampedScale;
+
+    if (this.paginationMode === 'scroll') {
+      if (this.scrollContainer) {
+        const slot = this.scrollContainer.querySelector<HTMLElement>(
+          `#pdf-page-slot-${this.currentPageNumber}`,
+        );
+        if (slot) {
+          this.renderedPages.delete(this.currentPageNumber);
+          await this.renderPageIntoSlot(this.currentPageNumber, slot, clampedScale);
+        }
+      }
+    } else {
+      await this.renderButtonsMode(this.currentPageNumber, clampedScale);
+    }
+  }
+
+  override getZoom(): number {
+    return this.gestureController ? this.gestureController.getState().scale : this.zoomScale;
+  }
+
+  override resetZoom(skipReRender: boolean = false): void {
+    const wasZoomed = this.zoomScale !== 1.0;
+    this.zoomScale = 1.0;
+    this.currentScale = this.baseScale;
+    this.gestureController?.resetZoom(true);
+    (this.container as ZoomableContainerElement | null)?.__onEngineResetZoom?.();
+
+    if (wasZoomed && !skipReRender && this.pdfDocument && this.container) {
+      void this.setZoom(1.0);
     }
   }
 
@@ -213,6 +288,7 @@ export class PdfEngine extends BaseEngine {
     const initialViewport = firstPage.getViewport({ scale: 1 });
     const containerWidth = Math.max(this.container.clientWidth, 320);
     const targetScale = Math.max(Math.min((containerWidth - 32) / initialViewport.width, 2.0), 0.4);
+    this.baseScale = targetScale;
     this.currentScale = targetScale;
     const scaledViewport = firstPage.getViewport({ scale: targetScale });
     const expectedWidth = Math.floor(scaledViewport.width);
@@ -361,6 +437,8 @@ export class PdfEngine extends BaseEngine {
       canvasContext.imageSmoothingEnabled = true;
       canvasContext.imageSmoothingQuality = 'high';
 
+      slot.style.width = `${Math.floor(viewport.width)}px`;
+      slot.style.minHeight = `${Math.floor(viewport.height)}px`;
       slot.innerHTML = '';
       slot.appendChild(canvas);
       if (this.currentColors) {
@@ -496,7 +574,7 @@ export class PdfEngine extends BaseEngine {
     }
   }
 
-  private async renderButtonsMode(pageNumber: number): Promise<void> {
+  private async renderButtonsMode(pageNumber: number, customScale?: number): Promise<void> {
     if (!this.pdfDocument || !this.container) return;
     this.cleanupScroll();
 
@@ -557,10 +635,17 @@ export class PdfEngine extends BaseEngine {
     const containerHeight =
       this.container.clientHeight > 0 ? this.container.clientHeight : window.innerHeight || 640;
 
-    const initialViewport = this.currentPageProxy.getViewport({ scale: 1 });
-    const scaleX = (containerWidth - 32) / initialViewport.width;
-    const scaleY = (containerHeight - 32) / initialViewport.height;
-    const targetScale = Math.max(Math.min(scaleX, scaleY, 2.5), 0.2);
+    let targetScale: number;
+    if (customScale !== undefined) {
+      targetScale = customScale;
+    } else {
+      const initialViewport = this.currentPageProxy.getViewport({ scale: 1 });
+      const scaleX = (containerWidth - 32) / initialViewport.width;
+      const scaleY = (containerHeight - 32) / initialViewport.height;
+      targetScale = Math.max(Math.min(scaleX, scaleY, 2.5), 0.2);
+      this.baseScale = targetScale;
+    }
+    this.currentScale = targetScale;
     const viewport = this.currentPageProxy.getViewport({ scale: targetScale });
     const dpr = this.getClampedDpr();
 
@@ -818,6 +903,17 @@ export class PdfEngine extends BaseEngine {
   destroy(): void {
     this.detachVisibilityListener();
     this.cleanupScroll();
+
+    if (this.gestureController) {
+      this.gestureController.destroy();
+      this.gestureController = null;
+    }
+
+    if (this.container) {
+      const zoomableContainer = this.container as ZoomableContainerElement;
+      delete zoomableContainer.__readerSetZoom;
+      delete zoomableContainer.__readerResetZoom;
+    }
 
     if (this.activeRenderTask) {
       try {

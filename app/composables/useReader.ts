@@ -97,8 +97,13 @@ export function useReader() {
     }
   };
 
+  const resetZoom = (): void => {
+    activeEngine.value?.resetZoom?.();
+  };
+
   const nextPage = async (): Promise<void> => {
     if (!activeEngine.value) return;
+    resetZoom();
     readerStore.setRendering(true);
     try {
       await activeEngine.value.next();
@@ -123,6 +128,7 @@ export function useReader() {
 
   const prevPage = async (): Promise<void> => {
     if (!activeEngine.value) return;
+    resetZoom();
     readerStore.setRendering(true);
     try {
       await activeEngine.value.prev();
@@ -147,6 +153,7 @@ export function useReader() {
 
   const goToLocator = async (locator: string): Promise<void> => {
     if (!activeEngine.value) return;
+    resetZoom();
     readerStore.setRendering(true);
     try {
       await activeEngine.value.goTo(locator);
@@ -188,6 +195,7 @@ export function useReader() {
     goToLocator,
     setPaginationMode,
     applyTheme,
+    resetZoom,
     closeBook,
   };
 }

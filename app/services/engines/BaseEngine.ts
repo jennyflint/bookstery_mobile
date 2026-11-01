@@ -38,6 +38,18 @@ export abstract class BaseEngine implements ReaderEngineInterface {
     this.paginationMode = mode;
   }
 
+  async setZoom(_scale: number): Promise<void> {
+    // Default no-op for non-canvas engines
+  }
+
+  getZoom(): number {
+    return 1.0;
+  }
+
+  resetZoom(): void {
+    // Default no-op for non-canvas engines
+  }
+
   getCurrentLocation(): ReaderLocation {
     return { ...this.location };
   }

@@ -5,6 +5,7 @@ import { useReaderStore } from '~/stores/readerStore';
 import type { BookRecord } from '~/types';
 
 vi.mock('pdfjs-dist', () => ({
+  GlobalWorkerOptions: { workerSrc: '' },
   getDocument: vi.fn().mockReturnValue({
     promise: Promise.resolve({
       numPages: 5,
