@@ -5,4 +5,6 @@ export interface ScreenControlSettings {
   orientationLock: ScreenOrientationMode;
   applyOrientationOnlyInReader: boolean;
   fontSize?: number;
+  volumeKeyPageTurn?: boolean;
+  invertVolumeKeys?: boolean;
 }

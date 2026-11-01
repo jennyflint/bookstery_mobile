@@ -32,6 +32,7 @@ import { useAiStore } from '../../stores/aiStore';
 import { useTtsStore } from '../../stores/ttsStore';
 import { useSettingsStore } from '../../stores/useSettingsStore';
 import { useAiReader } from '../../composables/useAiReader';
+import { useVolumePageTurn } from '../../composables/useVolumePageTurn';
 
 const { t } = useI18n();
 const route = useRoute();
@@ -437,6 +438,19 @@ const handleToggleTts = async (): Promise<void> => {
 };
 
 const handleNextPage = async (): Promise<void> => {
+  if (readerStore.isReflowMode && readerStore.currentBook?.format === 'pdf') {
+    const reflowEl = document.querySelector(
+      '[data-testid="pdf-reflow-view"]',
+    ) as HTMLElement | null;
+    if (reflowEl) {
+      const { scrollTop, clientHeight, scrollHeight } = reflowEl;
+      if (scrollTop + clientHeight < scrollHeight - 15) {
+        reflowEl.scrollBy({ top: Math.max(100, clientHeight * 0.9), behavior: 'smooth' });
+        return;
+      }
+    }
+  }
+
   const wasPlaying = ttsStore.isPlaying;
   activeEngine.value?.clearTtsHighlight?.();
   await nextPage();
@@ -449,6 +463,19 @@ const handleNextPage = async (): Promise<void> => {
 };
 
 const handlePrevPage = async (): Promise<void> => {
+  if (readerStore.isReflowMode && readerStore.currentBook?.format === 'pdf') {
+    const reflowEl = document.querySelector(
+      '[data-testid="pdf-reflow-view"]',
+    ) as HTMLElement | null;
+    if (reflowEl) {
+      const { scrollTop, clientHeight } = reflowEl;
+      if (scrollTop > 15) {
+        reflowEl.scrollBy({ top: -Math.max(100, clientHeight * 0.9), behavior: 'smooth' });
+        return;
+      }
+    }
+  }
+
   const wasPlaying = ttsStore.isPlaying;
   activeEngine.value?.clearTtsHighlight?.();
   await prevPage();
@@ -459,6 +486,31 @@ const handlePrevPage = async (): Promise<void> => {
     }, 150);
   }
 };
+
+const isAnyModalOpen = computed<boolean>(() => {
+  return (
+    isSettingsOpen.value ||
+    isTranslationOpen.value ||
+    highlightStore.isNoteModalOpen ||
+    highlightStore.isQuoteCardModalOpen ||
+    highlightStore.isExportModalOpen ||
+    highlightStore.isNotesDrawerOpen ||
+    Boolean(highlightStore.selectedHighlight) ||
+    aiStore.isSheetOpen ||
+    aiStore.isSettingsModalOpen ||
+    aiStore.isOnboardingModalOpen ||
+    aiStore.showInactivityBanner ||
+    Boolean(readerStore.selection) ||
+    Boolean(highlightStore.activeSelection)
+  );
+});
+
+useVolumePageTurn({
+  onNextPage: handleNextPage,
+  onPrevPage: handlePrevPage,
+  isReaderOpen: computed(() => !isNavigating.value && Boolean(readerStore.currentBook)),
+  isAnyModalOpen,
+});
 
 const handleNavigatePage = async (page: number): Promise<void> => {
   const wasPlaying = ttsStore.isPlaying;
@@ -614,7 +666,10 @@ defineExpose({
 
     <AiAssistantSheet />
 
-    <AiChatDrawer :page-text="activePageText" @close="aiStore.closeChat" />
+    <AiChatDrawer
+      :page-text="activePageText"
+      @close="aiStore.closeChat"
+    />
 
     <AiDictionaryModal @close="aiStore.closeDictionaryModal" />
 

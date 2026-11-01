@@ -21,6 +21,8 @@ describe('useSettingsStore', () => {
     expect(store.keepScreenAwake).toBe(true);
     expect(store.orientationLock).toBe('auto');
     expect(store.applyOrientationOnlyInReader).toBe(true);
+    expect(store.volumeKeyPageTurn).toBe(true);
+    expect(store.invertVolumeKeys).toBe(false);
     expect(store.isReaderActive).toBe(false);
   });
 
@@ -31,6 +33,8 @@ describe('useSettingsStore', () => {
         keepScreenAwake: false,
         orientationLock: 'portrait',
         applyOrientationOnlyInReader: false,
+        volumeKeyPageTurn: false,
+        invertVolumeKeys: true,
       }),
     );
 
@@ -40,6 +44,8 @@ describe('useSettingsStore', () => {
     expect(newStore.keepScreenAwake).toBe(false);
     expect(newStore.orientationLock).toBe('portrait');
     expect(newStore.applyOrientationOnlyInReader).toBe(false);
+    expect(newStore.volumeKeyPageTurn).toBe(false);
+    expect(newStore.invertVolumeKeys).toBe(true);
   });
 
   describe('setKeepScreenAwake', () => {
@@ -202,12 +208,36 @@ describe('useSettingsStore', () => {
       store.keepScreenAwake = false;
       store.orientationLock = 'landscape';
       store.applyOrientationOnlyInReader = false;
+      store.volumeKeyPageTurn = false;
+      store.invertVolumeKeys = true;
 
       store.resetToDefault();
 
       expect(store.keepScreenAwake).toBe(true);
       expect(store.orientationLock).toBe('auto');
       expect(store.applyOrientationOnlyInReader).toBe(true);
+      expect(store.volumeKeyPageTurn).toBe(true);
+      expect(store.invertVolumeKeys).toBe(false);
+    });
+  });
+
+  describe('setVolumeKeyPageTurn', () => {
+    it('should update volumeKeyPageTurn and persist to localStorage', () => {
+      store.setVolumeKeyPageTurn(false);
+
+      expect(store.volumeKeyPageTurn).toBe(false);
+      const stored = JSON.parse(localStorage.getItem(SETTINGS_STORAGE_KEY) || '{}');
+      expect(stored.volumeKeyPageTurn).toBe(false);
+    });
+  });
+
+  describe('setInvertVolumeKeys', () => {
+    it('should update invertVolumeKeys and persist to localStorage', () => {
+      store.setInvertVolumeKeys(true);
+
+      expect(store.invertVolumeKeys).toBe(true);
+      const stored = JSON.parse(localStorage.getItem(SETTINGS_STORAGE_KEY) || '{}');
+      expect(stored.invertVolumeKeys).toBe(true);
     });
   });
 });

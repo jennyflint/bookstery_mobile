@@ -135,6 +135,21 @@ export const ImpactStyle = {
   Light: 'LIGHT',
 };
 
+export const mockVolumeButtons = {
+  setVolumeInterception: vi.fn().mockImplementation(async ({ enabled }: { enabled: boolean }) => ({ enabled })),
+  isInterceptionEnabled: vi.fn().mockImplementation(async () => ({ enabled: false })),
+  addListener: vi
+    .fn()
+    .mockImplementation(async (_event: string, _callback: (event: { direction: 'up' | 'down' }) => void) => {
+      return {
+        remove: vi.fn().mockResolvedValue(undefined),
+      };
+    }),
+  removeAllListeners: vi.fn().mockResolvedValue(undefined),
+};
+
+export const VolumeButtons = mockVolumeButtons;
+
 export const mockHaptics = {
   impact: vi.fn().mockResolvedValue(undefined),
   selectionChanged: vi.fn().mockResolvedValue(undefined),

@@ -41,4 +41,72 @@ describe('ReaderView.vue', () => {
 
     expect(leaveSpy).toHaveBeenCalledWith(false);
   });
+
+  it('emits next and prev events when handleNextPage and handlePrevPage are invoked', async () => {
+    const wrapper = mount(ReaderView, {
+      global: {
+        plugins: [pinia],
+        stubs: {
+          ReaderViewport: true,
+        },
+      },
+    });
+
+    const vm = wrapper.vm as any;
+    await vm.handleNextPage();
+    expect(wrapper.emitted('next')).toHaveLength(1);
+
+    await vm.handlePrevPage();
+    expect(wrapper.emitted('prev')).toHaveLength(1);
+  });
+
+  it('scrolls reflow element instead of immediately emitting next when not at bottom', async () => {
+    const readerStore = (await import('~/stores/readerStore')).useReaderStore();
+    readerStore.isReflowMode = true;
+    readerStore.currentBook = {
+      id: 'book-1',
+      title: 'PDF Book',
+      author: null,
+      format: 'pdf',
+      file_path: 'book.pdf',
+      cover_path: null,
+      locator: '1',
+      progress_percentage: 0,
+      total_items: 10,
+      last_read_at: Date.now(),
+      updated_at: Date.now(),
+    };
+
+    // Create a dummy DOM element mimicking reflow view
+    const reflowEl = document.createElement('div');
+    reflowEl.setAttribute('data-testid', 'pdf-reflow-view');
+    Object.defineProperty(reflowEl, 'scrollTop', { value: 0, writable: true });
+    Object.defineProperty(reflowEl, 'clientHeight', { value: 800, writable: true });
+    Object.defineProperty(reflowEl, 'scrollHeight', { value: 2000, writable: true });
+    const scrollBySpy = vi.fn();
+    reflowEl.scrollBy = scrollBySpy;
+    document.body.appendChild(reflowEl);
+
+    const wrapper = mount(ReaderView, {
+      global: {
+        plugins: [pinia],
+        stubs: {
+          ReaderViewport: true,
+        },
+      },
+    });
+
+    const vm = wrapper.vm as any;
+    await vm.handleNextPage();
+
+    expect(scrollBySpy).toHaveBeenCalled();
+    expect(wrapper.emitted('next')).toBeUndefined();
+
+    // Now set scrollTop to bottom
+    reflowEl.scrollTop = 1200; // scrollTop + clientHeight = 2000 >= scrollHeight - 15
+    await vm.handleNextPage();
+    expect(wrapper.emitted('next')).toHaveLength(1);
+
+    document.body.removeChild(reflowEl);
+  });
 });

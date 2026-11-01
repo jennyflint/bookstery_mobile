@@ -248,6 +248,10 @@
     "orientationPortrait": "Книжкова",
     "orientationLandscape": "Альбомна",
     "orientationInReaderOnly": "Блокувати орієнтацію лише під час читання",
+    "volumeKeyPageTurn": "Гортання кнопками гучності",
+    "volumeKeyPageTurnDesc": "Використовувати фізичні кнопки гучності для перегортання сторінок",
+    "invertVolumeKeys": "Інвертувати кнопки гучності",
+    "invertVolumeKeysDesc": "Змінити напрямок кнопок (Гучність вгору = вперед, вниз = назад)",
     "language": "Мова інтерфейсу",
     "version": "Версія"
   },

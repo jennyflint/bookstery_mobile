@@ -248,6 +248,10 @@
     "orientationPortrait": "Portrait",
     "orientationLandscape": "Landscape",
     "orientationInReaderOnly": "Apply orientation lock only in reader",
+    "volumeKeyPageTurn": "Turn Pages with Volume Buttons",
+    "volumeKeyPageTurnDesc": "Use physical volume up and down buttons to navigate book pages",
+    "invertVolumeKeys": "Invert Volume Buttons",
+    "invertVolumeKeysDesc": "Swap volume buttons (Volume Up = Next, Volume Down = Prev)",
     "language": "Interface Language",
     "version": "Version"
   },

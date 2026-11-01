@@ -24,6 +24,18 @@ const selectOrientation = async (mode: ScreenOrientationMode): Promise<void> => 
   readerStore.setOrientationLock(mode);
   await settingsStore.setOrientationLock(mode);
 };
+
+const toggleVolumeKeyPageTurn = (): void => {
+  const nextValue = !settingsStore.volumeKeyPageTurn;
+  readerStore.setVolumeKeyPageTurn(nextValue);
+  settingsStore.setVolumeKeyPageTurn(nextValue);
+};
+
+const toggleInvertVolumeKeys = (): void => {
+  const nextValue = !settingsStore.invertVolumeKeys;
+  readerStore.setInvertVolumeKeys(nextValue);
+  settingsStore.setInvertVolumeKeys(nextValue);
+};
 </script>
 
 <template>
@@ -204,6 +216,76 @@ const selectOrientation = async (mode: ScreenOrientationMode): Promise<void> => 
           <span class="truncate">{{ t('settings.orientationLandscape') }}</span>
         </button>
       </div>
+    </div>
+
+    <!-- 3. Hardware Volume Key Page Turning -->
+    <div class="flex items-center justify-between gap-4 border-t border-gray-100 pt-3">
+      <div class="flex-1 space-y-0.5 pr-2">
+        <label
+          for="volume-key-page-turn-switch"
+          class="block cursor-pointer select-none text-xs font-semibold text-gray-900"
+        >
+          {{ t('settings.volumeKeyPageTurn') }}
+        </label>
+        <p class="text-[11px] leading-relaxed text-gray-500">
+          {{ t('settings.volumeKeyPageTurnDesc') }}
+        </p>
+      </div>
+
+      <!-- Toggle Switch -->
+      <button
+        id="volume-key-page-turn-switch"
+        type="button"
+        role="switch"
+        :aria-checked="settingsStore.volumeKeyPageTurn"
+        data-testid="volume-key-page-turn-toggle"
+        class="focus:outline-hidden relative inline-flex h-7 w-12 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2"
+        :class="settingsStore.volumeKeyPageTurn ? 'bg-indigo-600' : 'bg-gray-200'"
+        @click="toggleVolumeKeyPageTurn"
+      >
+        <span class="sr-only">{{ t('settings.volumeKeyPageTurn') }}</span>
+        <span
+          class="pointer-events-none inline-block h-6 w-6 transform rounded-full bg-white shadow-md ring-0 transition duration-200 ease-in-out"
+          :class="settingsStore.volumeKeyPageTurn ? 'translate-x-5' : 'translate-x-0'"
+        />
+      </button>
+    </div>
+
+    <!-- 4. Invert Volume Keys (Shown when volumeKeyPageTurn is enabled) -->
+    <div
+      v-if="settingsStore.volumeKeyPageTurn"
+      data-testid="invert-volume-keys-section"
+      class="flex items-center justify-between gap-4 border-t border-gray-100 pt-3"
+    >
+      <div class="flex-1 space-y-0.5 pr-2">
+        <label
+          for="invert-volume-keys-switch"
+          class="block cursor-pointer select-none text-xs font-semibold text-gray-900"
+        >
+          {{ t('settings.invertVolumeKeys') }}
+        </label>
+        <p class="text-[11px] leading-relaxed text-gray-500">
+          {{ t('settings.invertVolumeKeysDesc') }}
+        </p>
+      </div>
+
+      <!-- Toggle Switch -->
+      <button
+        id="invert-volume-keys-switch"
+        type="button"
+        role="switch"
+        :aria-checked="settingsStore.invertVolumeKeys"
+        data-testid="invert-volume-keys-toggle"
+        class="focus:outline-hidden relative inline-flex h-7 w-12 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2"
+        :class="settingsStore.invertVolumeKeys ? 'bg-indigo-600' : 'bg-gray-200'"
+        @click="toggleInvertVolumeKeys"
+      >
+        <span class="sr-only">{{ t('settings.invertVolumeKeys') }}</span>
+        <span
+          class="pointer-events-none inline-block h-6 w-6 transform rounded-full bg-white shadow-md ring-0 transition duration-200 ease-in-out"
+          :class="settingsStore.invertVolumeKeys ? 'translate-x-5' : 'translate-x-0'"
+        />
+      </button>
     </div>
   </section>
 </template>

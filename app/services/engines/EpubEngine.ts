@@ -187,6 +187,33 @@ export class EpubEngine extends BaseEngine {
       doc.addEventListener('mouseup', onGestureEnd, true);
       doc.addEventListener('touchend', onGestureEnd, true);
 
+      // Keyboard navigation fallback for volume & page keys inside EPUB iframe
+      doc.addEventListener('keydown', (e: KeyboardEvent) => {
+        if (
+          [
+            'AudioVolumeDown',
+            'VolumeDown',
+            'AudioVolumeUp',
+            'VolumeUp',
+            'PageDown',
+            'PageUp',
+          ].includes(e.key)
+        ) {
+          if (typeof window !== 'undefined') {
+            const forwarded = new KeyboardEvent('keydown', {
+              key: e.key,
+              code: e.code,
+              bubbles: true,
+              cancelable: true,
+            });
+            window.dispatchEvent(forwarded);
+            if (forwarded.defaultPrevented) {
+              e.preventDefault();
+            }
+          }
+        }
+      });
+
       doc.addEventListener('click', (event: MouseEvent) => {
         // Lifting the finger after selecting text must never toggle UI or dismiss the selection.
         if (shouldIgnoreReaderTap(win)) {

@@ -10,6 +10,8 @@ export const DEFAULT_SCREEN_CONTROL_SETTINGS: Required<ScreenControlSettings> = 
   orientationLock: 'auto',
   applyOrientationOnlyInReader: true,
   fontSize: 18,
+  volumeKeyPageTurn: true,
+  invertVolumeKeys: false,
 };
 
 function getStoredSettings(): Required<ScreenControlSettings> {
@@ -39,6 +41,14 @@ function getStoredSettings(): Required<ScreenControlSettings> {
           typeof parsed.fontSize === 'number' && !isNaN(parsed.fontSize)
             ? Math.min(32, Math.max(12, Math.round(parsed.fontSize)))
             : DEFAULT_SCREEN_CONTROL_SETTINGS.fontSize,
+        volumeKeyPageTurn:
+          typeof parsed.volumeKeyPageTurn === 'boolean'
+            ? parsed.volumeKeyPageTurn
+            : DEFAULT_SCREEN_CONTROL_SETTINGS.volumeKeyPageTurn,
+        invertVolumeKeys:
+          typeof parsed.invertVolumeKeys === 'boolean'
+            ? parsed.invertVolumeKeys
+            : DEFAULT_SCREEN_CONTROL_SETTINGS.invertVolumeKeys,
       };
     }
   } catch {
@@ -66,6 +76,8 @@ export const useSettingsStore = defineStore('settings', {
       orientationLock: initial.orientationLock as ScreenOrientationMode,
       applyOrientationOnlyInReader: initial.applyOrientationOnlyInReader,
       fontSize: initial.fontSize,
+      volumeKeyPageTurn: initial.volumeKeyPageTurn,
+      invertVolumeKeys: initial.invertVolumeKeys,
       isReaderActive: false,
     };
   },
@@ -171,12 +183,34 @@ export const useSettingsStore = defineStore('settings', {
       this.setFontSize(DEFAULT_SCREEN_CONTROL_SETTINGS.fontSize);
     },
 
+    setVolumeKeyPageTurn(enabled: boolean): void {
+      this.volumeKeyPageTurn = enabled;
+      this.persist();
+
+      try {
+        const readerStore = useReaderStore();
+        readerStore.setVolumeKeyPageTurn(enabled);
+      } catch {}
+    },
+
+    setInvertVolumeKeys(invert: boolean): void {
+      this.invertVolumeKeys = invert;
+      this.persist();
+
+      try {
+        const readerStore = useReaderStore();
+        readerStore.setInvertVolumeKeys(invert);
+      } catch {}
+    },
+
     resetToDefault(): void {
       this.keepScreenAwake = DEFAULT_SCREEN_CONTROL_SETTINGS.keepScreenAwake;
       this.orientationLock = DEFAULT_SCREEN_CONTROL_SETTINGS.orientationLock;
       this.applyOrientationOnlyInReader =
         DEFAULT_SCREEN_CONTROL_SETTINGS.applyOrientationOnlyInReader;
       this.fontSize = DEFAULT_SCREEN_CONTROL_SETTINGS.fontSize;
+      this.volumeKeyPageTurn = DEFAULT_SCREEN_CONTROL_SETTINGS.volumeKeyPageTurn;
+      this.invertVolumeKeys = DEFAULT_SCREEN_CONTROL_SETTINGS.invertVolumeKeys;
       this.persist();
 
       try {
@@ -184,6 +218,8 @@ export const useSettingsStore = defineStore('settings', {
         if (readerStore.settings.fontSize !== this.fontSize) {
           readerStore.setFontSize(this.fontSize);
         }
+        readerStore.setVolumeKeyPageTurn(this.volumeKeyPageTurn);
+        readerStore.setInvertVolumeKeys(this.invertVolumeKeys);
       } catch {}
 
       if (this.isReaderActive) {
@@ -202,6 +238,8 @@ export const useSettingsStore = defineStore('settings', {
         orientationLock: this.orientationLock,
         applyOrientationOnlyInReader: this.applyOrientationOnlyInReader,
         fontSize: this.fontSize,
+        volumeKeyPageTurn: this.volumeKeyPageTurn,
+        invertVolumeKeys: this.invertVolumeKeys,
       });
     },
   },

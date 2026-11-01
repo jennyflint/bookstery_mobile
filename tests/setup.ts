@@ -9,7 +9,20 @@ import {
   mockFilePicker,
   mockTextToSpeech,
   mockScreenOrientation,
+  mockVolumeButtons,
 } from './mocks/capacitor-plugins';
+
+vi.mock('../app/services/volume/VolumeButtonsAdapter', () => ({
+  VolumeButtons: mockVolumeButtons,
+}));
+
+vi.mock('../../app/services/volume/VolumeButtonsAdapter', () => ({
+  VolumeButtons: mockVolumeButtons,
+}));
+
+vi.mock('~/services/volume/VolumeButtonsAdapter', () => ({
+  VolumeButtons: mockVolumeButtons,
+}));
 
 vi.mock('@capacitor/screen-orientation', () => ({
   ScreenOrientation: mockScreenOrientation,

@@ -65,6 +65,8 @@ const DEFAULT_SETTINGS: ReaderSettings = {
   keepScreenAwake: true,
   orientationLock: 'auto',
   applyOrientationOnlyInReader: true,
+  volumeKeyPageTurn: true,
+  invertVolumeKeys: false,
 };
 
 function getStoredSettings(): ReaderSettings {
@@ -310,6 +312,14 @@ export const useReaderStore = defineStore('reader', {
     },
     setApplyOrientationOnlyInReader(onlyInReader: boolean): void {
       this.settings.applyOrientationOnlyInReader = onlyInReader;
+      persistSettings(this.settings);
+    },
+    setVolumeKeyPageTurn(enabled: boolean): void {
+      this.settings.volumeKeyPageTurn = enabled;
+      persistSettings(this.settings);
+    },
+    setInvertVolumeKeys(invert: boolean): void {
+      this.settings.invertVolumeKeys = invert;
       persistSettings(this.settings);
     },
     resetToDefault(): void {

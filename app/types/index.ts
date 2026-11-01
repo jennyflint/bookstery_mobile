@@ -11,6 +11,7 @@ export * from './sort';
 export * from './tts';
 export * from './reflow';
 export * from './settings';
+export * from './volume';
 
 export type BookFormat = 'pdf' | 'epub' | 'fb2';
 
@@ -132,6 +133,8 @@ export interface ReaderSettings {
   keepScreenAwake?: boolean;
   orientationLock?: import('./settings').ScreenOrientationMode;
   applyOrientationOnlyInReader?: boolean;
+  volumeKeyPageTurn?: boolean;
+  invertVolumeKeys?: boolean;
 }
 
 export interface TextSelectionDetail {
