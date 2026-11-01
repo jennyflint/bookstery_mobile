@@ -267,3 +267,9 @@ Run docker
 ```bash
 docker run --rm   --user root   -e ANDROID_HOME=/home/circleci/android-sdk   -e ANDROID_SDK_ROOT=/home/circleci/android-sdk   -v $(pwd):/project   -w /project/android   cimg/android:2026.01   ./gradlew assembleDebug --no-daemon
 ```
+
+# Fix Storage permission
+```bash
+sudo cp docs/android/StorageAccessPlugin.java docs/android/MainActivity.java android/app/src/main/java/com/bookstery/app/
+npm run cap:sync
+```

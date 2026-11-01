@@ -21,6 +21,7 @@ const emit = defineEmits<{
 const readerStore = useReaderStore();
 const { handleReaderTap } = useTextSelection();
 const viewportWrapperRef = ref<HTMLElement | null>(null);
+const gestureTargetRef = ref<HTMLElement | null>(null);
 const containerRef = ref<ZoomableContainerElement | null>(null);
 
 const {
@@ -32,13 +33,23 @@ const {
   resetZoom,
   didInteractRecently,
   bindTouchSource,
-} = usePinchZoom(viewportWrapperRef, containerRef, {
+} = usePinchZoom(viewportWrapperRef, gestureTargetRef, {
   minScale: 1.0,
   maxScale: 4.0,
   doubleTapScale: 2.5,
   doubleTapDelayMs: 300,
   debounceMs: 200,
-  isRenderZoomSupported: () => !!props.onZoomRender || !!containerRef.value?.__readerSetZoom,
+  getContentSize: () => {
+    if (readerStore.currentBook?.format === 'pdf' && readerStore.isReflowMode) return null;
+    return containerRef.value?.__readerGetContentSize?.() ?? null;
+  },
+  isRenderZoomSupported: () => {
+    // The PDF reflow layer is plain HTML text: it can only be scaled with CSS.
+    if (readerStore.currentBook?.format === 'pdf' && readerStore.isReflowMode) return false;
+    const container = containerRef.value;
+    if (container?.__readerCanRenderZoom) return container.__readerCanRenderZoom();
+    return !!props.onZoomRender || !!container?.__readerSetZoom;
+  },
   onZoomRender: async (targetScale: number) => {
     if (props.onZoomRender) {
       await props.onZoomRender(targetScale);
@@ -87,9 +98,12 @@ const viewportStyle = computed(() => ({
   touchAction: 'none',
 }));
 
-const containerTransformStyle = computed(() => ({
+const containerPaddingStyle = {
   paddingTop: 'env(safe-area-inset-top, 0px)',
   paddingBottom: 'env(safe-area-inset-bottom, 0px)',
+};
+
+const containerTransformStyle = computed(() => ({
   transform: `translate3d(${translateX.value}px, ${translateY.value}px, 0) scale(${cssScale.value})`,
   transformOrigin: 'center center',
   transition: isAnimating.value ? 'transform 250ms cubic-bezier(0.22, 1, 0.36, 1)' : 'none',
@@ -139,26 +153,34 @@ defineExpose({
     :style="viewportStyle"
     @click="handleContainerClick"
   >
+    <!-- Everything inside the gesture target (engine content and PDF reflow layer) zooms together. -->
     <div
-      ref="containerRef"
+      ref="gestureTargetRef"
       data-testid="reader-gesture-target"
-      class="w-full h-full flex flex-col items-center justify-center overflow-auto"
+      class="relative w-full h-full"
       :style="containerTransformStyle"
-    />
-
-    <!-- Reflow Mode Layer for PDF -->
-    <div
-      v-if="readerStore.currentBook?.format === 'pdf' && readerStore.isReflowMode"
-      data-testid="reflow-viewport-layer"
-      class="absolute inset-0 z-20 w-full h-full"
     >
-      <PdfViewer
-        :active-engine="props.activeEngine"
-        :page-number="readerStore.currentPage"
-        @next="emit('next')"
-        @prev="emit('prev')"
-        @center-tap="emit('center-tap')"
+      <div
+        ref="containerRef"
+        data-testid="reader-engine-container"
+        class="w-full h-full flex flex-col items-center justify-center overflow-auto"
+        :style="containerPaddingStyle"
       />
+
+      <!-- Reflow Mode Layer for PDF -->
+      <div
+        v-if="readerStore.currentBook?.format === 'pdf' && readerStore.isReflowMode"
+        data-testid="reflow-viewport-layer"
+        class="absolute inset-0 z-20 w-full h-full"
+      >
+        <PdfViewer
+          :active-engine="props.activeEngine"
+          :page-number="readerStore.currentPage"
+          @next="emit('next')"
+          @prev="emit('prev')"
+          @center-tap="emit('center-tap')"
+        />
+      </div>
     </div>
 
     <div

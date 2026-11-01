@@ -114,6 +114,8 @@ export interface PinchZoomOptions {
   onZoomRender?: (scale: number) => Promise<void> | void;
   /** When it returns false, the gesture scale stays applied as a CSS transform instead of being re-rendered. */
   isRenderZoomSupported?: () => boolean;
+  /** Content size at scale 1.0; when provided, pan limits follow the content, and small content stays centered. */
+  getContentSize?: () => { width: number; height: number } | null;
   onSwipeNext?: () => void;
   onSwipePrev?: () => void;
 }
@@ -122,6 +124,10 @@ export interface ZoomableContainerElement extends HTMLElement {
   __readerSetZoom?: (scale: number) => Promise<void>;
   __readerResetZoom?: () => void;
   __onEngineResetZoom?: () => void;
+  /** Lets an engine veto gesture-driven re-rendering (e.g. PDF scroll mode); the CSS scale is kept instead. */
+  __readerCanRenderZoom?: () => boolean;
+  /** Logical size of the page at zoom 1.0, used to bound panning to the page instead of the viewport. */
+  __readerGetContentSize?: () => { width: number; height: number } | null;
   /** Lets engines that render inside iframes forward the iframe's touches to the pinch controller. */
   __readerBindTouchSource?: (doc: Document, frame: HTMLElement) => () => void;
 }

@@ -1,5 +1,7 @@
 import type { PinchZoomOptions } from '../../types';
 
+const ZOOM_ANIMATION_MS = 250;
+
 export interface PinchZoomStateSnapshot {
   scale: number;
   cssScale: number;
@@ -42,6 +44,7 @@ export class PinchZoomController {
   private onSwipeNext?: () => void;
   private onSwipePrev?: () => void;
   private isRenderZoomSupported?: () => boolean;
+  private getContentSize?: () => { width: number; height: number } | null;
   private onStateChange?: (state: PinchZoomStateSnapshot) => void;
 
   private scale: number = 1.0;
@@ -89,6 +92,7 @@ export class PinchZoomController {
     this.onSwipeNext = config.onSwipeNext;
     this.onSwipePrev = config.onSwipePrev;
     this.isRenderZoomSupported = config.isRenderZoomSupported;
+    this.getContentSize = config.getContentSize;
     this.onStateChange = config.onStateChange;
 
     this.boundTouchStart = this.handleTouchStart.bind(this);
@@ -165,8 +169,13 @@ export class PinchZoomController {
       return { x: 0, y: 0 };
     }
     const { width, height } = this.getViewportDimensions();
-    const maxOffsetX = Math.max(0, (width * (targetScale - 1)) / 2);
-    const maxOffsetY = Math.max(0, (height * (targetScale - 1)) / 2);
+    const content = this.getContentSize?.();
+    const maxOffsetX = content
+      ? Math.max(0, (content.width * targetScale - width) / 2)
+      : Math.max(0, (width * (targetScale - 1)) / 2);
+    const maxOffsetY = content
+      ? Math.max(0, (content.height * targetScale - height) / 2)
+      : Math.max(0, (height * (targetScale - 1)) / 2);
     return {
       x: Math.min(Math.max(x, -maxOffsetX), maxOffsetX),
       y: Math.min(Math.max(y, -maxOffsetY), maxOffsetY),
@@ -179,7 +188,7 @@ export class PinchZoomController {
     this.target.style.transformOrigin = 'center center';
     this.target.style.willChange = 'transform';
     this.target.style.transition = this.isAnimating
-      ? 'transform 250ms cubic-bezier(0.22, 1, 0.36, 1)'
+      ? `transform ${ZOOM_ANIMATION_MS}ms cubic-bezier(0.22, 1, 0.36, 1)`
       : 'none';
     this.onStateChange?.(this.getState());
   }
@@ -191,7 +200,7 @@ export class PinchZoomController {
     }
   }
 
-  private scheduleHighResRender(targetScale: number): void {
+  private scheduleHighResRender(targetScale: number, delayMs: number = this.debounceMs): void {
     this.clearDebounceTimer();
     this.debounceTimer = setTimeout(async () => {
       this.debounceTimer = null;
@@ -209,7 +218,7 @@ export class PinchZoomController {
         this.isAnimating = false;
         this.applyTransform();
       }
-    }, this.debounceMs);
+    }, delayMs);
   }
 
   private startPinch(t1: GestureTouchPoint, t2: GestureTouchPoint): void {
@@ -421,7 +430,7 @@ export class PinchZoomController {
       this.translateY = 0;
       this.cssScale = Number((1.0 / this.renderedScale).toFixed(4));
       this.applyTransform();
-      this.scheduleHighResRender(1.0);
+      this.scheduleHighResRender(1.0, this.getAnimatedRenderDelay());
     } else {
       const targetScale = this.doubleTapScale;
       const { width, height, left, top } = this.getViewportDimensions();
@@ -436,8 +445,13 @@ export class PinchZoomController {
       this.translateY = Math.round(clamped.y);
       this.cssScale = Number((targetScale / this.renderedScale).toFixed(4));
       this.applyTransform();
-      this.scheduleHighResRender(targetScale);
+      this.scheduleHighResRender(targetScale, this.getAnimatedRenderDelay());
     }
+  }
+
+  /** Re-rendering must not cut the 250ms zoom animation short, or the page visibly jumps. */
+  private getAnimatedRenderDelay(): number {
+    return Math.max(this.debounceMs, ZOOM_ANIMATION_MS + 20);
   }
 
   public resetZoom(skipRenderCallback: boolean = false): void {

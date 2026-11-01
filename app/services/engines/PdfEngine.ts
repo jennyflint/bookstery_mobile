@@ -43,6 +43,12 @@ function isDarkColor(hexOrRgb: string): boolean {
   return lum < 0.5;
 }
 
+const MAX_CANVAS_PIXELS = 16_000_000;
+const FIT_MARGIN_PX = 32;
+const RESIZE_DEBOUNCE_MS = 150;
+const LAYOUT_WAIT_TIMEOUT_MS = 500;
+const CANCEL_SETTLE_TIMEOUT_MS = 250;
+
 export class PdfEngine extends BaseEngine {
   private pdfDocument: pdfjsLib.PDFDocumentProxy | null = null;
   private currentPageProxy: pdfjsLib.PDFPageProxy | null = null;
@@ -64,10 +70,150 @@ export class PdfEngine extends BaseEngine {
   private currentColors: { bg: string; text: string } | null = null;
   private isProgrammaticScroll: boolean = false;
   private currentFontSize: number = 18;
+  private resizeObserver: ResizeObserver | null = null;
+  private resizeTimer: ReturnType<typeof setTimeout> | null = null;
+  private lastLayoutSize: { width: number; height: number } | null = null;
+  private renderGeneration: number = 0;
+  private basePageSize: { width: number; height: number } | null = null;
 
   private getClampedDpr(): number {
     const rawDpr = typeof window !== 'undefined' ? window.devicePixelRatio || 1 : 1;
     return Math.min(rawDpr, 2.5);
+  }
+
+  /** Lowers the pixel ratio for large canvases: mobile browsers fail to allocate huge ones, leaving a blank page. */
+  private getCanvasSafeDpr(cssWidth: number, cssHeight: number): number {
+    const dpr = this.getClampedDpr();
+    const area = Math.max(cssWidth * cssHeight, 1);
+    if (area * dpr * dpr <= MAX_CANVAS_PIXELS) {
+      return dpr;
+    }
+    return Math.max(Math.sqrt(MAX_CANVAS_PIXELS / area), 0.25);
+  }
+
+  /** Available reader size in CSS pixels, with window fallbacks while layout is not settled yet. */
+  private getContainerSize(): { width: number; height: number } {
+    const width = this.container?.clientWidth ?? 0;
+    const height = this.container?.clientHeight ?? 0;
+    return {
+      width: width > 0 ? width : window.innerWidth || 360,
+      height: height > 0 ? height : window.innerHeight || 640,
+    };
+  }
+
+  /**
+   * Fit-to-screen scale for a page. `getViewport` already applies the page's built-in
+   * rotation, so landscape scans and rotated pages are measured in their displayed orientation.
+   */
+  private computeFitScale(page: pdfjsLib.PDFPageProxy): number {
+    const intrinsic = page.getViewport({ scale: 1 });
+    if (!(intrinsic.width > 0) || !(intrinsic.height > 0)) {
+      return 1;
+    }
+    const { width, height } = this.getContainerSize();
+    const scaleX = (width - FIT_MARGIN_PX) / intrinsic.width;
+    const scaleY = (height - FIT_MARGIN_PX) / intrinsic.height;
+    return Math.max(Math.min(scaleX, scaleY, 2.5), 0.2);
+  }
+
+  /** Resolves once the container has a real size (first layout pass), or after a short timeout. */
+  private waitForContainerLayout(container: HTMLElement): Promise<void> {
+    if (container.clientWidth > 0 && container.clientHeight > 0) {
+      return Promise.resolve();
+    }
+    if (typeof ResizeObserver === 'undefined') {
+      return Promise.resolve();
+    }
+    return new Promise<void>((resolve) => {
+      const observer = new ResizeObserver(() => {
+        if (container.clientWidth > 0 && container.clientHeight > 0) {
+          finish();
+        }
+      });
+      const timeout = setTimeout(() => finish(), LAYOUT_WAIT_TIMEOUT_MS);
+      function finish(): void {
+        clearTimeout(timeout);
+        observer.disconnect();
+        resolve();
+      }
+      observer.observe(container);
+    });
+  }
+
+  private observeContainerResize(): void {
+    this.disconnectResizeObserver();
+    if (!this.container || typeof ResizeObserver === 'undefined') {
+      return;
+    }
+    this.lastLayoutSize = { width: this.container.clientWidth, height: this.container.clientHeight };
+    this.resizeObserver = new ResizeObserver(() => {
+      if (!this.container) return;
+      const next = { width: this.container.clientWidth, height: this.container.clientHeight };
+      const prev = this.lastLayoutSize;
+      if (next.width <= 0 || next.height <= 0) return;
+      if (prev && Math.abs(next.width - prev.width) < 2 && Math.abs(next.height - prev.height) < 2) {
+        return;
+      }
+      if (this.resizeTimer) clearTimeout(this.resizeTimer);
+      this.resizeTimer = setTimeout(() => {
+        this.resizeTimer = null;
+        this.lastLayoutSize = next;
+        void this.relayout();
+      }, RESIZE_DEBOUNCE_MS);
+    });
+    this.resizeObserver.observe(this.container);
+  }
+
+  private disconnectResizeObserver(): void {
+    if (this.resizeTimer) {
+      clearTimeout(this.resizeTimer);
+      this.resizeTimer = null;
+    }
+    this.resizeObserver?.disconnect();
+    this.resizeObserver = null;
+  }
+
+  /** Re-fits the current page after the reader container changed size (rotation, UI chrome, split view). */
+  private async relayout(): Promise<void> {
+    if (!this.pdfDocument || !this.container) return;
+    try {
+      if (this.paginationMode === 'scroll') {
+        await this.renderScrollMode();
+        this.scrollToPage(this.currentPageNumber, false);
+      } else {
+        await this.renderButtonsMode(this.currentPageNumber, this.zoomScale, true);
+      }
+    } catch (err) {
+      console.warn('[PdfEngine] Failed to re-fit page after container resize:', err);
+    }
+  }
+
+  /**
+   * Cancels the running page render and waits until pdf.js has released the canvas, so two
+   * render passes can never paint onto the same surface.
+   */
+  private async cancelActiveRender(): Promise<void> {
+    const task = this.activeRenderTask;
+    if (!task) return;
+    this.activeRenderTask = null;
+    try {
+      task.cancel();
+    } catch {
+      return;
+    }
+    let timeout: ReturnType<typeof setTimeout> | null = null;
+    try {
+      await Promise.race([
+        task.promise,
+        new Promise<void>((resolve) => {
+          timeout = setTimeout(resolve, CANCEL_SETTLE_TIMEOUT_MS);
+        }),
+      ]);
+    } catch {
+      // RenderingCancelledException is the expected outcome of cancel().
+    } finally {
+      if (timeout) clearTimeout(timeout);
+    }
   }
 
   async init(
@@ -77,10 +223,15 @@ export class PdfEngine extends BaseEngine {
   ): Promise<void> {
     this.container = container;
     this.container.innerHTML = '';
+    await this.waitForContainerLayout(container);
 
     const zoomableContainer = container as ZoomableContainerElement;
     zoomableContainer.__readerSetZoom = (scale: number) => this.setZoom(scale);
     zoomableContainer.__readerResetZoom = () => this.resetZoom();
+    // Scroll mode stacks many pages, so gestures only scale them with CSS there.
+    zoomableContainer.__readerCanRenderZoom = () => this.paginationMode !== 'scroll';
+    zoomableContainer.__readerGetContentSize = () =>
+      this.paginationMode === 'scroll' ? null : this.basePageSize;
 
     if (!container.closest('[data-testid="reader-viewport"]')) {
       this.gestureController?.destroy();
@@ -169,6 +320,7 @@ export class PdfEngine extends BaseEngine {
       } else {
         await this.renderButtonsMode(this.currentPageNumber);
       }
+      this.observeContainerResize();
     } catch (err) {
       console.error('[PdfEngine] Failed to initialize PDF document:', err);
       throw err;
@@ -210,27 +362,18 @@ export class PdfEngine extends BaseEngine {
     }
   }
 
-  override async setZoom(scale: number): Promise<void> {
+  /** `zoom` is relative to the fit-to-screen scale, so 1.0 always means the default page size. */
+  override async setZoom(zoom: number): Promise<void> {
     if (!this.pdfDocument || !this.container) {
       return;
     }
-    const clampedScale = Math.min(Math.max(scale, 0.5), 4.0);
-    this.zoomScale = clampedScale;
-    this.currentScale = clampedScale;
+    const clampedZoom = Math.min(Math.max(zoom, 0.5), 4.0);
+    this.zoomScale = clampedZoom;
 
     if (this.paginationMode === 'scroll') {
-      if (this.scrollContainer) {
-        const slot = this.scrollContainer.querySelector<HTMLElement>(
-          `#pdf-page-slot-${this.currentPageNumber}`,
-        );
-        if (slot) {
-          this.renderedPages.delete(this.currentPageNumber);
-          await this.renderPageIntoSlot(this.currentPageNumber, slot, clampedScale);
-        }
-      }
-    } else {
-      await this.renderButtonsMode(this.currentPageNumber, clampedScale);
+      return;
     }
+    await this.renderButtonsMode(this.currentPageNumber, clampedZoom, true);
   }
 
   override async setFontSize(size: number): Promise<void> {
@@ -297,7 +440,10 @@ export class PdfEngine extends BaseEngine {
     const firstPage = await this.pdfDocument.getPage(1);
     const initialViewport = firstPage.getViewport({ scale: 1 });
     const containerWidth = Math.max(this.container.clientWidth, 320);
-    const targetScale = Math.max(Math.min((containerWidth - 32) / initialViewport.width, 2.0), 0.4);
+    const targetScale = Math.max(
+      Math.min((containerWidth - FIT_MARGIN_PX) / (initialViewport.width || 1), 2.0),
+      0.4,
+    );
     this.baseScale = targetScale;
     this.currentScale = targetScale;
     const scaledViewport = firstPage.getViewport({ scale: targetScale });
@@ -419,7 +565,7 @@ export class PdfEngine extends BaseEngine {
     try {
       pageProxy = await this.pdfDocument.getPage(pageNumber);
       const viewport = pageProxy.getViewport({ scale });
-      const dpr = this.getClampedDpr();
+      const dpr = this.getCanvasSafeDpr(viewport.width, viewport.height);
 
       const concurrentTask = this.activeSlotRenderTasks.get(pageNumber);
       if (concurrentTask) {
@@ -601,17 +747,16 @@ export class PdfEngine extends BaseEngine {
     }
   }
 
-  private async renderButtonsMode(pageNumber: number, customScale?: number): Promise<void> {
+  private async renderButtonsMode(
+    pageNumber: number,
+    zoom: number = 1,
+    swapWhenReady: boolean = false,
+  ): Promise<void> {
     if (!this.pdfDocument || !this.container) return;
     this.cleanupScroll();
+    const generation = ++this.renderGeneration;
 
-    if (this.activeRenderTask) {
-      try {
-        this.activeRenderTask.cancel();
-      } catch {
-      }
-      this.activeRenderTask = null;
-    }
+    await this.cancelActiveRender();
 
     if (this.currentPageProxy) {
       try {
@@ -624,13 +769,7 @@ export class PdfEngine extends BaseEngine {
     this.currentPageNumber = pageNumber;
     const pageProxy = await this.pdfDocument.getPage(pageNumber);
 
-    if (this.activeRenderTask) {
-      try {
-        this.activeRenderTask.cancel();
-      } catch {
-      }
-      this.activeRenderTask = null;
-    }
+    await this.cancelActiveRender();
 
     if (this.currentPageProxy) {
       try {
@@ -640,7 +779,10 @@ export class PdfEngine extends BaseEngine {
     }
     this.currentPageProxy = pageProxy;
 
-    this.container.innerHTML = '';
+    // Zoom re-renders keep the old page on screen until the new canvas is ready, avoiding a blank flash.
+    if (!swapWhenReady) {
+      this.container.innerHTML = '';
+    }
 
     const viewportContainer = document.createElement('div');
     viewportContainer.className =
@@ -657,37 +799,38 @@ export class PdfEngine extends BaseEngine {
     canvasContext.imageSmoothingEnabled = true;
     canvasContext.imageSmoothingQuality = 'high';
 
-    const containerWidth =
-      this.container.clientWidth > 0 ? this.container.clientWidth : window.innerWidth || 360;
-    const containerHeight =
-      this.container.clientHeight > 0 ? this.container.clientHeight : window.innerHeight || 640;
-
-    let targetScale: number;
-    if (customScale !== undefined) {
-      targetScale = customScale;
-    } else {
-      const initialViewport = this.currentPageProxy.getViewport({ scale: 1 });
-      const scaleX = (containerWidth - 32) / initialViewport.width;
-      const scaleY = (containerHeight - 32) / initialViewport.height;
-      targetScale = Math.max(Math.min(scaleX, scaleY, 2.5), 0.2);
-      this.baseScale = targetScale;
-    }
+    this.baseScale = this.computeFitScale(pageProxy);
+    const targetScale = this.baseScale * zoom;
     this.currentScale = targetScale;
-    const viewport = this.currentPageProxy.getViewport({ scale: targetScale });
-    const dpr = this.getClampedDpr();
+    const baseViewport = pageProxy.getViewport({ scale: this.baseScale });
+    this.basePageSize = {
+      width: Math.floor(baseViewport.width),
+      height: Math.floor(baseViewport.height),
+    };
+    const viewport = pageProxy.getViewport({ scale: targetScale });
+    const dpr = this.getCanvasSafeDpr(viewport.width, viewport.height);
+
+    // Wrapper, canvas and text layer share the exact logical size; only the canvas buffer is scaled by DPR.
+    const cssWidth = Math.floor(viewport.width);
+    const cssHeight = Math.floor(viewport.height);
 
     const pageWrapper = document.createElement('div');
     pageWrapper.className = 'pdf-page-wrapper relative shadow-md rounded overflow-hidden select-text';
     pageWrapper.style.position = 'relative';
-    pageWrapper.style.width = `${Math.floor(viewport.width)}px`;
-    pageWrapper.style.height = `${Math.floor(viewport.height)}px`;
+    pageWrapper.style.flex = 'none';
+    pageWrapper.style.width = `${cssWidth}px`;
+    pageWrapper.style.height = `${cssHeight}px`;
 
-    canvas.width = Math.floor(viewport.width * dpr);
-    canvas.height = Math.floor(viewport.height * dpr);
-    canvas.style.width = `${Math.floor(viewport.width)}px`;
-    canvas.style.height = `${Math.floor(viewport.height)}px`;
+    canvas.width = Math.floor(cssWidth * dpr);
+    canvas.height = Math.floor(cssHeight * dpr);
+    canvas.style.width = `${cssWidth}px`;
+    canvas.style.height = `${cssHeight}px`;
+    canvas.style.maxWidth = 'none';
+    canvas.style.maxHeight = 'none';
     canvas.style.display = 'block';
     canvas.style.pointerEvents = 'none';
+    canvasContext.setTransform(1, 0, 0, 1, 0, 0);
+    canvasContext.clearRect(0, 0, canvas.width, canvas.height);
 
     pageWrapper.appendChild(canvas);
     if (this.currentColors) {
@@ -697,8 +840,8 @@ export class PdfEngine extends BaseEngine {
 
     const textLayerDiv = document.createElement('div');
     textLayerDiv.className = 'textLayer pdf-text-layer';
-    textLayerDiv.style.width = `${Math.floor(viewport.width)}px`;
-    textLayerDiv.style.height = `${Math.floor(viewport.height)}px`;
+    textLayerDiv.style.width = `${cssWidth}px`;
+    textLayerDiv.style.height = `${cssHeight}px`;
     textLayerDiv.style.setProperty('--scale-factor', String(viewport.scale));
     pageWrapper.appendChild(textLayerDiv);
 
@@ -723,7 +866,9 @@ export class PdfEngine extends BaseEngine {
     };
     viewportContainer.addEventListener('wheel', handleWheel, { passive: true });
 
-    this.container.appendChild(viewportContainer);
+    if (!swapWhenReady) {
+      this.container.appendChild(viewportContainer);
+    }
 
     const transform = dpr !== 1 ? [dpr, 0, 0, dpr, 0, 0] : undefined;
     const renderContext = {
@@ -750,8 +895,33 @@ export class PdfEngine extends BaseEngine {
       }
     }
 
+    if (generation !== this.renderGeneration || !this.container) {
+      return;
+    }
+
+    if (swapWhenReady) {
+      this.container.innerHTML = '';
+      this.container.appendChild(viewportContainer);
+    }
+
+    const textLayerPromise = this.renderButtonsTextLayer(pageProxy, textLayerDiv, viewport);
+    // The swap and the gesture controller's CSS reset must happen in the same frame, so
+    // zoom re-renders do not wait for the (invisible) text layer.
+    if (!swapWhenReady) {
+      await textLayerPromise;
+    }
+
+    this.location = this.getCurrentLocation();
+    this.onLocationChange?.(this.location);
+  }
+
+  private async renderButtonsTextLayer(
+    pageProxy: pdfjsLib.PDFPageProxy,
+    textLayerDiv: HTMLElement,
+    viewport: ReturnType<pdfjsLib.PDFPageProxy['getViewport']>,
+  ): Promise<void> {
     try {
-      const textContent = await this.currentPageProxy.getTextContent();
+      const textContent = await pageProxy.getTextContent();
       textLayerDiv.innerHTML = '';
       if (typeof (pdfjsLib as any).renderTextLayer === 'function') {
         const textLayerTask = (pdfjsLib as any).renderTextLayer({
@@ -774,9 +944,6 @@ export class PdfEngine extends BaseEngine {
     } catch (textErr) {
       console.warn('[PdfEngine] Failed to render text layer in buttons mode:', textErr);
     }
-
-    this.location = this.getCurrentLocation();
-    this.onLocationChange?.(this.location);
   }
 
   private cleanupScroll(): void {
@@ -1064,6 +1231,7 @@ export class PdfEngine extends BaseEngine {
   override destroy(): void {
     this.clearTtsHighlight();
     this.detachVisibilityListener();
+    this.disconnectResizeObserver();
     this.cleanupScroll();
 
     if (this.gestureController) {
@@ -1075,6 +1243,8 @@ export class PdfEngine extends BaseEngine {
       const zoomableContainer = this.container as ZoomableContainerElement;
       delete zoomableContainer.__readerSetZoom;
       delete zoomableContainer.__readerResetZoom;
+      delete zoomableContainer.__readerCanRenderZoom;
+      delete zoomableContainer.__readerGetContentSize;
     }
 
     if (this.activeRenderTask) {

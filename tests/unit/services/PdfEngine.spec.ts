@@ -188,8 +188,9 @@ describe('PdfEngine', () => {
     await engine.init(container, new Uint8Array([1, 2, 3]));
     await engine.setPaginationMode('buttons');
 
+    const baseScale = mockPdfPage.getViewport.mock.calls.at(-1)?.[0]?.scale as number;
     await engine.setZoom(2.5);
-    expect(mockPdfPage.getViewport).toHaveBeenLastCalledWith({ scale: 2.5 });
+    expect(mockPdfPage.getViewport).toHaveBeenLastCalledWith({ scale: baseScale * 2.5 });
 
     const resetSpy = vi.spyOn(engine, 'resetZoom');
     await engine.next();
@@ -223,4 +224,82 @@ describe('PdfEngine', () => {
     expect(textLayer!.classList.contains('textLayer')).toBe(true);
     expect(textLayer!.style.getPropertyValue('--scale-factor')).toBeDefined();
   });
+
+  it('should re-fit the page when the container is resized', async () => {
+    vi.useFakeTimers();
+    let notifyResize: (() => void) | null = null;
+    class FakeResizeObserver {
+      constructor(cb: () => void) {
+        notifyResize = cb;
+      }
+      observe(): void {}
+      disconnect(): void {}
+    }
+    vi.stubGlobal('ResizeObserver', FakeResizeObserver);
+
+    const setSize = (width: number, height: number): void => {
+      Object.defineProperty(container, 'clientWidth', { value: width, configurable: true });
+      Object.defineProperty(container, 'clientHeight', { value: height, configurable: true });
+    };
+
+    try {
+      mockPdfPage.getViewport.mockImplementation(({ scale }: { scale: number }) => ({
+        width: 600 * scale,
+        height: 800 * scale,
+        scale,
+      }));
+      setSize(632, 832);
+      await engine.init(container, new Uint8Array([1, 2, 3]));
+      await engine.setPaginationMode('buttons');
+
+      const canvasBefore = container.querySelector<HTMLCanvasElement>('.pdf-canvas');
+      expect(canvasBefore!.style.width).toBe('600px');
+
+      setSize(332, 432);
+      notifyResize!();
+      await vi.advanceTimersByTimeAsync(200);
+
+      const canvasAfter = container.querySelector<HTMLCanvasElement>('.pdf-canvas');
+      expect(canvasAfter!.style.width).toBe('300px');
+      expect(canvasAfter!.style.height).toBe('400px');
+    } finally {
+      vi.useRealTimers();
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it('should await the cancelled render before starting a new one on the same page', async () => {
+    await engine.init(container, new Uint8Array([1, 2, 3]));
+    await engine.setPaginationMode('buttons');
+
+    const order: string[] = [];
+    let rejectRender: ((reason?: unknown) => void) | null = null;
+    const pending = new Promise<void>((_, reject) => {
+      rejectRender = reject;
+    });
+    const cancel = vi.fn(() => {
+      order.push('cancel');
+      const err = new Error('cancelled');
+      err.name = 'RenderingCancelledException';
+      setTimeout(() => {
+        order.push('settled');
+        rejectRender?.(err);
+      }, 0);
+    });
+    mockPdfPage.render
+      .mockReturnValueOnce({ promise: pending, cancel })
+      .mockImplementationOnce(() => {
+        order.push('render');
+        return mockRenderTask;
+      });
+
+    const first = engine.setZoom(2);
+    await Promise.resolve();
+    await Promise.resolve();
+    const second = engine.setZoom(3);
+    await Promise.all([first, second]);
+
+    expect(order.indexOf('settled')).toBeLessThan(order.indexOf('render'));
+  });
 });
+

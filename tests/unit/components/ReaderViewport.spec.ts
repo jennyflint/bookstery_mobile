@@ -307,10 +307,11 @@ describe('ReaderViewport Component', () => {
       toJSON: () => ({}),
     });
 
+    const engineContainer = wrapper.find('[data-testid="reader-engine-container"]').element as HTMLElement;
     const frame = document.createElement('iframe');
-    targetEl.appendChild(frame);
+    engineContainer.appendChild(frame);
     const frameDoc = document.implementation.createHTMLDocument('chapter');
-    const bind = (targetEl as unknown as {
+    const bind = (engineContainer as unknown as {
       __readerBindTouchSource: (d: Document, f: HTMLElement) => () => void;
     }).__readerBindTouchSource;
     bind(frameDoc, frame);
