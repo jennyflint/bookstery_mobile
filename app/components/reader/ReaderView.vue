@@ -3,6 +3,7 @@ import { onMounted, onUnmounted } from 'vue';
 import { useSettingsStore } from '../../stores/useSettingsStore';
 import { useTtsStore } from '../../stores/ttsStore';
 import ReaderViewport from './ReaderViewport.vue';
+import { shouldIgnoreReaderTap } from '../../services/selection/SelectionGuard';
 
 const props = defineProps<{
   activeEngine?: unknown;
@@ -17,6 +18,12 @@ const emit = defineEmits<{
 
 const settingsStore = useSettingsStore();
 const ttsStore = useTtsStore();
+
+/** Never toggle the UI while text is selected or right after a selection gesture. */
+const handleCenterTap = (): void => {
+  if (shouldIgnoreReaderTap()) return;
+  emit('center-tap');
+};
 
 onMounted(async () => {
   await settingsStore.enterReader();
@@ -36,7 +43,7 @@ onUnmounted(async () => {
     <ReaderViewport
       :active-engine="props.activeEngine"
       :on-zoom-render="props.onZoomRender"
-      @center-tap="emit('center-tap')"
+      @center-tap="handleCenterTap"
       @next="emit('next')"
       @prev="emit('prev')"
     />

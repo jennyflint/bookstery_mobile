@@ -16,7 +16,7 @@ const { t } = useI18n();
 const readerStore = useReaderStore();
 const highlightStore = useHighlightStore();
 const aiStore = useAiStore();
-const { clearSelection } = useTextSelection();
+const { dismissSelection } = useTextSelection();
 const translationService = TranslationService.getInstance();
 const { triggerExplain, triggerCharacter, triggerDictionary, triggerAskInChat } = useAiReader();
 
@@ -55,7 +55,7 @@ const handleApplyHighlight = async (color: HighlightColor) => {
   if (!highlightStore.activeSelection && readerStore.selection) {
     highlightStore.setActiveSelection({
       text,
-      locator: readerStore.locator || '1',
+      locator: readerStore.selection.locator || readerStore.locator || '1',
       format: (readerStore.currentBook?.format || 'epub') as 'pdf' | 'epub' | 'fb2',
       x: readerStore.selection.x,
       y: readerStore.selection.y,
@@ -78,7 +78,7 @@ const handleAddNote = () => {
   if (!highlightStore.activeSelection && readerStore.selection) {
     highlightStore.setActiveSelection({
       text,
-      locator: readerStore.locator || '1',
+      locator: readerStore.selection.locator || readerStore.locator || '1',
       format: (readerStore.currentBook?.format || 'epub') as 'pdf' | 'epub' | 'fb2',
       x: readerStore.selection.x,
       y: readerStore.selection.y,
@@ -101,7 +101,7 @@ const handleQuoteCard = () => {
   if (!highlightStore.activeSelection && readerStore.selection) {
     highlightStore.setActiveSelection({
       text,
-      locator: readerStore.locator || '1',
+      locator: readerStore.selection.locator || readerStore.locator || '1',
       format: (readerStore.currentBook?.format || 'epub') as 'pdf' | 'epub' | 'fb2',
       x: readerStore.selection.x,
       y: readerStore.selection.y,
@@ -216,10 +216,9 @@ const handleDeleteHighlight = async () => {
   }
 };
 
+/** Clears reactive + native selection (including EPUB iframes) and hides the bar. */
 const handleDismiss = () => {
-  clearSelection();
-  highlightStore.setActiveSelection(null);
-  highlightStore.selectedHighlight = null;
+  dismissSelection();
 };
 </script>
 
@@ -237,7 +236,14 @@ const handleDismiss = () => {
       data-testid="reader-selection-bar"
       class="fixed bottom-0 inset-x-0 z-50 bg-zinc-900/95 text-white backdrop-blur-xl border-t border-zinc-800/80 shadow-2xl px-3 py-3 select-none"
       :style="{ paddingBottom: 'calc(0.75rem + env(safe-area-inset-bottom, 0px))' }"
+      @mousedown.prevent
+      @touchstart.stop
     >
+      <!--
+        mousedown.prevent keeps focus in the document so tapping an action never collapses
+        the active native selection before the action runs; touchstart.stop keeps bar
+        gestures away from reader gesture handlers.
+      -->
       <div class="mx-auto max-w-2xl flex flex-wrap items-center justify-center gap-2">
         <!-- Color swatches -->
         <div class="flex items-center gap-2 px-2.5 py-1.5 rounded-xl bg-zinc-800/90 border border-zinc-700/60 shadow-inner">

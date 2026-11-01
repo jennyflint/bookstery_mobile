@@ -12,7 +12,7 @@ import { useBookSync } from '../../composables/useBookSync';
 import { useAppLifecycle } from '../../composables/useAppLifecycle';
 import { useTextSelection } from '../../composables/useTextSelection';
 import { TranslationService } from '../../services/translation/TranslationService';
-import type { TranslationResult } from '../../types';
+import type { EnginePageTapDetail, EngineSelectionDetail, TranslationResult } from '../../types';
 import ReaderViewport from '../../components/reader/ReaderViewport.vue';
 import ReaderOverlayControls from '../../components/reader/ReaderOverlayControls.vue';
 import ThemeSettingsSheet from '../../components/reader/ThemeSettingsSheet.vue';
@@ -57,7 +57,13 @@ const {
 } = useReader();
 const { queueProgress } = useBookSync();
 const { enableKeepAwake, disableKeepAwake } = useAppLifecycle();
-const { clearSelection, bindIframeSelection } = useTextSelection();
+const {
+  clearSelection,
+  dismissSelection,
+  applyEngineSelection,
+  registerSelectionClearer,
+  handleReaderTap,
+} = useTextSelection();
 const translationService = TranslationService.getInstance();
 
 watch(
@@ -180,36 +186,22 @@ startxref
         highlightStore.selectedHighlight = hl;
       });
 
-      if (activeEngine.value) {
-        const engineAny = activeEngine.value as any;
-        engineAny.onCenterTap = () => {
+      const engine = activeEngine.value;
+      if (engine) {
+        // Callbacks are invoked lazily by the engine, so assigning them after `openBook`
+        // still covers the first rendered chapter.
+        engine.onCenterTap = () => {
           handleCenterTap();
         };
-        if (typeof engineAny.onIframeReady !== 'undefined') {
-          engineAny.onIframeReady = (iframe: HTMLIFrameElement) => {
-            bindIframeSelection(iframe);
-          };
-        }
-        if (typeof engineAny.onSelectionChange !== 'undefined') {
-          engineAny.onSelectionChange = (detail: { text: string; locator?: string }) => {
-            readerStore.setSelection({
-              text: detail.text,
-              x: 0,
-              y: 0,
-              width: 0,
-              height: 0,
-            });
-            if (detail.locator) {
-              highlightStore.setActiveSelection({
-                text: detail.text,
-                locator: detail.locator,
-                format: (book.format || 'epub') as any,
-                x: 0,
-                y: 0,
-              });
-            }
-          };
-        }
+        engine.onPageTap = (detail: EnginePageTapDetail) => {
+          handleEnginePageTap(detail);
+        };
+        engine.onSelectionChange = (detail: EngineSelectionDetail) => {
+          applyEngineSelection(detail);
+        };
+        registerSelectionClearer(() => {
+          activeEngine.value?.clearSelection?.();
+        });
       }
     } catch (openErr) {
       console.error('[Reader] Failed to open book:', openErr);
@@ -234,6 +226,7 @@ onUnmounted(async () => {
   await settingsStore.leaveReader(isTtsPlaying);
   readerStore.clearReflowCache();
   closeBook();
+  registerSelectionClearer(null);
 });
 
 const handleCloseReader = async (): Promise<void> => {
@@ -347,8 +340,8 @@ const handleBackButtonPress = async (): Promise<void> => {
     aiStore.dismissInactivityBanner();
     return;
   }
-  if (readerStore.selection) {
-    clearSelection();
+  if (readerStore.selection || highlightStore.activeSelection) {
+    dismissSelection();
     return;
   }
 
@@ -357,13 +350,22 @@ const handleBackButtonPress = async (): Promise<void> => {
 };
 
 const handleCenterTap = () => {
+  // Viewport / reflow taps are already routed through `handleReaderTap`; this fallback
+  // still guarantees a tap never toggles the UI while a selection is shown.
   if (readerStore.selection || highlightStore.activeSelection || highlightStore.selectedHighlight) {
-    clearSelection();
-    highlightStore.setActiveSelection(null);
-    highlightStore.selectedHighlight = null;
+    handleReaderTap();
     return;
   }
   readerStore.toggleImmersiveMode();
+};
+
+/** Taps coming from engine-owned documents (EPUB iframes). */
+const handleEnginePageTap = (detail: EnginePageTapDetail): void => {
+  handleReaderTap(() => {
+    if (detail.isCenter) {
+      readerStore.toggleImmersiveMode();
+    }
+  });
 };
 
 const handleOpenSettings = () => {

@@ -94,6 +94,14 @@ export interface ReaderEngineInterface {
   getCurrentPageText?(): Promise<string> | string;
   highlightTtsSentence?(sentenceText: string, sentenceIndex: number): void;
   clearTtsHighlight?(): void;
+  /** Removes native text selection inside engine-owned documents (e.g. EPUB iframes). */
+  clearSelection?(): void;
+  /** Fired when a non-empty native selection is made inside engine-owned documents. */
+  onSelectionChange?: (detail: EngineSelectionDetail) => void;
+  /** Fired when the user taps engine-owned content (only when no text selection is active). */
+  onPageTap?: (detail: EnginePageTapDetail) => void;
+  /** Legacy center-tap callback. */
+  onCenterTap?: () => void;
 }
 
 export interface PinchZoomOptions {
@@ -132,6 +140,29 @@ export interface TextSelectionDetail {
   y: number;
   width: number;
   height: number;
+  /** EPUB CFI range or PDF/FB2 page locator of the selection, when known. */
+  locator?: string;
+  /** Sentence surrounding the selected text (used for AI context / dictionary). */
+  contextSentence?: string;
+}
+
+/**
+ * Selection payload emitted by reader engines (e.g. EPUB iframe content)
+ * when native text selection changes inside their own document.
+ */
+export interface EngineSelectionDetail {
+  text: string;
+  /** EPUB CFI range (or page locator) of the selection. */
+  locator?: string;
+  contextSentence?: string;
+  /** Selection bounding rect in top-level viewport coordinates. */
+  rect?: { x: number; y: number; width: number; height: number };
+}
+
+/** Tap event emitted by engines that render inside their own document (iframes). */
+export interface EnginePageTapDetail {
+  clientX: number;
+  isCenter: boolean;
 }
 
 export interface ScannedFile {

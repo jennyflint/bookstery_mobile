@@ -1,7 +1,20 @@
 import ePub from 'epubjs';
-import type { Book, Rendition, Location } from 'epubjs';
+import type { Book, Rendition, Location, Contents } from 'epubjs';
 import { BaseEngine } from './BaseEngine';
-import type { HighlightRecord, ReaderLocation, ReaderPaginationMode } from '../../types';
+import {
+  SELECTION_SETTLE_MS,
+  extractContextSentence,
+  getWindowSelectionText,
+  markSelectionActivity,
+  shouldIgnoreReaderTap,
+} from '../selection/SelectionGuard';
+import type {
+  EnginePageTapDetail,
+  EngineSelectionDetail,
+  HighlightRecord,
+  ReaderLocation,
+  ReaderPaginationMode,
+} from '../../types';
 
 export class EpubEngine extends BaseEngine {
   private book: Book | null = null;
@@ -12,7 +25,8 @@ export class EpubEngine extends BaseEngine {
   private currentFontSize: number = 18;
   private currentLineHeight: number = 1.6;
   public onIframeReady?: (iframe: HTMLIFrameElement) => void;
-  public onSelectionChange?: (detail: { text: string; locator?: string }) => void;
+  public onSelectionChange?: (detail: EngineSelectionDetail) => void;
+  public onPageTap?: (detail: EnginePageTapDetail) => void;
   public onCenterTap?: () => void;
 
   override setHighlights(
@@ -45,60 +59,160 @@ export class EpubEngine extends BaseEngine {
     }
   }
 
-  async init(
-    container: HTMLElement,
-    data: Uint8Array | ArrayBuffer | string,
-    initialLocator?: string,
-  ): Promise<void> {
-    this.container = container;
-    this.container.innerHTML = '';
+  /** Returns the rendered epubjs contents (one per visible iframe). */
+  private getContentsList(): Contents[] {
+    if (!this.rendition) return [];
+    try {
+      const raw = (this.rendition as unknown as { getContents?: () => Contents[] | Contents }).getContents?.();
+      if (!raw) return [];
+      return Array.isArray(raw) ? raw : [raw];
+    } catch {
+      return [];
+    }
+  }
 
-    const bookData = data instanceof Uint8Array ? data.buffer : data;
-    this.book = ePub(bookData as string | ArrayBuffer);
-    await this.book.ready;
+  /** Offset of the iframe hosting `contents` relative to the top-level viewport. */
+  private getFrameOffset(contents: Contents): { left: number; top: number } {
+    try {
+      const frame = contents.window?.frameElement as HTMLElement | null;
+      if (frame) {
+        const rect = frame.getBoundingClientRect();
+        return { left: rect.left, top: rect.top };
+      }
+    } catch {
+      // Detached iframe.
+    }
+    return { left: 0, top: 0 };
+  }
 
-    this.rendition = this.book.renderTo(container, {
-      width: '100%',
-      height: '100%',
-      flow: this.paginationMode === 'scroll' ? 'scrolled-doc' : 'paginated',
-      spread: 'none',
-    });
+  /**
+   * Reads the current native selection inside an EPUB iframe and reports it to the
+   * reader through `onSelectionChange`. Empty selections are ignored on purpose:
+   * selection state is sticky and only cleared explicitly by the reader.
+   */
+  private emitSelectionFromContents(contents: Contents, knownCfiRange?: string): void {
+    const win = contents.window;
+    const sel = win?.getSelection();
+    const text = sel ? sel.toString().trim() : '';
+    if (!sel || !text) return;
 
-    if (this.currentColors) {
-      this.applyTheme(this.currentColors);
+    markSelectionActivity();
+
+    let cfiRange = knownCfiRange ?? '';
+    let contextSentence: string | undefined;
+    let rect: EngineSelectionDetail['rect'];
+    try {
+      if (sel.rangeCount > 0) {
+        const range = sel.getRangeAt(0);
+        if (!cfiRange) {
+          cfiRange = contents.cfiFromRange(range);
+        }
+        contextSentence = extractContextSentence(range, text);
+        const r = range.getBoundingClientRect();
+        const offset = this.getFrameOffset(contents);
+        rect = {
+          x: Math.round(offset.left + r.left + r.width / 2),
+          y: Math.round(offset.top + r.top),
+          width: Math.round(r.width),
+          height: Math.round(r.height),
+        };
+      }
+    } catch {
+      // CFI / geometry are optional: the text alone is enough to show the selection bar.
     }
 
-    this.rendition.hooks.content.register((contents: any) => {
+    this.onSelectionChange?.({
+      text,
+      locator: cfiRange || undefined,
+      contextSentence,
+      rect,
+    });
+  }
+
+  /** Wires iframe content hooks and rendition events (used on init and on flow change). */
+  private attachRenditionListeners(): void {
+    if (!this.rendition) return;
+
+    this.rendition.hooks.content.register((contents: Contents) => {
       const doc = contents?.document;
-      if (doc?.body) {
+      const win = contents?.window;
+      if (!doc || !win) return;
+
+      if (doc.body) {
         doc.body.style.userSelect = 'text';
         doc.body.style.webkitUserSelect = 'text';
       }
-      const iframe = contents?.document?.defaultView?.frameElement as HTMLIFrameElement;
+
+      // Ensure CSS inside the iframe permits native text selection.
+      try {
+        void contents.addStylesheetRules(
+          {
+            'body, p, div, span, a, li': {
+              '-webkit-user-select': 'text !important',
+              'user-select': 'text !important',
+            },
+          },
+          'bookstery-selection',
+        );
+      } catch {
+        // Stylesheet injection is best-effort.
+      }
+
+      const iframe = win.frameElement as HTMLIFrameElement | null;
       if (iframe && this.onIframeReady) {
         this.onIframeReady(iframe);
       }
-      if (doc) {
-        this.injectFontSizeToDoc(doc, this.currentFontSize);
-        doc.addEventListener('click', (event: MouseEvent) => {
-          const sel = contents?.window?.getSelection();
-          if (sel && sel.toString().trim().length > 0) {
-            return;
-          }
-          const width = window.innerWidth;
-          const clickX = event.clientX;
-          if (clickX > width * 0.2 && clickX < width * 0.8) {
-            this.onCenterTap?.();
-          }
-        });
-      }
+
+      this.injectFontSizeToDoc(doc, this.currentFontSize);
+
+      // Primary selection trigger: the iframe's own `selectionchange` (never bubbles to the parent).
+      let debounceTimer: ReturnType<typeof setTimeout> | null = null;
+      doc.addEventListener('selectionchange', () => {
+        if (getWindowSelectionText(win).length > 0) {
+          markSelectionActivity();
+        }
+        if (debounceTimer) clearTimeout(debounceTimer);
+        debounceTimer = setTimeout(() => {
+          debounceTimer = null;
+          this.emitSelectionFromContents(contents);
+        }, SELECTION_SETTLE_MS);
+      });
+
+      // Refresh the tap lock when a gesture ends with text still selected.
+      const onGestureEnd = (): void => {
+        if (getWindowSelectionText(win).length > 0) {
+          markSelectionActivity();
+        }
+      };
+      doc.addEventListener('mouseup', onGestureEnd, true);
+      doc.addEventListener('touchend', onGestureEnd, true);
+
+      doc.addEventListener('click', (event: MouseEvent) => {
+        // Lifting the finger after selecting text must never toggle UI or dismiss the selection.
+        if (shouldIgnoreReaderTap(win)) {
+          return;
+        }
+        const target = event.target as Element | null;
+        if (target?.closest?.('a[href]')) {
+          return;
+        }
+        const offset = this.getFrameOffset(contents);
+        const clientX = event.clientX + offset.left;
+        const width = window.innerWidth;
+        const isCenter = clientX > width * 0.2 && clientX < width * 0.8;
+
+        if (this.onPageTap) {
+          this.onPageTap({ clientX, isCenter });
+        } else if (isCenter) {
+          this.onCenterTap?.();
+        }
+      });
     });
 
-    this.rendition.on('selected', (cfiRange: string, contents: any) => {
-      const sel = contents?.window?.getSelection();
-      const text = sel ? sel.toString().trim() : '';
-      if (text) {
-        this.onSelectionChange?.({ text, locator: cfiRange });
+    // Secondary selection trigger: epubjs' own debounced `selected` event.
+    this.rendition.on('selected', (cfiRange: string, contents: Contents) => {
+      if (contents) {
+        this.emitSelectionFromContents(contents, cfiRange);
       }
     });
 
@@ -125,6 +239,32 @@ export class EpubEngine extends BaseEngine {
       }
       this.injectFontSizeStyles(this.currentFontSize);
     });
+  }
+
+  async init(
+    container: HTMLElement,
+    data: Uint8Array | ArrayBuffer | string,
+    initialLocator?: string,
+  ): Promise<void> {
+    this.container = container;
+    this.container.innerHTML = '';
+
+    const bookData = data instanceof Uint8Array ? data.buffer : data;
+    this.book = ePub(bookData as string | ArrayBuffer);
+    await this.book.ready;
+
+    this.rendition = this.book.renderTo(container, {
+      width: '100%',
+      height: '100%',
+      flow: this.paginationMode === 'scroll' ? 'scrolled-doc' : 'paginated',
+      spread: 'none',
+    });
+
+    if (this.currentColors) {
+      this.applyTheme(this.currentColors);
+    }
+
+    this.attachRenditionListeners();
 
     try {
       await this.book.locations.generate(1024);
@@ -187,57 +327,7 @@ export class EpubEngine extends BaseEngine {
       if (this.currentColors) {
         this.applyTheme(this.currentColors);
       }
-      this.rendition.hooks.content.register((contents: any) => {
-        const doc = contents?.document;
-        if (doc?.body) {
-          doc.body.style.userSelect = 'text';
-          doc.body.style.webkitUserSelect = 'text';
-        }
-        const iframe = contents?.document?.defaultView?.frameElement as HTMLIFrameElement;
-        if (iframe && this.onIframeReady) {
-          this.onIframeReady(iframe);
-        }
-        if (doc) {
-          this.injectFontSizeToDoc(doc, this.currentFontSize);
-          doc.addEventListener('click', (event: MouseEvent) => {
-            const sel = contents?.window?.getSelection();
-            if (sel && sel.toString().trim().length > 0) {
-              return;
-            }
-            const width = window.innerWidth;
-            const clickX = event.clientX;
-            if (clickX > width * 0.2 && clickX < width * 0.8) {
-              this.onCenterTap?.();
-            }
-          });
-        }
-      });
-      this.rendition.on('selected', (cfiRange: string, contents: any) => {
-        const sel = contents?.window?.getSelection();
-        const text = sel ? sel.toString().trim() : '';
-        if (text) {
-          this.onSelectionChange?.({ text, locator: cfiRange });
-        }
-      });
-      this.rendition.on('relocated', (location: Location) => {
-        if (location && location.start) {
-          this.currentCfi = location.start.cfi;
-          if (location.start.percentage !== undefined) {
-            this.currentPercentage = Number((location.start.percentage * 100).toFixed(2));
-          }
-          this.location = this.getCurrentLocation();
-          this.onLocationChange?.(this.location);
-        }
-      });
-      this.rendition.on('rendered', () => {
-        this.restoreHighlights();
-        if (this.rendition?.themes?.fontSize) {
-          try {
-            this.rendition.themes.fontSize(`${this.currentFontSize}px`);
-          } catch {}
-        }
-        this.injectFontSizeStyles(this.currentFontSize);
-      });
+      this.attachRenditionListeners();
       if (currentLoc) {
         await this.rendition.display(currentLoc);
       } else {
@@ -341,14 +431,13 @@ export class EpubEngine extends BaseEngine {
     this.injectFontSizeStyles(this.currentFontSize);
   }
 
+  /** Removes native text selection from every rendered EPUB iframe. */
   clearSelection(): void {
-    if (this.rendition) {
+    for (const content of this.getContentsList()) {
       try {
-        const currentContents = (this.rendition as any).getContents?.() || [];
-        for (const content of currentContents) {
-          content.window?.getSelection()?.removeAllRanges();
-        }
+        content.window?.getSelection()?.removeAllRanges();
       } catch {
+        // Iframe may already be detached.
       }
     }
   }

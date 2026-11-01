@@ -2,6 +2,8 @@
 import { ref, computed, watch, onMounted, nextTick } from 'vue';
 import type { PDFDocumentProxy, PDFPageProxy } from 'pdfjs-dist';
 import { useReaderStore } from '../../stores/readerStore';
+import { useTextSelection } from '../../composables/useTextSelection';
+import { shouldIgnoreReaderTap } from '../../services/selection/SelectionGuard';
 import { extractReflowBlocks } from '../../utils/pdfReflowParser';
 import type { ReflowBlock } from '../../types/reflow';
 
@@ -22,6 +24,7 @@ const emit = defineEmits<{
 
 const { t } = useI18n();
 const readerStore = useReaderStore();
+const { handleReaderTap } = useTextSelection();
 
 const scrollContainerRef = ref<HTMLElement | null>(null);
 const fallbackCanvasRef = ref<HTMLCanvasElement | null>(null);
@@ -183,9 +186,8 @@ function handleTouchStart(e: TouchEvent): void {
 }
 
 function handleTouchEnd(e: TouchEvent): void {
-  // Do not navigate if user has selected text
-  const selection = typeof window !== 'undefined' ? window.getSelection()?.toString() : '';
-  if (selection && selection.length > 0) {
+  // Do not navigate while text is selected or right after a selection gesture
+  if (shouldIgnoreReaderTap()) {
     return;
   }
 
@@ -207,24 +209,27 @@ function handleTouchEnd(e: TouchEvent): void {
 }
 
 function handleContainerClick(e: MouseEvent): void {
+  // The reflow layer owns its taps; prevent the parent viewport from handling them twice.
+  e.stopPropagation();
+
   // Ignore clicks inside buttons or interactive elements
   const target = e.target as HTMLElement | null;
   if (target?.closest('button') || target?.closest('a')) {
     return;
   }
 
-  // Check if text was selected
-  const selection = typeof window !== 'undefined' ? window.getSelection()?.toString() : '';
-  if (selection && selection.length > 0) {
-    return;
-  }
-
   const width = window.innerWidth;
   const clickX = e.clientX;
   // Center 60% of screen triggers center tap for overlay toggle
-  if (clickX > width * 0.2 && clickX < width * 0.8) {
-    emit('center-tap');
-  }
+  const isCenter = clickX > width * 0.2 && clickX < width * 0.8;
+
+  // Ignore the click fired when lifting the finger after selecting text; a plain tap
+  // while the selection bar is shown only dismisses the selection (after verification).
+  handleReaderTap(() => {
+    if (isCenter) {
+      emit('center-tap');
+    }
+  });
 }
 
 watch(

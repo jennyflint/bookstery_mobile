@@ -2,6 +2,8 @@
 import { ref, computed, watch, onMounted } from 'vue';
 import { useReaderStore } from '../../stores/readerStore';
 import { usePinchZoom } from '../../composables/usePinchZoom';
+import { useTextSelection } from '../../composables/useTextSelection';
+import { shouldIgnoreReaderTap } from '../../services/selection/SelectionGuard';
 import PdfViewer from './PdfViewer.vue';
 import type { ZoomableContainerElement } from '../../types';
 
@@ -17,6 +19,7 @@ const emit = defineEmits<{
 }>();
 
 const readerStore = useReaderStore();
+const { handleReaderTap } = useTextSelection();
 const viewportWrapperRef = ref<HTMLElement | null>(null);
 const containerRef = ref<ZoomableContainerElement | null>(null);
 
@@ -42,9 +45,12 @@ const {
     }
   },
   onSwipeNext: () => {
+    // A horizontal drag while extending a text selection must not turn the page.
+    if (shouldIgnoreReaderTap()) return;
     emit('next');
   },
   onSwipePrev: () => {
+    if (shouldIgnoreReaderTap()) return;
     emit('prev');
   },
 });
@@ -92,12 +98,22 @@ const handleContainerClick = (event: MouseEvent) => {
     return;
   }
 
+  const target = event.target as HTMLElement | null;
+  if (target?.closest('button') || target?.closest('a')) {
+    return;
+  }
+
   const width = window.innerWidth;
   const clickX = event.clientX;
+  const isCenter = clickX > width * 0.2 && clickX < width * 0.8;
 
-  if (clickX > width * 0.2 && clickX < width * 0.8) {
-    emit('center-tap');
-  }
+  // Selection-aware guard: ignores the synthetic click fired after a selection gesture,
+  // and turns a plain tap into a (verified) dismissal while the selection bar is shown.
+  handleReaderTap(() => {
+    if (isCenter) {
+      emit('center-tap');
+    }
+  });
 };
 
 defineExpose({

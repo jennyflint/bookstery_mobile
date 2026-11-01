@@ -113,6 +113,12 @@ export const useReaderStore = defineStore('reader', {
     };
   },
   getters: {
+    /** Unified selected text shared by PDF (canvas + reflow), FB2 and EPUB viewers. */
+    selectedText: (state): string => state.selection?.text ?? '',
+    /** EPUB CFI range or page locator of the current selection. */
+    selectedCfiOrPage: (state): string => state.selection?.locator ?? '',
+    /** Sentence surrounding the current selection. */
+    selectionContextSentence: (state): string => state.selection?.contextSentence ?? '',
     fontScale: (state): number => Number((state.settings.fontSize / 18).toFixed(2)),
     reflowThemeColors: (state): { bg: string; text: string } => {
       switch (state.reflowTheme) {

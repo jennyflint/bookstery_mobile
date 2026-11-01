@@ -1,167 +1,296 @@
 import { onMounted, onUnmounted, getCurrentInstance } from 'vue';
 import { useReaderStore } from '../stores/readerStore';
-import type { TextSelectionDetail } from '../types';
+import { useHighlightStore } from '../stores/highlightStore';
+import {
+  SELECTION_SETTLE_MS,
+  clearAllNativeSelections,
+  extractContextSentence,
+  getWindowSelectionText,
+  hasActiveNativeSelection,
+  isWithinSelectionLock,
+  markSelectionActivity,
+  resetSelectionActivity,
+  shouldIgnoreReaderTap,
+} from '../services/selection/SelectionGuard';
+import type { BookFormat, EngineSelectionDetail, TextSelectionDetail } from '../types';
 
-let debounceTimer: ReturnType<typeof setTimeout> | null = null;
+/*
+ * Module-level state: the selection lifecycle is global to the reader page, while
+ * `useTextSelection()` is called from several components. Listeners are ref-counted
+ * so the document is only observed once.
+ */
+let documentDebounceTimer: ReturnType<typeof setTimeout> | null = null;
+let dismissVerifyTimer: ReturnType<typeof setTimeout> | null = null;
+let listenerRefCount = 0;
+let engineSelectionClearer: (() => void) | null = null;
+let registeredSelectionHandler: (() => void) | null = null;
+const boundIframeDocuments = new WeakSet<Document>();
+
+/** Marks the selection lock when a gesture ends while text is still selected. */
+const handleGestureEnd = (event: Event): void => {
+  const target = event.target as Node | null;
+  const win = target?.ownerDocument?.defaultView ?? (typeof window !== 'undefined' ? window : null);
+  if (getWindowSelectionText(win).length > 0 || getWindowSelectionText(window).length > 0) {
+    markSelectionActivity();
+  }
+};
 
 export function useTextSelection() {
   const readerStore = useReaderStore();
+  const highlightStore = useHighlightStore();
 
+  const buildDetail = (
+    sel: Selection,
+    text: string,
+    offset: { left: number; top: number } = { left: 0, top: 0 },
+  ): TextSelectionDetail => {
+    const detail: TextSelectionDetail = {
+      text,
+      x: 0,
+      y: 0,
+      width: 0,
+      height: 0,
+      locator: readerStore.locator || String(readerStore.currentPage),
+    };
+    try {
+      if (sel.rangeCount > 0) {
+        const range = sel.getRangeAt(0);
+        detail.contextSentence = extractContextSentence(range, text);
+        const rect = range.getBoundingClientRect();
+        if (rect.width > 0 || rect.height > 0) {
+          detail.x = Math.round(offset.left + rect.left + rect.width / 2);
+          detail.y = Math.round(offset.top + rect.top);
+          detail.width = Math.round(rect.width);
+          detail.height = Math.round(rect.height);
+        }
+      }
+    } catch {
+      // Range geometry is optional.
+    }
+    return detail;
+  };
+
+  /**
+   * Top-level document `selectionchange` handler (PDF text layer, PDF reflow, FB2).
+   * Selection state is sticky: an empty / collapsed selection NEVER clears the state here,
+   * because Android WebView emits transient empty selections while dragging handles or when
+   * the selection bar mounts. Dismissal is explicit (close button, action, page tap, page turn).
+   */
   const handleSelection = (): void => {
     if (typeof window === 'undefined') return;
 
-    if (debounceTimer) {
-      clearTimeout(debounceTimer);
+    if (getWindowSelectionText(window).length > 0) {
+      markSelectionActivity();
     }
 
-    debounceTimer = setTimeout(() => {
+    if (documentDebounceTimer) {
+      clearTimeout(documentDebounceTimer);
+    }
+
+    documentDebounceTimer = setTimeout(() => {
+      documentDebounceTimer = null;
       const activeSelection = window.getSelection();
-      if (!activeSelection || activeSelection.isCollapsed) {
-        if (readerStore.selection) {
-          readerStore.setSelection(null);
-        }
-        return;
-      }
+      if (!activeSelection || activeSelection.isCollapsed) return;
 
       const selectedText = activeSelection.toString().trim();
-      if (!selectedText) {
-        if (readerStore.selection) {
-          readerStore.setSelection(null);
-        }
-        return;
-      }
+      if (!selectedText) return;
 
-      let detail: TextSelectionDetail = {
-        text: selectedText,
-        x: 0,
-        y: 0,
-        width: 0,
-        height: 0,
-      };
-
-      try {
-        const range = activeSelection.getRangeAt(0);
-        const rect = range.getBoundingClientRect();
-        if (rect.width > 0 && rect.height > 0) {
-          detail = {
-            text: selectedText,
-            x: Math.round(rect.left + rect.width / 2),
-            y: Math.round(rect.top),
-            width: Math.round(rect.width),
-            height: Math.round(rect.height),
-          };
-        }
-      } catch {
-      }
-
-      readerStore.setSelection(detail);
-    }, 150);
+      markSelectionActivity();
+      cancelPendingDismiss();
+      readerStore.setSelection(buildDetail(activeSelection, selectedText));
+    }, SELECTION_SETTLE_MS);
   };
 
+  /**
+   * Applies a selection reported by an engine that renders into its own document
+   * (EPUB iframes). Updates the same reactive state used for PDF selections.
+   */
+  const applyEngineSelection = (detail: EngineSelectionDetail): void => {
+    const text = detail.text.trim();
+    if (!text) return;
+
+    markSelectionActivity();
+    cancelPendingDismiss();
+
+    const rect = detail.rect ?? { x: 0, y: 0, width: 0, height: 0 };
+    readerStore.setSelection({
+      text,
+      x: rect.x,
+      y: rect.y,
+      width: rect.width,
+      height: rect.height,
+      locator: detail.locator,
+      contextSentence: detail.contextSentence,
+    });
+
+    if (detail.locator) {
+      highlightStore.setActiveSelection({
+        text,
+        locator: detail.locator,
+        format: (readerStore.currentBook?.format || 'epub') as BookFormat,
+        x: rect.x,
+        y: rect.y,
+        width: rect.width,
+        height: rect.height,
+      });
+    }
+  };
+
+  /**
+   * Binds sticky selection tracking to a same-origin iframe document.
+   * Kept for engines that only expose their iframe element.
+   */
   const bindIframeSelection = (iframe: HTMLIFrameElement): void => {
     try {
       const doc = iframe.contentDocument || iframe.contentWindow?.document;
-      if (!doc) return;
+      if (!doc || boundIframeDocuments.has(doc)) return;
+      boundIframeDocuments.add(doc);
+
+      let iframeDebounceTimer: ReturnType<typeof setTimeout> | null = null;
 
       doc.addEventListener('selectionchange', () => {
-        if (debounceTimer) {
-          clearTimeout(debounceTimer);
+        const win = doc.defaultView;
+        if (getWindowSelectionText(win).length > 0) {
+          markSelectionActivity();
         }
-
-        debounceTimer = setTimeout(() => {
+        if (iframeDebounceTimer) {
+          clearTimeout(iframeDebounceTimer);
+        }
+        iframeDebounceTimer = setTimeout(() => {
+          iframeDebounceTimer = null;
           const sel = doc.getSelection();
-          if (!sel || sel.isCollapsed) {
-            if (readerStore.selection) {
-              readerStore.setSelection(null);
-            }
-            return;
-          }
-
+          if (!sel || sel.isCollapsed) return;
           const text = sel.toString().trim();
-          if (!text) {
-            if (readerStore.selection) {
-              readerStore.setSelection(null);
-            }
-            return;
-          }
+          if (!text) return;
 
-          let detail: TextSelectionDetail = {
+          const iframeRect = iframe.getBoundingClientRect();
+          const detail = buildDetail(sel, text, { left: iframeRect.left, top: iframeRect.top });
+          applyEngineSelection({
             text,
-            x: 0,
-            y: 0,
-            width: 0,
-            height: 0,
-          };
-
-          try {
-            const range = sel.getRangeAt(0);
-            const rect = range.getBoundingClientRect();
-            const iframeRect = iframe.getBoundingClientRect();
-            detail = {
-              text,
-              x: Math.round(iframeRect.left + rect.left + rect.width / 2),
-              y: Math.round(iframeRect.top + rect.top),
-              width: Math.round(rect.width),
-              height: Math.round(rect.height),
-            };
-          } catch {
-          }
-
-          readerStore.setSelection(detail);
-        }, 150);
+            locator: readerStore.selection?.locator,
+            contextSentence: detail.contextSentence,
+            rect: { x: detail.x, y: detail.y, width: detail.width, height: detail.height },
+          });
+        }, SELECTION_SETTLE_MS);
       });
+      doc.addEventListener('mouseup', handleGestureEnd, true);
+      doc.addEventListener('touchend', handleGestureEnd, true);
     } catch {
+      // Cross-origin or detached iframe: ignore.
     }
   };
 
-  const clearSelection = (): void => {
-    if (debounceTimer) {
-      clearTimeout(debounceTimer);
-      debounceTimer = null;
+  /** Registers the active engine's own selection clearer (e.g. EPUB `rendition.getContents()`). */
+  const registerSelectionClearer = (clearer: (() => void) | null): void => {
+    engineSelectionClearer = clearer;
+  };
+
+  function cancelPendingDismiss(): void {
+    if (dismissVerifyTimer) {
+      clearTimeout(dismissVerifyTimer);
+      dismissVerifyTimer = null;
     }
+  }
+
+  /** Clears reactive selection state and all native selections (top-level + iframes). */
+  const clearSelection = (): void => {
+    if (documentDebounceTimer) {
+      clearTimeout(documentDebounceTimer);
+      documentDebounceTimer = null;
+    }
+    cancelPendingDismiss();
+    resetSelectionActivity();
     readerStore.setSelection(null);
 
-    if (typeof window !== 'undefined') {
-      try {
-        const sel = window.getSelection();
-        if (sel) {
-          sel.removeAllRanges();
-        }
-      } catch {
-      }
-
-      try {
-        const iframes = document.querySelectorAll('iframe');
-        iframes.forEach((iframe) => {
-          const iframeDoc = iframe.contentDocument || iframe.contentWindow?.document;
-          iframeDoc?.getSelection()?.removeAllRanges();
-        });
-      } catch {
-      }
+    try {
+      engineSelectionClearer?.();
+    } catch {
+      // Engine may already be destroyed.
     }
+    clearAllNativeSelections();
+  };
+
+  /** Clears the selection and every related highlight state, hiding the selection bar. */
+  const dismissSelection = (): void => {
+    clearSelection();
+    highlightStore.setActiveSelection(null);
+    highlightStore.selectedHighlight = null;
+  };
+
+  const hasStickySelection = (): boolean =>
+    !!readerStore.selection || !!highlightStore.activeSelection || !!highlightStore.selectedHighlight;
+
+  /**
+   * Central reader tap guard shared by the viewport, PDF reflow view and EPUB iframes.
+   *
+   * - Ignores taps that are part of a selection gesture (active native selection, or a
+   *   non-empty selection observed within the last 400ms).
+   * - If a sticky selection is shown, the tap only dismisses it, after verifying (150ms later)
+   *   that no new selection is being made in the document or any EPUB iframe.
+   * - Otherwise runs `onTap` (toggle UI, etc.).
+   *
+   * @returns true when the tap was consumed by the selection lifecycle.
+   */
+  const handleReaderTap = (onTap?: () => void, sourceWindow?: Window | null): boolean => {
+    if (shouldIgnoreReaderTap(sourceWindow)) {
+      return true;
+    }
+
+    if (hasStickySelection()) {
+      cancelPendingDismiss();
+      dismissVerifyTimer = setTimeout(() => {
+        dismissVerifyTimer = null;
+        const sourceHasSelection = getWindowSelectionText(sourceWindow).length > 0;
+        if (!sourceHasSelection && !hasActiveNativeSelection() && !isWithinSelectionLock()) {
+          dismissSelection();
+        }
+      }, SELECTION_SETTLE_MS);
+      return true;
+    }
+
+    onTap?.();
+    return false;
   };
 
   if (getCurrentInstance()) {
     onMounted(() => {
-      if (typeof document !== 'undefined') {
-        document.addEventListener('selectionchange', handleSelection);
+      if (typeof document === 'undefined') return;
+      if (listenerRefCount === 0) {
+        registeredSelectionHandler = handleSelection;
+        document.addEventListener('selectionchange', registeredSelectionHandler);
+        document.addEventListener('mouseup', handleGestureEnd, true);
+        document.addEventListener('touchend', handleGestureEnd, true);
       }
+      listenerRefCount++;
     });
 
     onUnmounted(() => {
-      if (debounceTimer) {
-        clearTimeout(debounceTimer);
-        debounceTimer = null;
-      }
-      if (typeof document !== 'undefined') {
-        document.removeEventListener('selectionchange', handleSelection);
+      if (typeof document === 'undefined') return;
+      listenerRefCount = Math.max(0, listenerRefCount - 1);
+      if (listenerRefCount === 0) {
+        if (documentDebounceTimer) {
+          clearTimeout(documentDebounceTimer);
+          documentDebounceTimer = null;
+        }
+        cancelPendingDismiss();
+        if (registeredSelectionHandler) {
+          document.removeEventListener('selectionchange', registeredSelectionHandler);
+          registeredSelectionHandler = null;
+        }
+        document.removeEventListener('mouseup', handleGestureEnd, true);
+        document.removeEventListener('touchend', handleGestureEnd, true);
       }
     });
   }
 
   return {
     handleSelection,
+    applyEngineSelection,
     bindIframeSelection,
+    registerSelectionClearer,
     clearSelection,
+    dismissSelection,
+    hasStickySelection,
+    handleReaderTap,
   };
 }
