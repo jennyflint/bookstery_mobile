@@ -8,6 +8,7 @@ export * from './export';
 export * from './scanner';
 export * from './ai';
 export * from './sort';
+export * from './tts';
 
 export type BookFormat = 'pdf' | 'epub' | 'fb2';
 
@@ -87,6 +88,9 @@ export interface ReaderEngineInterface {
   resetZoom?(): void;
   onLocationChange?: (location: ReaderLocation) => void;
   destroy(): void;
+  getCurrentPageText?(): Promise<string> | string;
+  highlightTtsSentence?(sentenceText: string, sentenceIndex: number): void;
+  clearTtsHighlight?(): void;
 }
 
 export interface PinchZoomOptions {

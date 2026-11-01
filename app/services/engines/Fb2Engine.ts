@@ -503,7 +503,40 @@ export class Fb2Engine extends BaseEngine {
     };
   }
 
-  destroy(): void {
+  getCurrentPageText(): string {
+    if (!this.scrollContainer) return '';
+    return this.scrollContainer.textContent || '';
+  }
+
+  highlightTtsSentence(sentenceText: string, _sentenceIndex: number): void {
+    this.clearTtsHighlight();
+    if (!this.scrollContainer || !sentenceText) return;
+
+    const cleanTarget = sentenceText.trim().toLowerCase();
+    const targetWords = cleanTarget
+      .split(/\s+/)
+      .map((w) => w.replace(/[.,!?;:«»""''()]/g, ''))
+      .filter((w) => w.length > 2);
+
+    const paragraphs = Array.from(this.scrollContainer.querySelectorAll<HTMLElement>('p, h2, h3, div'));
+    for (const p of paragraphs) {
+      const pText = (p.textContent || '').toLowerCase();
+      if (pText.includes(cleanTarget) || (targetWords.length > 0 && targetWords.every((w) => pText.includes(w)))) {
+        p.classList.add('tts-active-span');
+        p.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+        return;
+      }
+    }
+  }
+
+  clearTtsHighlight(): void {
+    if (!this.scrollContainer) return;
+    const highlighted = this.scrollContainer.querySelectorAll('.tts-active-span');
+    highlighted.forEach((el) => el.classList.remove('tts-active-span'));
+  }
+
+  override destroy(): void {
+    this.clearTtsHighlight();
     if (this.scrollContainer && this.scrollHandler) {
       this.scrollContainer.removeEventListener('scroll', this.scrollHandler);
       this.scrollHandler = null;

@@ -34,6 +34,8 @@ export default defineNuxtConfig({
       include: [
         '@capawesome/capacitor-file-picker',
         '@capacitor/share',
+        '@capacitor-community/keep-awake',
+        '@capacitor-community/text-to-speech',
         'ai',
         '@ai-sdk/vue',
         '@ai-sdk/openai',

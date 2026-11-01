@@ -939,7 +939,84 @@ export class PdfEngine extends BaseEngine {
     svg.appendChild(rect);
   }
 
-  destroy(): void {
+  async getCurrentPageText(): Promise<string> {
+    const pageNum = this.currentPageNumber;
+    try {
+      if (this.pdfDocument) {
+        const pageProxy = await this.pdfDocument.getPage(pageNum);
+        const textContent = await pageProxy.getTextContent();
+        const text = textContent.items
+          .map((item: any) => item.str || '')
+          .join(' ');
+        if (text.trim()) {
+          return text;
+        }
+      }
+    } catch (err) {
+      console.warn('[PdfEngine] Failed to get text content from page proxy:', err);
+    }
+
+    const textLayer = this.getActiveTextLayer();
+    if (textLayer) {
+      const spans = Array.from(textLayer.querySelectorAll('span'));
+      return spans.map((s) => s.textContent || '').join(' ');
+    }
+
+    return '';
+  }
+
+  private getActiveTextLayer(): HTMLElement | null {
+    if (!this.container) return null;
+    const pageNum = this.currentPageNumber;
+    const slot = this.container.querySelector(`.pdf-page-slot[data-page-number="${pageNum}"]`);
+    if (slot) {
+      return slot.querySelector<HTMLElement>('.pdf-text-layer');
+    }
+    return this.container.querySelector<HTMLElement>('.pdf-text-layer');
+  }
+
+  highlightTtsSentence(sentenceText: string, _sentenceIndex: number): void {
+    this.clearTtsHighlight();
+    const textLayer = this.getActiveTextLayer();
+    if (!textLayer || !sentenceText) return;
+
+    const spans = Array.from(textLayer.querySelectorAll<HTMLElement>('span'));
+    const targetWords = sentenceText
+      .toLowerCase()
+      .split(/\s+/)
+      .map((w) => w.replace(/[.,!?;:«»""''()]/g, ''))
+      .filter((w) => w.length > 1);
+
+    if (targetWords.length === 0) return;
+
+    let firstActiveSpan: HTMLElement | null = null;
+
+    for (const span of spans) {
+      const spanText = (span.textContent || '').toLowerCase();
+      if (!spanText.trim()) continue;
+
+      const matches = targetWords.some((word) => spanText.includes(word));
+      if (matches) {
+        span.classList.add('tts-active-span');
+        if (!firstActiveSpan) {
+          firstActiveSpan = span;
+        }
+      }
+    }
+
+    if (firstActiveSpan) {
+      firstActiveSpan.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    }
+  }
+
+  clearTtsHighlight(): void {
+    if (!this.container) return;
+    const highlighted = this.container.querySelectorAll('.tts-active-span');
+    highlighted.forEach((el) => el.classList.remove('tts-active-span'));
+  }
+
+  override destroy(): void {
+    this.clearTtsHighlight();
     this.detachVisibilityListener();
     this.cleanupScroll();
 

@@ -42,6 +42,21 @@ export const mockKeepAwake = {
   isSupported: vi.fn().mockResolvedValue({ isSupported: true }),
 };
 
+export const mockTextToSpeech = {
+  speak: vi.fn().mockResolvedValue(undefined),
+  stop: vi.fn().mockResolvedValue(undefined),
+  getSupportedVoices: vi.fn().mockResolvedValue({
+    voices: [
+      { default: true, lang: 'uk-UA', name: 'Ukrainian Voice', voiceURI: 'uk-voice-1' },
+      { default: false, lang: 'en-US', name: 'English Voice', voiceURI: 'en-voice-1' },
+    ],
+  }),
+  getSupportedLanguages: vi.fn().mockResolvedValue({
+    languages: ['uk-UA', 'en-US'],
+  }),
+  openInstall: vi.fn().mockResolvedValue(undefined),
+};
+
 export const mockApp = {
   addListener: vi.fn().mockImplementation(async (_event: string, _callback: (...args: any[]) => void) => {
     return {

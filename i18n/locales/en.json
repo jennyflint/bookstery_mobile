@@ -67,6 +67,26 @@
     "asc": "Ascending",
     "desc": "Descending"
   },
+  "tts": {
+    "readAloud": "Read Aloud",
+    "play": "Play",
+    "pause": "Pause",
+    "stop": "Stop",
+    "previousSentence": "Previous sentence",
+    "nextSentence": "Next sentence",
+    "speed": "Speed",
+    "voice": "Voice",
+    "sentenceProgress": "Sentence {current} of {total}",
+    "noText": "No readable text on this page",
+    "autoLanguage": "Auto ({lang})",
+    "language": "Language",
+    "allVoices": "All voices",
+    "autoDetect": "Auto detect ({lang})",
+    "noVoiceForLanguage": "No voice found on device for {lang}",
+    "installVoiceHint": "Install language voice data in system Text-to-Speech settings for best experience",
+    "installVoiceBtn": "Install voice in system settings",
+    "onlineFallbackHint": "Voice is played via online speech synthesis"
+  },
   "scanner": {
     "title": "Scan Device For Books",
     "description": "Bookstery will index local storage for supported ebooks.",

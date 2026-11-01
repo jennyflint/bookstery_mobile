@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { useReaderStore } from '../../stores/readerStore';
+import { useTtsStore } from '../../stores/ttsStore';
 import SyncStatusBadge from '../common/SyncStatusBadge.vue';
 import ReaderProgressBar from './ReaderProgressBar.vue';
 
@@ -11,10 +12,12 @@ const emit = defineEmits<{
   (e: 'open-notes'): void;
   (e: 'chapter-tldr'): void;
   (e: 'navigate', page: number): void;
+  (e: 'toggle-tts'): void;
 }>();
 
 const { t } = useI18n();
 const readerStore = useReaderStore();
+const ttsStore = useTtsStore();
 </script>
 
 <template>
@@ -50,6 +53,23 @@ const readerStore = useReaderStore();
 
         <div class="flex items-center gap-1.5">
           <SyncStatusBadge />
+          <button
+            type="button"
+            data-testid="tts-read-aloud-btn"
+            class="p-2 rounded-xl text-zinc-600 hover:bg-zinc-100 active:scale-95 transition-all"
+            :class="{ 'text-indigo-600 bg-indigo-50 font-bold': ttsStore.isActive }"
+            :title="t('tts.readAloud')"
+            @click="emit('toggle-tts')"
+          >
+            <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                stroke-width="2"
+                d="M15.536 8.464a5 5 0 010 7.072m2.828-9.9a9 9 0 010 12.728M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z"
+              />
+            </svg>
+          </button>
           <button
             type="button"
             data-testid="chapter-tldr-action"

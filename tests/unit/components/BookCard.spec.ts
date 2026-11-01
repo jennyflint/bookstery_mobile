@@ -125,4 +125,20 @@ describe('BookCard Component', () => {
     expect(wrapper.emitted('delete')).toBeTruthy();
     expect(wrapper.emitted('delete')?.[0]).toEqual([baseBook.id]);
   });
+
+  it('should render menu button and emit open-menu with book when clicked', async () => {
+    const wrapper = mount(BookCard, {
+      props: {
+        book: baseBook,
+      },
+    });
+
+    const menuBtn = wrapper.find('[data-testid="book-menu-btn"]');
+    expect(menuBtn.exists()).toBe(true);
+
+    await menuBtn.trigger('click');
+
+    expect(wrapper.emitted('open-menu')).toBeTruthy();
+    expect(wrapper.emitted('open-menu')?.[0]).toEqual([baseBook]);
+  });
 });

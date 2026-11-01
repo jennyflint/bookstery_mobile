@@ -11,6 +11,7 @@ export class EpubEngine extends BaseEngine {
   private currentColors: { bg: string; text: string } | null = null;
   public onIframeReady?: (iframe: HTMLIFrameElement) => void;
   public onSelectionChange?: (detail: { text: string; locator?: string }) => void;
+  public onCenterTap?: () => void;
 
   override setHighlights(
     highlights: HighlightRecord[],
@@ -74,6 +75,19 @@ export class EpubEngine extends BaseEngine {
       const iframe = contents?.document?.defaultView?.frameElement as HTMLIFrameElement;
       if (iframe && this.onIframeReady) {
         this.onIframeReady(iframe);
+      }
+      if (doc) {
+        doc.addEventListener('click', (event: MouseEvent) => {
+          const sel = contents?.window?.getSelection();
+          if (sel && sel.toString().trim().length > 0) {
+            return;
+          }
+          const width = window.innerWidth;
+          const clickX = event.clientX;
+          if (clickX > width * 0.2 && clickX < width * 0.8) {
+            this.onCenterTap?.();
+          }
+        });
       }
     });
 
@@ -174,6 +188,19 @@ export class EpubEngine extends BaseEngine {
         if (iframe && this.onIframeReady) {
           this.onIframeReady(iframe);
         }
+        if (doc) {
+          doc.addEventListener('click', (event: MouseEvent) => {
+            const sel = contents?.window?.getSelection();
+            if (sel && sel.toString().trim().length > 0) {
+              return;
+            }
+            const width = window.innerWidth;
+            const clickX = event.clientX;
+            if (clickX > width * 0.2 && clickX < width * 0.8) {
+              this.onCenterTap?.();
+            }
+          });
+        }
       });
       this.rendition.on('selected', (cfiRange: string, contents: any) => {
         const sel = contents?.window?.getSelection();
@@ -256,7 +283,86 @@ export class EpubEngine extends BaseEngine {
     }
   }
 
-  destroy(): void {
+  getCurrentPageText(): string {
+    if (!this.rendition) return '';
+    try {
+      const contents = (this.rendition as any).getContents?.() || [];
+      const texts: string[] = [];
+      for (const content of contents) {
+        const body = content.document?.body;
+        if (body) {
+          const text = body.innerText || body.textContent || '';
+          if (text.trim()) {
+            texts.push(text.trim());
+          }
+        }
+      }
+      return texts.join('\n\n');
+    } catch (err) {
+      console.warn('[EpubEngine] Failed to extract page text:', err);
+      return '';
+    }
+  }
+
+  highlightTtsSentence(sentenceText: string, _sentenceIndex: number): void {
+    this.clearTtsHighlight();
+    if (!this.rendition || !sentenceText) return;
+
+    try {
+      const contents = (this.rendition as any).getContents?.() || [];
+      const cleanTarget = sentenceText.trim().toLowerCase();
+      const targetWords = cleanTarget
+        .split(/\s+/)
+        .map((w) => w.replace(/[.,!?;:«»""''()]/g, ''))
+        .filter((w) => w.length > 2);
+
+      for (const content of contents) {
+        const doc: Document | undefined = content.document;
+        if (!doc || !doc.body) continue;
+
+        if (!doc.getElementById('tts-highlight-style')) {
+          const style = doc.createElement('style');
+          style.id = 'tts-highlight-style';
+          style.textContent = `
+            .tts-active-span {
+              background-color: rgba(250, 204, 21, 0.35) !important;
+              border-radius: 2px !important;
+            }
+          `;
+          doc.head.appendChild(style);
+        }
+
+        const elements = Array.from(doc.body.querySelectorAll<HTMLElement>('p, span, div, li, h1, h2, h3, h4, h5, h6'));
+        for (const el of elements) {
+          const elText = (el.textContent || '').toLowerCase();
+          if (elText.includes(cleanTarget) || (targetWords.length > 0 && targetWords.every((w) => elText.includes(w)))) {
+            el.classList.add('tts-active-span');
+            el.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+            return;
+          }
+        }
+      }
+    } catch (err) {
+      console.warn('[EpubEngine] Failed to highlight TTS sentence:', err);
+    }
+  }
+
+  clearTtsHighlight(): void {
+    if (!this.rendition) return;
+    try {
+      const contents = (this.rendition as any).getContents?.() || [];
+      for (const content of contents) {
+        const doc = content.document;
+        if (doc) {
+          const highlighted = doc.querySelectorAll('.tts-active-span');
+          highlighted.forEach((el: Element) => el.classList.remove('tts-active-span'));
+        }
+      }
+    } catch {}
+  }
+
+  override destroy(): void {
+    this.clearTtsHighlight();
     if (this.rendition) {
       try {
         this.rendition.destroy();

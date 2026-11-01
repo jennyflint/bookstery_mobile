@@ -101,27 +101,51 @@ const formatBadgeClass = (format: string) => {
         {{ props.book.format }}
       </span>
 
-      <button
-        type="button"
-        data-testid="delete-book-btn"
-        class="rounded-lg p-1.5 text-zinc-400 transition-all hover:bg-rose-50 hover:text-rose-600 active:scale-95"
-        :title="t('library.deleteBook')"
-        @click.stop="emit('delete', props.book.id)"
-      >
-        <svg
-          class="h-4 w-4"
-          fill="none"
-          viewBox="0 0 24 24"
-          stroke="currentColor"
+      <div class="flex items-center gap-0.5">
+        <button
+          type="button"
+          data-testid="book-menu-btn"
+          class="rounded-lg p-1.5 text-zinc-400 transition-all hover:bg-zinc-100 hover:text-zinc-700 active:scale-95"
+          :title="t('common.menu')"
+          @click.stop="emit('open-menu', props.book)"
         >
-          <path
-            stroke-linecap="round"
-            stroke-linejoin="round"
-            stroke-width="2"
-            d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
-          />
-        </svg>
-      </button>
+          <svg
+            class="h-4 w-4"
+            fill="none"
+            viewBox="0 0 24 24"
+            stroke="currentColor"
+          >
+            <path
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              stroke-width="2"
+              d="M12 5v.01M12 12v.01M12 19v.01M12 6a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2z"
+            />
+          </svg>
+        </button>
+
+        <button
+          type="button"
+          data-testid="delete-book-btn"
+          class="rounded-lg p-1.5 text-zinc-400 transition-all hover:bg-rose-50 hover:text-rose-600 active:scale-95"
+          :title="t('library.deleteBook')"
+          @click.stop="emit('delete', props.book.id)"
+        >
+          <svg
+            class="h-4 w-4"
+            fill="none"
+            viewBox="0 0 24 24"
+            stroke="currentColor"
+          >
+            <path
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              stroke-width="2"
+              d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
+            />
+          </svg>
+        </button>
+      </div>
     </div>
 
     <h3

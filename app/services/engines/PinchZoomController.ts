@@ -345,6 +345,7 @@ export class PinchZoomController {
       const totalMove = Math.hypot(deltaX, deltaY);
 
       if (totalMove < 20 && !this.didGestureMove) {
+        this.didGestureMove = false;
         const now = Date.now();
         if (this.lastTapTime > 0 && now - this.lastTapTime <= this.doubleTapDelayMs) {
           if (e.cancelable) {
@@ -367,6 +368,9 @@ export class PinchZoomController {
         } else if (deltaX > 50) {
           this.onSwipePrev?.();
         }
+        setTimeout(() => {
+          this.didGestureMove = false;
+        }, 150);
       }
     }
   }

@@ -93,7 +93,7 @@ const handleContainerClick = (event: MouseEvent) => {
   const width = window.innerWidth;
   const clickX = event.clientX;
 
-  if (clickX > width * 0.3 && clickX < width * 0.7) {
+  if (clickX > width * 0.2 && clickX < width * 0.8) {
     emit('center-tap');
   }
 };

@@ -7,6 +7,7 @@ import {
   mockKeepAwake,
   mockNetwork,
   mockFilePicker,
+  mockTextToSpeech,
 } from './mocks/capacitor-plugins';
 
 vi.mock('@capawesome/capacitor-file-picker', () => ({
@@ -32,6 +33,22 @@ vi.mock('@capacitor/clipboard', () => ({
 
 vi.mock('@capacitor-community/keep-awake', () => ({
   KeepAwake: mockKeepAwake,
+}));
+
+vi.mock('@capacitor-community/text-to-speech', () => ({
+  TextToSpeech: mockTextToSpeech,
+}));
+
+vi.mock('../app/services/tts/TextToSpeechAdapter', () => ({
+  TextToSpeech: mockTextToSpeech,
+}));
+
+vi.mock('../../app/services/tts/TextToSpeechAdapter', () => ({
+  TextToSpeech: mockTextToSpeech,
+}));
+
+vi.mock('~/services/tts/TextToSpeechAdapter', () => ({
+  TextToSpeech: mockTextToSpeech,
 }));
 
 vi.mock('@codetrix-studio/capacitor-google-auth', () => ({

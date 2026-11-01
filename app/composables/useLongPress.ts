@@ -10,7 +10,7 @@ export function useLongPress(
   options: UseLongPressOptions = {},
 ) {
   const delay = options.delay ?? 500;
-  const slop = options.slop ?? 10;
+  const slop = options.slop ?? 18;
 
   const isTriggered = ref(false);
   let timer: ReturnType<typeof setTimeout> | null = null;
@@ -89,21 +89,27 @@ export function useLongPress(
   };
 
   const onPointerDown = (event: PointerEvent): void => {
-    if (event.pointerType === 'mouse' && event.button !== 0) {
+    if (event && event.pointerType === 'mouse' && event.button !== 0) {
       return;
     }
-    start(event.clientX, event.clientY, event);
+    if (event?.pointerType === 'touch') {
+      return;
+    }
+    start(event?.clientX ?? 0, event?.clientY ?? 0, event);
   };
 
   const onPointerMove = (event: PointerEvent): void => {
-    move(event.clientX, event.clientY);
+    if (event?.pointerType === 'touch') return;
+    move(event?.clientX ?? 0, event?.clientY ?? 0);
   };
 
-  const onPointerUp = (): void => {
+  const onPointerUp = (event?: PointerEvent): void => {
+    if (event?.pointerType === 'touch') return;
     cancel();
   };
 
-  const onPointerCancel = (): void => {
+  const onPointerCancel = (event?: PointerEvent): void => {
+    if (event?.pointerType === 'touch') return;
     cancel();
   };
 

@@ -24,7 +24,9 @@ import QuoteCardModal from '../../components/export/QuoteCardModal.vue';
 import NotesExportModal from '../../components/export/NotesExportModal.vue';
 import AiAssistantSheet from '../../components/ai/AiAssistantSheet.vue';
 import AiSettingsModal from '../../components/ai/AiSettingsModal.vue';
+import TtsPlayerBar from '../../components/reader/TtsPlayerBar.vue';
 import { useAiStore } from '../../stores/aiStore';
+import { useTtsStore } from '../../stores/ttsStore';
 import { useAiReader } from '../../composables/useAiReader';
 
 const { t } = useI18n();
@@ -34,6 +36,7 @@ const libraryStore = useLibraryStore();
 const readerStore = useReaderStore();
 const highlightStore = useHighlightStore();
 const aiStore = useAiStore();
+const ttsStore = useTtsStore();
 const { triggerChapterTldr } = useAiReader();
 const { openBook, nextPage, prevPage, goToLocator, goToPage, setPaginationMode, applyTheme, closeBook, activeEngine } = useReader();
 const { queueProgress } = useBookSync();
@@ -161,6 +164,9 @@ startxref
 
       if (activeEngine.value) {
         const engineAny = activeEngine.value as any;
+        engineAny.onCenterTap = () => {
+          handleCenterTap();
+        };
         if (typeof engineAny.onIframeReady !== 'undefined') {
           engineAny.onIframeReady = (iframe: HTMLIFrameElement) => {
             bindIframeSelection(iframe);
@@ -195,9 +201,15 @@ startxref
 
 onUnmounted(async () => {
   if (backButtonListener) {
-    await backButtonListener.remove();
+    try {
+      await backButtonListener.remove();
+    } catch {}
     backButtonListener = null;
   }
+  try {
+    await ttsStore.stop();
+  } catch {}
+  activeEngine.value?.clearTtsHighlight?.();
   await disableKeepAwake();
   closeBook();
 });
@@ -207,6 +219,9 @@ const handleCloseReader = async (): Promise<void> => {
   isNavigating.value = true;
 
   try {
+    await ttsStore.stop();
+    activeEngine.value?.clearTtsHighlight?.();
+
     // 1. Save reading progress to store, SQLite, and sync queue before navigating
     if (activeEngine.value && readerStore.currentBook) {
       try {
@@ -345,6 +360,88 @@ const handleCloseTranslation = () => {
   activeTranslationResult.value = null;
 };
 
+const startTtsForCurrentPage = async (startIndex: number = 0): Promise<void> => {
+  if (!activeEngine.value) return;
+
+  const rawText = await activeEngine.value.getCurrentPageText?.();
+  if (!rawText || !rawText.trim()) {
+    await ttsStore.stop();
+    return;
+  }
+
+  await ttsStore.startPageTts(rawText, startIndex, {
+    onSentenceChange: (sentence) => {
+      activeEngine.value?.highlightTtsSentence?.(sentence.text, sentence.index);
+    },
+    onPageFinished: async () => {
+      const loc = activeEngine.value?.getCurrentLocation();
+      const currentPage = loc?.currentPage || 1;
+      const totalPages = loc?.totalPages || 1;
+
+      if (currentPage < totalPages) {
+        await nextPage();
+        await nextTick();
+        setTimeout(async () => {
+          if (ttsStore.isPlaying) {
+            await startTtsForCurrentPage(0);
+          }
+        }, 150);
+      } else {
+        await ttsStore.stop();
+        activeEngine.value?.clearTtsHighlight?.();
+      }
+    },
+  });
+};
+
+const handleToggleTts = async (): Promise<void> => {
+  if (ttsStore.isActive) {
+    if (ttsStore.isPlaying) {
+      await ttsStore.pause();
+    } else {
+      await ttsStore.resume();
+    }
+  } else {
+    await startTtsForCurrentPage(0);
+  }
+};
+
+const handleNextPage = async (): Promise<void> => {
+  const wasPlaying = ttsStore.isPlaying;
+  activeEngine.value?.clearTtsHighlight?.();
+  await nextPage();
+  if (wasPlaying) {
+    await nextTick();
+    setTimeout(() => {
+      startTtsForCurrentPage(0);
+    }, 150);
+  }
+};
+
+const handlePrevPage = async (): Promise<void> => {
+  const wasPlaying = ttsStore.isPlaying;
+  activeEngine.value?.clearTtsHighlight?.();
+  await prevPage();
+  if (wasPlaying) {
+    await nextTick();
+    setTimeout(() => {
+      startTtsForCurrentPage(0);
+    }, 150);
+  }
+};
+
+const handleNavigatePage = async (page: number): Promise<void> => {
+  const wasPlaying = ttsStore.isPlaying;
+  activeEngine.value?.clearTtsHighlight?.();
+  await goToPage(page);
+  if (wasPlaying) {
+    await nextTick();
+    setTimeout(() => {
+      startTtsForCurrentPage(0);
+    }, 150);
+  }
+};
+
 defineExpose({
   viewportRef,
   isNavigating,
@@ -358,19 +455,22 @@ defineExpose({
     <ReaderViewport
       ref="viewportRef"
       @center-tap="handleCenterTap"
-      @next="nextPage"
-      @prev="prevPage"
+      @next="handleNextPage"
+      @prev="handlePrevPage"
     />
 
     <ReaderOverlayControls
       @back="handleCloseReader"
-      @next="nextPage"
-      @prev="prevPage"
-      @navigate="goToPage"
+      @next="handleNextPage"
+      @prev="handlePrevPage"
+      @navigate="handleNavigatePage"
       @open-settings="handleOpenSettings"
       @open-notes="highlightStore.openNotesDrawer"
       @chapter-tldr="triggerChapterTldr"
+      @toggle-tts="handleToggleTts"
     />
+
+    <TtsPlayerBar />
 
     <Transition
       enter-active-class="transition duration-300 ease-out"
