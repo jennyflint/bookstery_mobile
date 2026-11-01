@@ -237,3 +237,17 @@ To test code changes on your Android device in real-time without rebuilding the 
    npx cap run android -l --external
    ```
    Select your local Wi-Fi IP address when prompted.
+
+## Fast Generation debug-apk inside wsl
+
+Remove old build
+
+```bash
+sudo rm -rf android/.gradle android/app/build
+```
+
+Run docker 
+
+```bash
+docker run --rm   --user root   -e ANDROID_HOME=/home/circleci/android-sdk   -e ANDROID_SDK_ROOT=/home/circleci/android-sdk   -v $(pwd):/project   -w /project/android   cimg/android:2026.01   ./gradlew assembleDebug --no-daemon
+```
