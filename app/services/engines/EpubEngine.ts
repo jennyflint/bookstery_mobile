@@ -9,6 +9,8 @@ export class EpubEngine extends BaseEngine {
   private currentCfi: string = '';
   private currentPercentage: number = 0;
   private currentColors: { bg: string; text: string } | null = null;
+  private currentFontSize: number = 18;
+  private currentLineHeight: number = 1.6;
   public onIframeReady?: (iframe: HTMLIFrameElement) => void;
   public onSelectionChange?: (detail: { text: string; locator?: string }) => void;
   public onCenterTap?: () => void;
@@ -77,6 +79,7 @@ export class EpubEngine extends BaseEngine {
         this.onIframeReady(iframe);
       }
       if (doc) {
+        this.injectFontSizeToDoc(doc, this.currentFontSize);
         doc.addEventListener('click', (event: MouseEvent) => {
           const sel = contents?.window?.getSelection();
           if (sel && sel.toString().trim().length > 0) {
@@ -115,6 +118,12 @@ export class EpubEngine extends BaseEngine {
 
     this.rendition.on('rendered', () => {
       this.restoreHighlights();
+      if (this.rendition?.themes?.fontSize) {
+        try {
+          this.rendition.themes.fontSize(`${this.currentFontSize}px`);
+        } catch {}
+      }
+      this.injectFontSizeStyles(this.currentFontSize);
     });
 
     try {
@@ -189,6 +198,7 @@ export class EpubEngine extends BaseEngine {
           this.onIframeReady(iframe);
         }
         if (doc) {
+          this.injectFontSizeToDoc(doc, this.currentFontSize);
           doc.addEventListener('click', (event: MouseEvent) => {
             const sel = contents?.window?.getSelection();
             if (sel && sel.toString().trim().length > 0) {
@@ -218,6 +228,15 @@ export class EpubEngine extends BaseEngine {
           this.location = this.getCurrentLocation();
           this.onLocationChange?.(this.location);
         }
+      });
+      this.rendition.on('rendered', () => {
+        this.restoreHighlights();
+        if (this.rendition?.themes?.fontSize) {
+          try {
+            this.rendition.themes.fontSize(`${this.currentFontSize}px`);
+          } catch {}
+        }
+        this.injectFontSizeStyles(this.currentFontSize);
       });
       if (currentLoc) {
         await this.rendition.display(currentLoc);
@@ -268,7 +287,58 @@ export class EpubEngine extends BaseEngine {
           'fill-opacity': '0.55 !important',
         },
       });
+      if (this.rendition.themes.fontSize) {
+        try {
+          this.rendition.themes.fontSize(`${this.currentFontSize}px`);
+        } catch {}
+      }
+      this.injectFontSizeStyles(this.currentFontSize);
     }
+  }
+
+  private injectFontSizeToDoc(doc: Document, size: number): void {
+    if (!doc || !doc.head) return;
+    let style = doc.getElementById('bookstery-font-size-style') as HTMLStyleElement | null;
+    if (!style) {
+      style = doc.createElement('style');
+      style.id = 'bookstery-font-size-style';
+      doc.head.appendChild(style);
+    }
+    style.textContent = `
+      body, p, div, span, li, a, blockquote {
+        font-size: ${size}px !important;
+        line-height: ${this.currentLineHeight} !important;
+      }
+      h1 { font-size: ${Math.round(size * 1.6)}px !important; }
+      h2 { font-size: ${Math.round(size * 1.4)}px !important; }
+      h3 { font-size: ${Math.round(size * 1.2)}px !important; }
+      h4 { font-size: ${Math.round(size * 1.1)}px !important; }
+      h5, h6 { font-size: ${size}px !important; }
+    `;
+  }
+
+  private injectFontSizeStyles(size: number): void {
+    if (!this.rendition) return;
+    try {
+      const contents = (this.rendition as any).getContents?.() || [];
+      for (const content of contents) {
+        if (content.document) {
+          this.injectFontSizeToDoc(content.document, size);
+        }
+      }
+    } catch (err) {
+      console.warn('[EpubEngine] Failed to inject font size styles:', err);
+    }
+  }
+
+  override setFontSize(size: number): void {
+    this.currentFontSize = Math.min(Math.max(Math.round(size), 12), 36);
+    if (this.rendition?.themes?.fontSize) {
+      try {
+        this.rendition.themes.fontSize(`${this.currentFontSize}px`);
+      } catch {}
+    }
+    this.injectFontSizeStyles(this.currentFontSize);
   }
 
   clearSelection(): void {

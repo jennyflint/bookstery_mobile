@@ -1,16 +1,18 @@
 import { defineStore } from 'pinia';
 import { ScreenControlService } from '../services/ScreenControlService';
+import { useReaderStore } from './readerStore';
 import type { ScreenControlSettings, ScreenOrientationMode } from '../types';
 
 export const SETTINGS_STORAGE_KEY = 'bookstery_screen_control_settings';
 
-export const DEFAULT_SCREEN_CONTROL_SETTINGS: ScreenControlSettings = {
+export const DEFAULT_SCREEN_CONTROL_SETTINGS: Required<ScreenControlSettings> = {
   keepScreenAwake: true,
   orientationLock: 'auto',
   applyOrientationOnlyInReader: true,
+  fontSize: 18,
 };
 
-function getStoredSettings(): ScreenControlSettings {
+function getStoredSettings(): Required<ScreenControlSettings> {
   if (typeof window === 'undefined') {
     return { ...DEFAULT_SCREEN_CONTROL_SETTINGS };
   }
@@ -33,6 +35,10 @@ function getStoredSettings(): ScreenControlSettings {
           typeof parsed.applyOrientationOnlyInReader === 'boolean'
             ? parsed.applyOrientationOnlyInReader
             : DEFAULT_SCREEN_CONTROL_SETTINGS.applyOrientationOnlyInReader,
+        fontSize:
+          typeof parsed.fontSize === 'number' && !isNaN(parsed.fontSize)
+            ? Math.min(32, Math.max(12, Math.round(parsed.fontSize)))
+            : DEFAULT_SCREEN_CONTROL_SETTINGS.fontSize,
       };
     }
   } catch {
@@ -59,8 +65,13 @@ export const useSettingsStore = defineStore('settings', {
       keepScreenAwake: initial.keepScreenAwake,
       orientationLock: initial.orientationLock as ScreenOrientationMode,
       applyOrientationOnlyInReader: initial.applyOrientationOnlyInReader,
+      fontSize: initial.fontSize,
       isReaderActive: false,
     };
+  },
+
+  getters: {
+    fontScale: (state): number => Number((state.fontSize / 18).toFixed(2)),
   },
 
   actions: {
@@ -135,12 +146,45 @@ export const useSettingsStore = defineStore('settings', {
       }
     },
 
+    setFontSize(size: number): void {
+      const clamped = Math.min(Math.max(Math.round(size), 12), 32);
+      this.fontSize = clamped;
+      this.persist();
+
+      try {
+        const readerStore = useReaderStore();
+        if (readerStore.settings.fontSize !== clamped) {
+          readerStore.setFontSize(clamped);
+        }
+      } catch {}
+    },
+
+    increaseFontSize(): void {
+      this.setFontSize(this.fontSize + 2);
+    },
+
+    decreaseFontSize(): void {
+      this.setFontSize(this.fontSize - 2);
+    },
+
+    resetFontSize(): void {
+      this.setFontSize(DEFAULT_SCREEN_CONTROL_SETTINGS.fontSize);
+    },
+
     resetToDefault(): void {
       this.keepScreenAwake = DEFAULT_SCREEN_CONTROL_SETTINGS.keepScreenAwake;
       this.orientationLock = DEFAULT_SCREEN_CONTROL_SETTINGS.orientationLock;
       this.applyOrientationOnlyInReader =
         DEFAULT_SCREEN_CONTROL_SETTINGS.applyOrientationOnlyInReader;
+      this.fontSize = DEFAULT_SCREEN_CONTROL_SETTINGS.fontSize;
       this.persist();
+
+      try {
+        const readerStore = useReaderStore();
+        if (readerStore.settings.fontSize !== this.fontSize) {
+          readerStore.setFontSize(this.fontSize);
+        }
+      } catch {}
 
       if (this.isReaderActive) {
         if (this.keepScreenAwake) {
@@ -157,6 +201,7 @@ export const useSettingsStore = defineStore('settings', {
         keepScreenAwake: this.keepScreenAwake,
         orientationLock: this.orientationLock,
         applyOrientationOnlyInReader: this.applyOrientationOnlyInReader,
+        fontSize: this.fontSize,
       });
     },
   },

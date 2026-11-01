@@ -1,4 +1,5 @@
 import { defineStore } from 'pinia';
+import { useSettingsStore } from './useSettingsStore';
 import type {
   BookRecord,
   ReaderLocation,
@@ -112,6 +113,7 @@ export const useReaderStore = defineStore('reader', {
     };
   },
   getters: {
+    fontScale: (state): number => Number((state.settings.fontSize / 18).toFixed(2)),
     reflowThemeColors: (state): { bg: string; text: string } => {
       switch (state.reflowTheme) {
         case 'sepia':
@@ -260,8 +262,27 @@ export const useReaderStore = defineStore('reader', {
       persistSettings(this.settings);
     },
     setFontSize(size: number): void {
-      this.settings.fontSize = Math.min(Math.max(size, 12), 36);
+      const clamped = Math.min(Math.max(Math.round(size), 12), 32);
+      this.settings.fontSize = clamped;
+      this.reflowFontSize = clamped;
       persistSettings(this.settings);
+      this.saveReflowState();
+      try {
+        const settingsStore = useSettingsStore();
+        if (settingsStore.fontSize !== clamped) {
+          settingsStore.fontSize = clamped;
+          settingsStore.persist();
+        }
+      } catch {}
+    },
+    increaseFontSize(): void {
+      this.setFontSize(this.settings.fontSize + 2);
+    },
+    decreaseFontSize(): void {
+      this.setFontSize(this.settings.fontSize - 2);
+    },
+    resetFontSize(): void {
+      this.setFontSize(18);
     },
     setFontFamily(family: string): void {
       this.settings.fontFamily = family;

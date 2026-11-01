@@ -53,6 +53,10 @@ export function useReader() {
         engine.applyTheme(readerStore.currentThemeColors);
       }
 
+      if (engine.setFontSize) {
+        await engine.setFontSize(readerStore.settings.fontSize);
+      }
+
       await engine.init(container, fileData, book.locator);
 
       if (engine.applyTheme) {
@@ -193,6 +197,12 @@ export function useReader() {
     activeEngine.value?.applyTheme?.(colors);
   };
 
+  const applyFontSize = async (size: number): Promise<void> => {
+    if (activeEngine.value?.setFontSize) {
+      await activeEngine.value.setFontSize(size);
+    }
+  };
+
   const closeBook = (): void => {
     clearSelection();
     readerStore.registerPageNavigator(null);
@@ -211,6 +221,7 @@ export function useReader() {
     goToPage,
     setPaginationMode,
     applyTheme,
+    applyFontSize,
     resetZoom,
     closeBook,
   };

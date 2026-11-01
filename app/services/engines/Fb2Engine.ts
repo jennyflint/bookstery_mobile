@@ -9,6 +9,8 @@ export class Fb2Engine extends BaseEngine {
   private currentParagraphIndex: number = 0;
   private scrollContainer: HTMLElement | null = null;
   private scrollHandler: (() => void) | null = null;
+  private currentFontSize: number = 18;
+  private currentLineHeight: number = 1.6;
 
   override setHighlights(
     highlights: HighlightRecord[],
@@ -206,6 +208,8 @@ export class Fb2Engine extends BaseEngine {
 
     const article = document.createElement('article');
     article.className = 'fb2-content max-w-2xl mx-auto space-y-4';
+    article.style.fontSize = `${this.currentFontSize}px`;
+    article.style.lineHeight = `${this.currentLineHeight}`;
 
     const bodies = this.parsedDocument.querySelectorAll('body');
     let paragraphCounter = 0;
@@ -240,7 +244,7 @@ export class Fb2Engine extends BaseEngine {
 
             const p = document.createElement('p');
             p.id = `fb2-p-${paragraphCounter}`;
-            p.className = 'fb2-paragraph text-base leading-relaxed cursor-text';
+            p.className = 'fb2-paragraph text-[length:inherit] leading-[inherit] cursor-text';
             p.innerHTML = this.convertInlineTags(pNode, binaryMap);
             sectionElem.appendChild(p);
             this.paragraphElements.push(p);
@@ -258,7 +262,7 @@ export class Fb2Engine extends BaseEngine {
 
           const p = document.createElement('p');
           p.id = `fb2-p-${paragraphCounter}`;
-          p.className = 'fb2-paragraph text-base leading-relaxed cursor-text';
+          p.className = 'fb2-paragraph text-[length:inherit] leading-[inherit] cursor-text';
           p.innerHTML = this.convertInlineTags(pNode, binaryMap);
           article.appendChild(p);
           this.paragraphElements.push(p);
@@ -491,6 +495,17 @@ export class Fb2Engine extends BaseEngine {
     if (this.scrollContainer) {
       this.scrollContainer.style.backgroundColor = colors.bg;
       this.scrollContainer.style.color = colors.text;
+    }
+  }
+
+  override setFontSize(size: number): void {
+    this.currentFontSize = Math.min(Math.max(Math.round(size), 12), 36);
+    if (this.scrollContainer) {
+      this.scrollContainer.style.fontSize = `${this.currentFontSize}px`;
+      const article = this.scrollContainer.querySelector('article');
+      if (article) {
+        (article as HTMLElement).style.fontSize = `${this.currentFontSize}px`;
+      }
     }
   }
 

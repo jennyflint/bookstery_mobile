@@ -81,6 +81,7 @@ export interface ReaderEngineInterface {
   getCurrentLocation(): ReaderLocation;
   setPaginationMode?(mode: ReaderPaginationMode): void | Promise<void>;
   applyTheme?(colors: { bg: string; text: string }): void;
+  setFontSize?(size: number): void | Promise<void>;
   setHighlights?(
     highlights: HighlightRecord[],
     onHighlightClick?: (highlight: HighlightRecord) => void,

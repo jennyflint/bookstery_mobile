@@ -48,6 +48,7 @@ const {
   goToPage,
   setPaginationMode,
   applyTheme,
+  applyFontSize,
   closeBook,
   activeEngine,
 } = useReader();
@@ -62,6 +63,13 @@ watch(
     applyTheme(colors);
   },
   { deep: true },
+);
+
+watch(
+  () => readerStore.settings.fontSize,
+  (newSize) => {
+    void applyFontSize(newSize);
+  },
 );
 
 watch(

@@ -56,11 +56,11 @@ const selectPaginationMode = (mode: ReaderPaginationMode) => {
 };
 
 const increaseFont = () => {
-  readerStore.setFontSize(readerStore.settings.fontSize + 2);
+  readerStore.increaseFontSize();
 };
 
 const decreaseFont = () => {
-  readerStore.setFontSize(readerStore.settings.fontSize - 2);
+  readerStore.decreaseFontSize();
 };
 </script>
 
@@ -322,23 +322,40 @@ const decreaseFont = () => {
 
       <!-- Font Size -->
       <div class="space-y-3">
-        <label class="block text-xs font-bold uppercase tracking-wider text-zinc-500">
-          {{ t('reader.fontSize') }} ({{ readerStore.settings.fontSize }}px)
-        </label>
-        <div class="flex items-center justify-between gap-4 rounded-2xl bg-zinc-100 p-2">
+        <div class="flex items-center justify-between">
+          <label class="block text-xs font-bold uppercase tracking-wider text-zinc-500">
+            {{ t('reader.fontSize') }}
+          </label>
+          <span class="text-xs font-semibold text-zinc-600">
+            {{ readerStore.settings.fontSize }}px ({{ Math.round((readerStore.settings.fontSize / 18) * 100) }}%)
+          </span>
+        </div>
+        <div class="flex items-center justify-between gap-3 rounded-2xl bg-zinc-100 p-2">
           <button
             type="button"
-            class="flex h-10 w-12 items-center justify-center rounded-xl bg-white text-sm font-bold text-zinc-800 shadow-sm transition-all active:scale-95"
+            data-testid="decrease-font-btn"
+            class="flex h-10 w-11 shrink-0 items-center justify-center rounded-xl bg-white text-sm font-bold text-zinc-800 shadow-sm transition-all active:scale-95 disabled:opacity-40 disabled:pointer-events-none"
+            :disabled="readerStore.settings.fontSize <= 12"
             @click="decreaseFont"
           >
             A-
           </button>
-          <span class="text-sm font-semibold text-zinc-700"
-            >{{ readerStore.settings.fontSize }}px</span
-          >
+          <div class="flex-1 px-1 flex items-center">
+            <input
+              type="range"
+              min="12"
+              max="32"
+              step="1"
+              :value="readerStore.settings.fontSize"
+              class="w-full accent-indigo-600 cursor-pointer"
+              @input="readerStore.setFontSize(Number(($event.target as HTMLInputElement).value))"
+            />
+          </div>
           <button
             type="button"
-            class="flex h-10 w-12 items-center justify-center rounded-xl bg-white text-base font-bold text-zinc-800 shadow-sm transition-all active:scale-95"
+            data-testid="increase-font-btn"
+            class="flex h-10 w-11 shrink-0 items-center justify-center rounded-xl bg-white text-base font-bold text-zinc-800 shadow-sm transition-all active:scale-95 disabled:opacity-40 disabled:pointer-events-none"
+            :disabled="readerStore.settings.fontSize >= 32"
             @click="increaseFont"
           >
             A+

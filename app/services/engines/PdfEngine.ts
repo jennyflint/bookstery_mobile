@@ -63,6 +63,7 @@ export class PdfEngine extends BaseEngine {
   private visibilityHandler: (() => void) | null = null;
   private currentColors: { bg: string; text: string } | null = null;
   private isProgrammaticScroll: boolean = false;
+  private currentFontSize: number = 18;
 
   private getClampedDpr(): number {
     const rawDpr = typeof window !== 'undefined' ? window.devicePixelRatio || 1 : 1;
@@ -213,7 +214,7 @@ export class PdfEngine extends BaseEngine {
     if (!this.pdfDocument || !this.container) {
       return;
     }
-    const clampedScale = Math.min(Math.max(scale, 1.0), 4.0);
+    const clampedScale = Math.min(Math.max(scale, 0.5), 4.0);
     this.zoomScale = clampedScale;
     this.currentScale = clampedScale;
 
@@ -230,6 +231,13 @@ export class PdfEngine extends BaseEngine {
     } else {
       await this.renderButtonsMode(this.currentPageNumber, clampedScale);
     }
+  }
+
+  override async setFontSize(size: number): Promise<void> {
+    this.currentFontSize = Math.min(Math.max(Math.round(size), 12), 36);
+    const fontScale = this.currentFontSize / 18;
+    const targetScale = Math.min(Math.max(fontScale, 0.6), 3.0);
+    await this.setZoom(targetScale);
   }
 
   override getZoom(): number {

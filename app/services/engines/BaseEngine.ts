@@ -38,6 +38,10 @@ export abstract class BaseEngine implements ReaderEngineInterface {
     this.paginationMode = mode;
   }
 
+  setFontSize(_size: number): void | Promise<void> {
+    // Default no-op for engines that don't need font resizing
+  }
+
   async setZoom(_scale: number): Promise<void> {
     // Default no-op for non-canvas engines
   }

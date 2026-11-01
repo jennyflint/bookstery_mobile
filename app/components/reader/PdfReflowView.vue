@@ -54,22 +54,30 @@ const typographyStyle = computed(() => {
       ? 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace'
       : 'ui-serif, Georgia, Cambria, "Times New Roman", Times, serif';
 
+  const baseFontSize = readerStore.settings?.fontSize ?? readerStore.reflowFontSize ?? 18;
+
   return {
-    fontSize: `${readerStore.reflowFontSize}px`,
+    fontSize: `${baseFontSize}px`,
     lineHeight: `${readerStore.reflowLineHeight}`,
     fontFamily: family,
   };
 });
 
-const heading2Style = computed(() => ({
-  fontSize: `${Math.round(readerStore.reflowFontSize * 1.35)}px`,
-  lineHeight: '1.25',
-}));
+const heading2Style = computed(() => {
+  const baseFontSize = readerStore.settings?.fontSize ?? readerStore.reflowFontSize ?? 18;
+  return {
+    fontSize: `${Math.round(baseFontSize * 1.35)}px`,
+    lineHeight: '1.25',
+  };
+});
 
-const heading3Style = computed(() => ({
-  fontSize: `${Math.round(readerStore.reflowFontSize * 1.15)}px`,
-  lineHeight: '1.3',
-}));
+const heading3Style = computed(() => {
+  const baseFontSize = readerStore.settings?.fontSize ?? readerStore.reflowFontSize ?? 18;
+  return {
+    fontSize: `${Math.round(baseFontSize * 1.15)}px`,
+    lineHeight: '1.3',
+  };
+});
 
 async function resolvePageProxy(pageNumber: number): Promise<PDFPageProxy | null> {
   if (props.pdfDocument) {
@@ -167,7 +175,7 @@ let touchStartY = 0;
 let touchStartTime = 0;
 
 function handleTouchStart(e: TouchEvent): void {
-  if (e.touches.length === 1) {
+  if (e.touches.length === 1 && e.touches[0]) {
     touchStartX = e.touches[0].clientX;
     touchStartY = e.touches[0].clientY;
     touchStartTime = Date.now();
@@ -181,9 +189,10 @@ function handleTouchEnd(e: TouchEvent): void {
     return;
   }
 
-  if (e.changedTouches.length === 1) {
-    const dx = e.changedTouches[0].clientX - touchStartX;
-    const dy = e.changedTouches[0].clientY - touchStartY;
+  if (e.changedTouches.length === 1 && e.changedTouches[0]) {
+    const touch = e.changedTouches[0];
+    const dx = touch.clientX - touchStartX;
+    const dy = touch.clientY - touchStartY;
     const elapsed = Date.now() - touchStartTime;
 
     // Must be predominantly horizontal swipe
@@ -279,7 +288,7 @@ onMounted(() => {
       <article
         v-else
         data-testid="reflow-content"
-        class="select-text prose prose-zinc max-w-none"
+        class="select-text max-w-none text-[length:inherit] leading-[inherit]"
       >
         <template v-for="block in blocks" :key="block.id">
           <h2
@@ -303,7 +312,7 @@ onMounted(() => {
           <p
             v-else
             data-testid="reflow-p"
-            class="mb-4 text-justify select-text"
+            class="mb-4 text-justify select-text text-[length:inherit] leading-[inherit]"
           >
             {{ block.text }}
           </p>

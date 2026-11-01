@@ -578,7 +578,7 @@ const handleResetAllToDefault = () => {
         <div class="space-y-2 pt-2">
           <div class="flex items-center justify-between text-xs font-semibold text-zinc-700">
             <span>{{ t('reader.fontSize') }}</span>
-            <span>{{ readerStore.settings.fontSize }}px</span>
+            <span>{{ readerStore.settings.fontSize }}px ({{ Math.round((readerStore.settings.fontSize / 18) * 100) }}%)</span>
           </div>
           <input
             type="range"

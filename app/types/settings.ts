@@ -4,4 +4,5 @@ export interface ScreenControlSettings {
   keepScreenAwake: boolean;
   orientationLock: ScreenOrientationMode;
   applyOrientationOnlyInReader: boolean;
+  fontSize?: number;
 }
