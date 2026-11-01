@@ -56,4 +56,47 @@ describe('ScanDirectoriesSettings Component', () => {
       'content://com.android.externalstorage.documents/tree/primary%3ABooks',
     );
   });
+
+  it('should silently handle user cancellation from FilePicker without displaying error message', async () => {
+    vi.spyOn(FilePicker, 'pickDirectory').mockRejectedValue(new Error('User canceled'));
+
+    const wrapper = mount(ScanDirectoriesSettings, {
+      global: {
+        mocks: {
+          t: (key: string) => key,
+        },
+      },
+    });
+
+    const addBtn = wrapper.find('[data-testid="add-folder-btn"]');
+    await addBtn.trigger('click');
+    await flushPromises();
+
+    expect(wrapper.text()).not.toContain('scanner.folderAccessError');
+    const store = useScannerStore();
+    expect(store.directories.length).toBe(0);
+  });
+
+  it('should display folderAccessError message when directory validation fails', async () => {
+    vi.spyOn(FilePicker, 'pickDirectory').mockResolvedValue({
+      path: 'content://com.android.externalstorage.documents/tree/primary%3AInaccessible',
+    });
+    vi.spyOn(AutoScanService.getInstance(), 'validateDirectoryAccess').mockResolvedValue(false);
+
+    const wrapper = mount(ScanDirectoriesSettings, {
+      global: {
+        mocks: {
+          t: (key: string) => key,
+        },
+      },
+    });
+
+    const addBtn = wrapper.find('[data-testid="add-folder-btn"]');
+    await addBtn.trigger('click');
+    await flushPromises();
+
+    expect(wrapper.text()).toContain('scanner.folderAccessError');
+    const store = useScannerStore();
+    expect(store.directories.length).toBe(0);
+  });
 });

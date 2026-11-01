@@ -5,6 +5,7 @@ import {
   AutoScanService,
   deriveDisplayNameFromUri,
 } from '../../services/scanner/AutoScanService';
+import { FilePicker } from '@capawesome/capacitor-file-picker';
 import type { ScanDirectory } from '../../types';
 
 const { t } = useI18n();
@@ -62,7 +63,6 @@ const handleAddFolder = async () => {
     let displayName = '';
 
     try {
-      const { FilePicker } = await import('@capawesome/capacitor-file-picker');
       const result = await FilePicker.pickDirectory();
       if (result && result.path) {
         selectedPath = result.path;
@@ -70,22 +70,38 @@ const handleAddFolder = async () => {
       }
     } catch (pickerErr: unknown) {
       const err = pickerErr as { message?: string; name?: string };
+      const msg = (err?.message || '').toLowerCase();
       if (
-        err?.message?.includes('canceled') ||
-        err?.message?.includes('cancelled') ||
+        msg.includes('cancel') ||
+        msg.includes('abort') ||
+        msg.includes('dismiss') ||
         err?.name === 'AbortError'
       ) {
         return;
       }
 
       if (typeof window !== 'undefined' && 'showDirectoryPicker' in window) {
-        const picker = (
-          window as unknown as { showDirectoryPicker: () => Promise<{ name: string }> }
-        ).showDirectoryPicker;
-        const handle = await picker();
-        if (handle && handle.name) {
-          selectedPath = handle.name;
-          displayName = handle.name;
+        try {
+          const picker = (
+            window as unknown as { showDirectoryPicker: () => Promise<{ name: string }> }
+          ).showDirectoryPicker;
+          const handle = await picker();
+          if (handle && handle.name) {
+            selectedPath = handle.name;
+            displayName = handle.name;
+          }
+        } catch (webErr: unknown) {
+          const err2 = webErr as { message?: string; name?: string };
+          const msg2 = (err2?.message || '').toLowerCase();
+          if (
+            msg2.includes('cancel') ||
+            msg2.includes('abort') ||
+            msg2.includes('dismiss') ||
+            err2?.name === 'AbortError'
+          ) {
+            return;
+          }
+          throw webErr;
         }
       } else {
         throw pickerErr;
@@ -114,9 +130,11 @@ const handleAddFolder = async () => {
     await scannerStore.addFolder(selectedPath, displayName);
   } catch (err: unknown) {
     const errorObj = err as { message?: string; name?: string };
+    const msg = (errorObj?.message || '').toLowerCase();
     if (
-      errorObj?.message?.includes('canceled') ||
-      errorObj?.message?.includes('cancelled') ||
+      msg.includes('cancel') ||
+      msg.includes('abort') ||
+      msg.includes('dismiss') ||
       errorObj?.name === 'AbortError'
     ) {
       return;

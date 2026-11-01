@@ -1,4 +1,5 @@
 import { Filesystem, Directory } from '@capacitor/filesystem';
+import { Capacitor } from '@capacitor/core';
 import { FileHashService } from './FileHashService';
 import { ScanDirectoryRepository, normalizeDirectoryUri } from '../database/ScanDirectoryRepository';
 import { SqliteService } from '../database/SqliteService';
@@ -82,27 +83,52 @@ export class AutoScanService {
     return null;
   }
 
+  async ensureFilesystemPermissions(): Promise<boolean> {
+    try {
+      if (!Capacitor.isNativePlatform()) {
+        return true;
+      }
+
+      const status = await Filesystem.checkPermissions();
+      if (status.publicStorage === 'granted') {
+        return true;
+      }
+
+      const requestResult = await Filesystem.requestPermissions();
+      return requestResult.publicStorage === 'granted';
+    } catch {
+      return true;
+    }
+  }
+
   async validateDirectoryAccess(uri: string): Promise<boolean> {
     const normalized = normalizeDirectoryUri(uri);
     if (!normalized) {
       return false;
     }
 
-    try {
-      if (normalized.startsWith('content://') || normalized.startsWith('file://')) {
-        await Filesystem.readdir({
-          path: normalized,
-        });
-        return true;
-      }
+    const hasPermission = await this.ensureFilesystemPermissions();
+    if (!hasPermission) {
+      return false;
+    }
 
-      const { path, directory } = this.resolveDirectoryTarget(normalized);
+    const { path, directory } = this.resolveDirectoryTarget(normalized);
+
+    try {
       await Filesystem.readdir({
         path,
         directory,
       });
       return true;
     } catch {
+      if (normalized.startsWith('content://') || normalized.startsWith('file://')) {
+        try {
+          await Filesystem.readdir({
+            path: normalized,
+          });
+          return true;
+        } catch {}
+      }
       return false;
     }
   }
@@ -110,6 +136,11 @@ export class AutoScanService {
   async scanAllActiveDirectories(
     onProgress?: (scannedFilesCount: number, currentFileName: string) => void,
   ): Promise<ScanResultSummary> {
+    const hasPermission = await this.ensureFilesystemPermissions();
+    if (!hasPermission) {
+      return this.createEmptySummary();
+    }
+
     const settings = await this.directoryRepository.getSettings();
     if (settings.auto_scan_on_startup === 0) {
       return this.createEmptySummary();
@@ -148,6 +179,11 @@ export class AutoScanService {
     dirUri: string,
     onProgress?: (scannedFilesCount: number, currentFileName: string) => void,
   ): Promise<ScanResultSummary> {
+    const hasPermission = await this.ensureFilesystemPermissions();
+    if (!hasPermission) {
+      return this.createEmptySummary();
+    }
+
     const settings = await this.directoryRepository.getSettings();
     const isRecursive = settings.scan_subdirectories === 1;
 
@@ -346,38 +382,117 @@ export class AutoScanService {
     filePath: string,
     dirUri: string,
   ): Promise<string | ArrayBuffer | Uint8Array | Blob> {
-    if (filePath.startsWith('content://') || filePath.startsWith('file://')) {
+    const { directory } = this.resolveDirectoryTarget(normalizeDirectoryUri(dirUri));
+
+    if ((filePath.startsWith('content://') || filePath.startsWith('file://')) && !directory) {
       const result = await Filesystem.readFile({
         path: filePath,
       });
       return result.data;
     }
 
-    const { directory } = this.resolveDirectoryTarget(normalizeDirectoryUri(dirUri));
-    const result = await Filesystem.readFile({
-      path: filePath,
-      directory,
-    });
-    return result.data;
+    try {
+      const result = await Filesystem.readFile({
+        path: filePath,
+        directory,
+      });
+      return result.data;
+    } catch (err) {
+      if (filePath.startsWith('content://') || filePath.startsWith('file://')) {
+        const fallback = await Filesystem.readFile({
+          path: filePath,
+        });
+        return fallback.data;
+      }
+      throw err;
+    }
   }
 
-  private resolveDirectoryTarget(uri: string): {
+  resolveDirectoryTarget(uri: string): {
     path: string;
     directory?: Directory;
   } {
-    const lower = uri.toLowerCase();
-    if (lower === 'documents' || lower === '/documents') {
+    let decoded = uri;
+    try {
+      decoded = decodeURIComponent(uri);
+    } catch {}
+
+    // 1. Android SAF tree URI: content://.../tree/...
+    if (decoded.includes('/tree/')) {
+      const treePart = decoded.split('/tree/')[1] || '';
+      const cleanTreePart = treePart.split('?')[0];
+
+      if (cleanTreePart.includes(':')) {
+        const colonIndex = cleanTreePart.indexOf(':');
+        const afterColon = cleanTreePart.substring(colonIndex + 1);
+        const relPath = afterColon.replace(/^\/+/, '').replace(/\/+$/, '');
+        return {
+          path: relPath,
+          directory: Directory.ExternalStorage,
+        };
+      }
+
+      const relPath = cleanTreePart.replace(/^\/+/, '').replace(/\/+$/, '');
+      return {
+        path: relPath,
+        directory: Directory.ExternalStorage,
+      };
+    }
+
+    // 2. Normalize raw: or file://
+    let cleaned = decoded;
+    if (cleaned.startsWith('raw:')) {
+      cleaned = cleaned.slice(4);
+    }
+    if (cleaned.startsWith('file://')) {
+      cleaned = cleaned.slice(7);
+    }
+
+    // 3. Android primary storage path: /storage/emulated/0/...
+    if (cleaned.startsWith('/storage/emulated/0')) {
+      const relPath = cleaned
+        .slice('/storage/emulated/0'.length)
+        .replace(/^\/+/, '')
+        .replace(/\/+$/, '');
+      return {
+        path: relPath,
+        directory: Directory.ExternalStorage,
+      };
+    }
+
+    // 4. Keyword mappings (Documents, Data, ExternalStorage)
+    const lower = cleaned.toLowerCase().replace(/^\/+/, '');
+    if (lower === 'documents') {
       return { path: '', directory: Directory.Documents };
     }
-    if (lower === 'data' || lower === '/data') {
+    if (lower.startsWith('documents/')) {
+      return { path: cleaned.replace(/^\/+/, '').slice(10), directory: Directory.Documents };
+    }
+
+    if (lower === 'data') {
       return { path: '', directory: Directory.Data };
     }
-    if (lower.startsWith('documents/')) {
-      return { path: uri.slice(10), directory: Directory.Documents };
-    }
     if (lower.startsWith('data/')) {
-      return { path: uri.slice(5), directory: Directory.Data };
+      return { path: cleaned.replace(/^\/+/, '').slice(5), directory: Directory.Data };
     }
+
+    if (
+      lower === 'externalstorage' ||
+      lower === 'external_storage' ||
+      lower === 'external'
+    ) {
+      return { path: '', directory: Directory.ExternalStorage };
+    }
+    if (lower.startsWith('externalstorage/')) {
+      return { path: cleaned.replace(/^\/+/, '').slice(16), directory: Directory.ExternalStorage };
+    }
+    if (lower.startsWith('external_storage/')) {
+      return { path: cleaned.replace(/^\/+/, '').slice(17), directory: Directory.ExternalStorage };
+    }
+    if (lower.startsWith('external/')) {
+      return { path: cleaned.replace(/^\/+/, '').slice(9), directory: Directory.ExternalStorage };
+    }
+
     return { path: uri };
   }
 

@@ -11,6 +11,7 @@ describe('SyncService', () => {
   let syncService: SyncService;
 
   beforeEach(() => {
+    localStorage.clear();
     vi.clearAllMocks();
     sqliteService = new SqliteService();
     authService = new GoogleAuthService(sqliteService);

@@ -11,7 +11,8 @@ describe('SyncQueueService', () => {
   let queueService: SyncQueueService;
 
   beforeEach(() => {
-    vi.useFakeTimers();
+    localStorage.clear();
+    vi.clearAllMocks();
     sqliteService = new SqliteService();
     authService = new GoogleAuthService(sqliteService);
     folderService = new GoogleDriveFolderService(sqliteService, authService);
@@ -43,6 +44,7 @@ describe('SyncQueueService', () => {
   });
 
   it('should coalesce rapid page turns using debounce timer into a single remote push', async () => {
+    vi.useFakeTimers();
     vi.spyOn(authService, 'isAuthenticated').mockReturnValue(true);
     vi.spyOn(authService, 'getAccessToken').mockResolvedValue('valid-token');
 
@@ -63,6 +65,7 @@ describe('SyncQueueService', () => {
 
     const pendingAfter = await sqliteService.getPendingSyncQueue();
     expect(pendingAfter.length).toBe(0);
+    vi.useRealTimers();
   });
 
   it('should transition outbox queue from pending to synced upon processing', async () => {

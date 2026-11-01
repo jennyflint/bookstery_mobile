@@ -4,7 +4,8 @@ import {
   deriveDisplayNameFromUri,
 } from '../../../app/services/scanner/AutoScanService';
 import { FileHashService } from '../../../app/services/scanner/FileHashService';
-import { Filesystem } from '@capacitor/filesystem';
+import { Filesystem, Directory } from '@capacitor/filesystem';
+import { Capacitor } from '@capacitor/core';
 import type { BookRecord, ScanDirectory, ScannerSettings } from '../../../app/types';
 
 describe('AutoScanService', () => {
@@ -274,6 +275,89 @@ describe('AutoScanService', () => {
 
       expect(summary.scannedFilesCount).toBe(0);
       expect(summary.newBooksCount).toBe(0);
+      expect(readdirSpy).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('resolveDirectoryTarget', () => {
+    it('should resolve Android SAF tree URIs to ExternalStorage with relative paths', () => {
+      const res1 = service.resolveDirectoryTarget(
+        'content://com.android.externalstorage.documents/tree/primary%3ADownload',
+      );
+      expect(res1.directory).toBe(Directory.ExternalStorage);
+      expect(res1.path).toBe('Download');
+
+      const res2 = service.resolveDirectoryTarget(
+        'content://com.android.externalstorage.documents/tree/primary%3ABooks%2FFiction',
+      );
+      expect(res2.directory).toBe(Directory.ExternalStorage);
+      expect(res2.path).toBe('Books/Fiction');
+    });
+
+    it('should resolve raw Android external storage paths', () => {
+      const res = service.resolveDirectoryTarget('/storage/emulated/0/Books');
+      expect(res.directory).toBe(Directory.ExternalStorage);
+      expect(res.path).toBe('Books');
+    });
+
+    it('should resolve Documents and Data keyword directories', () => {
+      const docRes = service.resolveDirectoryTarget('Documents/Ebooks');
+      expect(docRes.directory).toBe(Directory.Documents);
+      expect(docRes.path).toBe('Ebooks');
+
+      const dataRes = service.resolveDirectoryTarget('Data/MyBooks');
+      expect(dataRes.directory).toBe(Directory.Data);
+      expect(dataRes.path).toBe('MyBooks');
+    });
+  });
+
+  describe('validateDirectoryAccess & Permissions', () => {
+    it('should return true when readdir succeeds on resolved SAF target', async () => {
+      vi.spyOn(Filesystem, 'readdir').mockResolvedValue({ files: [] });
+
+      const isValid = await service.validateDirectoryAccess(
+        'content://com.android.externalstorage.documents/tree/primary%3ABooks',
+      );
+
+      expect(isValid).toBe(true);
+      expect(Filesystem.readdir).toHaveBeenCalledWith({
+        path: 'Books',
+        directory: Directory.ExternalStorage,
+      });
+    });
+
+    it('should return false when readdir throws', async () => {
+      vi.spyOn(Filesystem, 'readdir').mockRejectedValue(new Error('Permission denied'));
+
+      const isValid = await service.validateDirectoryAccess(
+        'content://com.android.externalstorage.documents/tree/primary%3ANotAccessible',
+      );
+
+      expect(isValid).toBe(false);
+    });
+
+    it('should check and request permissions when on native platform', async () => {
+      vi.spyOn(Capacitor, 'isNativePlatform').mockReturnValue(true);
+      vi.spyOn(Filesystem, 'checkPermissions').mockResolvedValue({ publicStorage: 'prompt' });
+      vi.spyOn(Filesystem, 'requestPermissions').mockResolvedValue({ publicStorage: 'granted' });
+      vi.spyOn(Filesystem, 'readdir').mockResolvedValue({ files: [] });
+
+      const isValid = await service.validateDirectoryAccess('Documents/Books');
+
+      expect(isValid).toBe(true);
+      expect(Filesystem.checkPermissions).toHaveBeenCalled();
+      expect(Filesystem.requestPermissions).toHaveBeenCalled();
+    });
+
+    it('should return false and abort scan if permissions are denied on native platform', async () => {
+      vi.spyOn(Capacitor, 'isNativePlatform').mockReturnValue(true);
+      vi.spyOn(Filesystem, 'checkPermissions').mockResolvedValue({ publicStorage: 'denied' });
+      vi.spyOn(Filesystem, 'requestPermissions').mockResolvedValue({ publicStorage: 'denied' });
+      const readdirSpy = vi.spyOn(Filesystem, 'readdir');
+
+      const isValid = await service.validateDirectoryAccess('Documents/Books');
+
+      expect(isValid).toBe(false);
       expect(readdirSpy).not.toHaveBeenCalled();
     });
   });
