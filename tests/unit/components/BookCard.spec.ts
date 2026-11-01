@@ -10,7 +10,7 @@ describe('BookCard Component', () => {
     author: 'Test Author',
     format: 'pdf',
     file_path: 'books/test.pdf',
-    cover_path: '/covers/book-test-1.webp',
+    cover_path: 'tests/fixtures/covers/book-test-1.webp',
     locator: '1',
     progress_percentage: 45,
     total_items: 100,
@@ -31,7 +31,7 @@ describe('BookCard Component', () => {
 
     const img = wrapper.find('img');
     expect(img.exists()).toBe(true);
-    expect(img.attributes('src')).toBe('/covers/book-test-1.webp');
+    expect(img.attributes('src')).toBe('tests/fixtures/covers/book-test-1.webp');
   });
 
   it('should render cached base64 cover from localStorage when available', () => {
@@ -74,7 +74,7 @@ describe('BookCard Component', () => {
     });
 
     const img = wrapper.find('img');
-    expect(img.attributes('src')).toBe('/covers/book-test-1.webp');
+    expect(img.attributes('src')).toBe('tests/fixtures/covers/book-test-1.webp');
 
     await img.trigger('error');
 
@@ -107,5 +107,22 @@ describe('BookCard Component', () => {
 
     const badge = wrapper.find('[data-testid="pinned-badge"]');
     expect(badge.exists()).toBe(true);
+  });
+
+  it('should render visible delete button and emit delete with book id when clicked', async () => {
+    const wrapper = mount(BookCard, {
+      props: {
+        book: baseBook,
+      },
+    });
+
+    const deleteBtn = wrapper.find('[data-testid="delete-book-btn"]');
+    expect(deleteBtn.exists()).toBe(true);
+    expect(deleteBtn.classes()).not.toContain('opacity-0');
+
+    await deleteBtn.trigger('click');
+
+    expect(wrapper.emitted('delete')).toBeTruthy();
+    expect(wrapper.emitted('delete')?.[0]).toEqual([baseBook.id]);
   });
 });

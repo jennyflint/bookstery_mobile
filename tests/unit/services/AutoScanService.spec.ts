@@ -63,7 +63,7 @@ describe('AutoScanService', () => {
     };
 
     mockCoverQueue = {
-      enqueue: vi.fn().mockResolvedValue('covers/mock-cover.jpg'),
+      enqueue: vi.fn().mockResolvedValue('tests/fixtures/covers/mock-cover.jpg'),
     };
 
     service = new AutoScanService(
@@ -119,7 +119,7 @@ describe('AutoScanService', () => {
         author: 'Author',
         format: 'pdf',
         file_path: 'Books/existing.pdf',
-        cover_path: 'covers/existing.jpg',
+        cover_path: 'tests/fixtures/covers/existing.jpg',
         locator: '1',
         progress_percentage: 10,
         total_items: 100,
@@ -218,7 +218,7 @@ describe('AutoScanService', () => {
         author: 'Homer',
         format: 'pdf',
         file_path: 'Books/old-path.pdf',
-        cover_path: 'covers/old.jpg',
+        cover_path: 'tests/fixtures/covers/old.jpg',
         locator: '1',
         progress_percentage: 20,
         total_items: 200,

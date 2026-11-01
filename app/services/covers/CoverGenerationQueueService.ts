@@ -32,13 +32,16 @@ export class CoverGenerationQueueService {
   private isProcessing: boolean = false;
   private readonly extractor: CoverExtractorService;
   private readonly sqliteService: SqliteService;
+  private readonly coversDir: string;
 
   constructor(
     extractor: CoverExtractorService = new CoverExtractorService(),
     sqliteService: SqliteService = SqliteService.getInstance(),
+    coversDir: string = '/covers',
   ) {
     this.extractor = extractor;
     this.sqliteService = sqliteService;
+    this.coversDir = coversDir;
   }
 
   static getInstance(): CoverGenerationQueueService {
@@ -112,8 +115,13 @@ export class CoverGenerationQueueService {
   }
 
   private async saveCoverFile(bookId: string, coverBytes: Uint8Array): Promise<string> {
-    const relativePath = `/covers/${bookId}.webp`;
-    const storagePath = `public/covers/${bookId}.webp`;
+    const isCustomDir = this.coversDir !== '/covers';
+    const relativePath = isCustomDir
+      ? `${this.coversDir.replace(/\/+$/, '')}/${bookId}.webp`
+      : `/covers/${bookId}.webp`;
+    const storagePath = isCustomDir
+      ? `${this.coversDir.replace(/\/+$/, '')}/${bookId}.webp`
+      : `public/covers/${bookId}.webp`;
     const base64Data = uint8ArrayToBase64(coverBytes);
 
     if (!Capacitor.isNativePlatform() && typeof fetch !== 'undefined') {

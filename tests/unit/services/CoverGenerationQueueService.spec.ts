@@ -17,7 +17,7 @@ describe('CoverGenerationQueueService', () => {
 
     vi.spyOn(mockSqlite, 'updateCoverPath').mockResolvedValue(undefined);
 
-    queueService = new CoverGenerationQueueService(mockExtractor, mockSqlite);
+    queueService = new CoverGenerationQueueService(mockExtractor, mockSqlite, 'tests/fixtures/covers');
   });
 
   it('should process covers sequentially with concurrency strictly equal to one', async () => {
@@ -43,9 +43,9 @@ describe('CoverGenerationQueueService', () => {
     const [res1, res2, res3] = await Promise.all([promise1, promise2, promise3]);
 
     expect(maxConcurrentExtractions).toBe(1);
-    expect(res1).toBe('/covers/book-1.webp');
-    expect(res2).toBe('/covers/book-2.webp');
-    expect(res3).toBe('/covers/book-3.webp');
+    expect(res1).toBe('tests/fixtures/covers/book-1.webp');
+    expect(res2).toBe('tests/fixtures/covers/book-2.webp');
+    expect(res3).toBe('tests/fixtures/covers/book-3.webp');
     expect(queueService.pendingCount).toBe(0);
     expect(queueService.isProcessingCovers).toBe(false);
   });
@@ -56,15 +56,15 @@ describe('CoverGenerationQueueService', () => {
 
     const result = await queueService.enqueue('alpha-123', 'epub', new Uint8Array([9]));
 
-    expect(result).toBe('/covers/alpha-123.webp');
+    expect(result).toBe('tests/fixtures/covers/alpha-123.webp');
     expect(Filesystem.writeFile).toHaveBeenCalledWith(
       expect.objectContaining({
-        path: 'public/covers/alpha-123.webp',
+        path: 'tests/fixtures/covers/alpha-123.webp',
         directory: 'DATA',
         recursive: true,
       }),
     );
-    expect(mockSqlite.updateCoverPath).toHaveBeenCalledWith('alpha-123', '/covers/alpha-123.webp');
+    expect(mockSqlite.updateCoverPath).toHaveBeenCalledWith('alpha-123', 'tests/fixtures/covers/alpha-123.webp');
   });
 
   it('should fallback to null and not throw when book lacks embedded cover', async () => {
@@ -88,9 +88,9 @@ describe('CoverGenerationQueueService', () => {
     const successResult = await succeedingPromise;
 
     expect(failResult).toBeNull();
-    expect(successResult).toBe('/covers/valid-book.webp');
+    expect(successResult).toBe('tests/fixtures/covers/valid-book.webp');
     expect(mockSqlite.updateCoverPath).toHaveBeenCalledWith('corrupt-book', null);
-    expect(mockSqlite.updateCoverPath).toHaveBeenCalledWith('valid-book', '/covers/valid-book.webp');
+    expect(mockSqlite.updateCoverPath).toHaveBeenCalledWith('valid-book', 'tests/fixtures/covers/valid-book.webp');
   });
 
   it('should clear all pending tasks from the queue', async () => {

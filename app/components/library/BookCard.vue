@@ -103,7 +103,8 @@ const formatBadgeClass = (format: string) => {
 
       <button
         type="button"
-        class="rounded-lg p-1.5 text-zinc-400 opacity-0 transition-all hover:bg-rose-50 hover:text-rose-600 focus:opacity-100 group-hover:opacity-100"
+        data-testid="delete-book-btn"
+        class="rounded-lg p-1.5 text-zinc-400 transition-all hover:bg-rose-50 hover:text-rose-600 active:scale-95"
         :title="t('library.deleteBook')"
         @click.stop="emit('delete', props.book.id)"
       >
@@ -123,6 +124,12 @@ const formatBadgeClass = (format: string) => {
       </button>
     </div>
 
+    <h3
+        class="line-clamp-2 text-base font-bold leading-tight text-zinc-900 transition-colors group-hover:text-indigo-600"
+      >
+        {{ props.book.title }}
+      </h3>
+
     <div
       class="relative my-3 flex h-44 w-full items-center justify-center overflow-hidden rounded-xl border border-zinc-100 bg-zinc-100 shadow-inner"
     >
@@ -141,6 +148,8 @@ const formatBadgeClass = (format: string) => {
         </svg>
       </div>
 
+      
+
       <img
         :src="coverSrc"
         :alt="props.book.title"
@@ -149,12 +158,7 @@ const formatBadgeClass = (format: string) => {
       />
     </div>
 
-    <div class="my-4">
-      <h3
-        class="line-clamp-2 text-base font-bold leading-tight text-zinc-900 transition-colors group-hover:text-indigo-600"
-      >
-        {{ props.book.title }}
-      </h3>
+    <div class="my-2">
       <p
         v-if="props.book.author"
         class="mt-1 line-clamp-1 text-xs font-medium text-zinc-500"
