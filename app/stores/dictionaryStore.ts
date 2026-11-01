@@ -49,7 +49,10 @@ export const useDictionaryStore = defineStore('dictionary', {
     async loadAll(): Promise<void> {
       this.isLoading = true;
       try {
-        await Promise.all([this.loadVocabulary(), this.loadHistory()]);
+        const sqlite = SqliteService.getInstance();
+        await sqlite.init();
+        await sqlite.migrateDictionaryHistoryToVocabulary();
+        await this.loadVocabulary();
       } finally {
         this.isLoading = false;
       }
@@ -77,10 +80,48 @@ export const useDictionaryStore = defineStore('dictionary', {
       }
     },
 
+    async saveTranslatedWord(
+      sourceText: string,
+      translatedText: string,
+      bookId: string | null = null,
+      bookTitle: string | null = null,
+    ): Promise<number> {
+      const sqlite = SqliteService.getInstance();
+      await sqlite.init();
+
+      let resolvedTitle = bookTitle;
+      if (!resolvedTitle && bookId) {
+        const book = await sqlite.getBookById(bookId);
+        resolvedTitle = book?.title || null;
+      }
+
+      const wordRecord: Omit<VocabularyWordRecord, 'id'> = {
+        book_id: bookId,
+        book_title: resolvedTitle,
+        word: sourceText.trim(),
+        lemma: null,
+        part_of_speech: null,
+        phonetic: null,
+        translation: translatedText.trim(),
+        contextual_definition: translatedText.trim(),
+        general_definition: null,
+        synonyms_json: null,
+        example_sentence: null,
+        context_sentence: null,
+        created_at: Date.now(),
+      };
+
+      const newId = await sqlite.saveVocabularyWord(wordRecord);
+      const fullRecord: VocabularyWordRecord = { id: newId, ...wordRecord };
+      this.vocabularyWords.unshift(fullRecord);
+      return newId;
+    },
+
     async translate(
       text: string,
       targetLang: string = 'uk',
       bookId: string | null = null,
+      bookTitle: string | null = null,
     ): Promise<TranslationResult> {
       this.isLoading = true;
       try {
@@ -89,22 +130,12 @@ export const useDictionaryStore = defineStore('dictionary', {
         this.activeTranslation = result;
 
         if (result.translatedText) {
-          const newId = await translationService.saveToDictionary(
-            bookId,
+          await this.saveTranslatedWord(
             result.sourceText,
             result.translatedText,
-            result.sourceLang,
-            result.targetLang,
+            bookId,
+            bookTitle,
           );
-          this.items.unshift({
-            id: newId,
-            book_id: bookId,
-            source_text: result.sourceText,
-            translated_text: result.translatedText,
-            source_lang: result.sourceLang,
-            target_lang: result.targetLang,
-            created_at: Date.now(),
-          });
         }
         return result;
       } finally {

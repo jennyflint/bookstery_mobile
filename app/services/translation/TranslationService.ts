@@ -17,7 +17,11 @@ export class TranslationService {
     return TranslationService.instance;
   }
 
-  async translateText(text: string, targetLang: string = 'uk', sourceLang: string = 'auto'): Promise<TranslationResult> {
+  async translateText(
+    text: string,
+    targetLang: string = 'uk',
+    sourceLang: string = 'auto',
+  ): Promise<TranslationResult> {
     const trimmed = text.trim();
     if (!trimmed) {
       return {
@@ -63,15 +67,28 @@ export class TranslationService {
     bookId: string | null,
     sourceText: string,
     translatedText: string,
-    sourceLang: string | null,
-    targetLang: string,
+    _sourceLang: string | null = null,
+    _targetLang: string = 'uk',
+    bookTitle: string | null = null,
   ): Promise<number> {
-    return await this.sqliteService.saveDictionaryItem({
+    let resolvedTitle = bookTitle;
+    if (!resolvedTitle && bookId) {
+      const book = await this.sqliteService.getBookById(bookId);
+      resolvedTitle = book?.title || null;
+    }
+    return await this.sqliteService.saveVocabularyWord({
       book_id: bookId,
-      source_text: sourceText,
-      translated_text: translatedText,
-      source_lang: sourceLang,
-      target_lang: targetLang,
+      book_title: resolvedTitle,
+      word: sourceText.trim(),
+      lemma: null,
+      part_of_speech: null,
+      phonetic: null,
+      translation: translatedText.trim(),
+      contextual_definition: translatedText.trim(),
+      general_definition: null,
+      synonyms_json: null,
+      example_sentence: null,
+      context_sentence: null,
       created_at: Date.now(),
     });
   }

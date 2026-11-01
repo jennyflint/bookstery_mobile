@@ -40,9 +40,9 @@ const handleCopyTranslation = async () => {
 
 const handleSaveToDictionary = async () => {
   if (props.result && props.result.sourceText && props.result.translatedText) {
-    await dictionaryStore.translate(
+    await dictionaryStore.saveTranslatedWord(
       props.result.sourceText,
-      props.result.targetLang,
+      props.result.translatedText,
       props.bookId || null,
     );
     emit('close');
@@ -57,46 +57,60 @@ const handleSaveToDictionary = async () => {
     @click.self="emit('close')"
   >
     <div
-      class="w-full max-w-lg bg-white rounded-t-3xl p-6 shadow-2xl border-t border-zinc-100 space-y-4 animate-in slide-in-from-bottom duration-200"
+      class="animate-in slide-in-from-bottom w-full max-w-lg space-y-4 rounded-t-3xl border-t border-zinc-100 bg-white p-6 shadow-2xl duration-200"
       :style="{ paddingBottom: 'calc(1.5rem + env(safe-area-inset-bottom, 0px))' }"
     >
-      <div class="flex items-center justify-between pb-2 border-b border-zinc-100">
+      <div class="flex items-center justify-between border-b border-zinc-100 pb-2">
         <div class="flex items-center gap-2">
-          <span class="text-xs font-bold uppercase tracking-wider text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded">
+          <span
+            class="rounded bg-indigo-50 px-2 py-0.5 text-xs font-bold uppercase tracking-wider text-indigo-600"
+          >
             {{ result.sourceLang }} &rarr; {{ result.targetLang }}
           </span>
-          <span class="text-xs text-zinc-400 font-medium">{{ t('translation.translate') }}</span>
+          <span class="text-xs font-medium text-zinc-400">{{ t('translation.translate') }}</span>
         </div>
 
         <button
           type="button"
-          class="p-1 rounded-lg text-zinc-400 hover:text-zinc-600 transition-colors"
+          class="rounded-lg p-1 text-zinc-400 transition-colors hover:text-zinc-600"
           @click="emit('close')"
         >
-          <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+          <svg
+            class="h-5 w-5"
+            fill="none"
+            viewBox="0 0 24 24"
+            stroke="currentColor"
+          >
+            <path
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              stroke-width="2"
+              d="M6 18L18 6M6 6l12 12"
+            />
           </svg>
         </button>
       </div>
 
       <div class="space-y-3">
-        <div class="bg-zinc-50 rounded-2xl p-3 border border-zinc-100">
-          <p class="text-xs font-medium text-zinc-400 mb-1">{{ t('translation.sourceText') }}</p>
-          <p class="text-sm text-zinc-800 font-medium select-text leading-relaxed">{{ result.sourceText }}</p>
+        <div class="rounded-2xl border border-zinc-100 bg-zinc-50 p-3">
+          <p class="mb-1 text-xs font-medium text-zinc-400">{{ t('translation.sourceText') }}</p>
+          <p class="select-text text-sm font-medium leading-relaxed text-zinc-800">
+            {{ result.sourceText }}
+          </p>
         </div>
 
-        <div class="bg-indigo-50 rounded-2xl p-3 border border-indigo-100">
-          <div class="flex items-center justify-between mb-1">
+        <div class="rounded-2xl border border-indigo-100 bg-indigo-50 p-3">
+          <div class="mb-1 flex items-center justify-between">
             <p class="text-xs font-medium text-indigo-600">{{ t('translation.translatedText') }}</p>
             <button
               type="button"
-              class="text-xs text-indigo-600 hover:text-indigo-800 font-semibold"
+              class="text-xs font-semibold text-indigo-600 hover:text-indigo-800"
               @click="handleCopyTranslation"
             >
               {{ isCopied ? t('translation.copied') : t('translation.copy') }}
             </button>
           </div>
-          <p class="text-base text-zinc-900 font-semibold select-text leading-relaxed">
+          <p class="select-text text-base font-semibold leading-relaxed text-zinc-900">
             {{ result.translatedText || t('translation.translating') }}
           </p>
         </div>
@@ -106,24 +120,44 @@ const handleSaveToDictionary = async () => {
         <button
           type="button"
           data-testid="open-google-translate-intent"
-          class="flex-1 py-3 px-4 rounded-xl bg-zinc-100 hover:bg-zinc-200 active:scale-95 text-zinc-800 font-semibold text-xs transition-all flex items-center justify-center gap-2"
+          class="flex flex-1 items-center justify-center gap-2 rounded-xl bg-zinc-100 px-4 py-3 text-xs font-semibold text-zinc-800 transition-all hover:bg-zinc-200 active:scale-95"
           @click="handleOpenNativeTranslate"
         >
-          <svg class="w-4 h-4 text-indigo-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+          <svg
+            class="h-4 w-4 text-indigo-600"
+            fill="none"
+            viewBox="0 0 24 24"
+            stroke="currentColor"
+          >
+            <path
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              stroke-width="2"
+              d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"
+            />
           </svg>
           <span>{{ t('translation.openGoogleTranslate') }}</span>
         </button>
 
         <button
           type="button"
-          class="flex-1 py-3 px-4 rounded-xl bg-indigo-600 hover:bg-indigo-700 active:scale-95 text-white font-semibold text-xs shadow-md transition-all flex items-center justify-center gap-2"
+          class="flex flex-1 items-center justify-center gap-2 rounded-xl bg-indigo-600 px-4 py-3 text-xs font-semibold text-white shadow-md transition-all hover:bg-indigo-700 active:scale-95"
           @click="handleSaveToDictionary"
         >
-          <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z" />
+          <svg
+            class="h-4 w-4"
+            fill="none"
+            viewBox="0 0 24 24"
+            stroke="currentColor"
+          >
+            <path
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              stroke-width="2"
+              d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z"
+            />
           </svg>
-          <span>{{ t('translation.saveToDictionary') }}</span>
+          <span>{{ t('ai.saveToVocabulary') }}</span>
         </button>
       </div>
     </div>

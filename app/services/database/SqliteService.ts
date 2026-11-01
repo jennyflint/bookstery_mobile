@@ -164,15 +164,25 @@ export class SqliteService {
       } catch {}
 
       try {
-        await this.db.execute("ALTER TABLE llm_settings ADD COLUMN target_language TEXT DEFAULT 'uk';");
+        await this.migrateDictionaryHistoryToVocabulary();
       } catch {}
 
       try {
-        await this.db.execute('ALTER TABLE llm_settings ADD COLUMN custom_system_prompt TEXT DEFAULT NULL;');
+        await this.db.execute(
+          "ALTER TABLE llm_settings ADD COLUMN target_language TEXT DEFAULT 'uk';",
+        );
       } catch {}
 
       try {
-        await this.db.execute('ALTER TABLE llm_settings ADD COLUMN custom_prompts_json TEXT DEFAULT NULL;');
+        await this.db.execute(
+          'ALTER TABLE llm_settings ADD COLUMN custom_system_prompt TEXT DEFAULT NULL;',
+        );
+      } catch {}
+
+      try {
+        await this.db.execute(
+          'ALTER TABLE llm_settings ADD COLUMN custom_prompts_json TEXT DEFAULT NULL;',
+        );
       } catch {}
 
       try {
@@ -377,11 +387,7 @@ export class SqliteService {
     }
   }
 
-  async updateFilePathAndSize(
-    bookId: string,
-    filePath: string,
-    fileSize?: number,
-  ): Promise<void> {
+  async updateFilePathAndSize(bookId: string, filePath: string, fileSize?: number): Promise<void> {
     const now = Date.now();
     if (this.isNative && this.db) {
       try {
@@ -492,6 +498,81 @@ export class SqliteService {
     writeStorage(STORAGE_KEYS.SYNC_QUEUE, remaining);
   }
 
+  async migrateDictionaryHistoryToVocabulary(): Promise<void> {
+    if (this.isNative && this.db) {
+      try {
+        const historyResult = await this.db.query(
+          'SELECT * FROM dictionary_history ORDER BY created_at ASC;',
+        );
+        const historyItems = (historyResult.values as DictionaryItem[]) || [];
+        if (historyItems.length > 0) {
+          for (const item of historyItems) {
+            let bookTitle: string | null = null;
+            if (item.book_id) {
+              const bookRes = await this.db.query('SELECT title FROM books WHERE id = ?;', [
+                item.book_id,
+              ]);
+              if (bookRes.values && bookRes.values.length > 0) {
+                bookTitle = (bookRes.values[0] as { title?: string }).title || null;
+              }
+            }
+            await this.saveVocabularyWord({
+              book_id: item.book_id || null,
+              book_title: bookTitle,
+              word: item.source_text,
+              lemma: null,
+              part_of_speech: null,
+              phonetic: null,
+              translation: item.translated_text,
+              contextual_definition: item.translated_text,
+              general_definition: null,
+              synonyms_json: null,
+              example_sentence: null,
+              context_sentence: null,
+              created_at: item.created_at || Date.now(),
+            });
+          }
+          await this.db.run('DELETE FROM dictionary_history;');
+        }
+      } catch {}
+    }
+
+    const listWeb = readStorage<DictionaryItem[]>(STORAGE_KEYS.DICTIONARY, []);
+    const listAlt = readStorage<DictionaryItem[]>('bookstery_dictionary', []);
+    const list = [...listWeb, ...listAlt];
+    if (list.length > 0) {
+      const vocabItems = readStorage<VocabularyWordRecord[]>('bookstery_web_vocabulary', []);
+      for (const item of list) {
+        const exists = vocabItems.some(
+          (v) =>
+            v.word.toLowerCase() === item.source_text.toLowerCase() &&
+            v.translation.toLowerCase() === item.translated_text.toLowerCase(),
+        );
+        if (!exists) {
+          vocabItems.unshift({
+            id: Date.now() + Math.floor(Math.random() * 1000),
+            book_id: item.book_id || null,
+            book_title: null,
+            word: item.source_text,
+            lemma: null,
+            part_of_speech: null,
+            phonetic: null,
+            translation: item.translated_text,
+            contextual_definition: item.translated_text,
+            general_definition: null,
+            synonyms_json: null,
+            example_sentence: null,
+            context_sentence: null,
+            created_at: item.created_at || Date.now(),
+          });
+        }
+      }
+      writeStorage('bookstery_web_vocabulary', vocabItems);
+      writeStorage(STORAGE_KEYS.DICTIONARY, []);
+      writeStorage('bookstery_dictionary', []);
+    }
+  }
+
   async getDictionaryHistory(): Promise<DictionaryItem[]> {
     if (this.isNative && this.db) {
       try {
@@ -506,32 +587,21 @@ export class SqliteService {
   }
 
   async saveDictionaryItem(item: Omit<DictionaryItem, 'id'>): Promise<number> {
-    if (this.isNative && this.db) {
-      try {
-        const query = `
-          INSERT INTO dictionary_history (book_id, source_text, translated_text, source_lang, target_lang, created_at)
-          VALUES (?, ?, ?, ?, ?, ?);
-        `;
-        const res = await this.db.run(query, [
-          item.book_id,
-          item.source_text,
-          item.translated_text,
-          item.source_lang,
-          item.target_lang,
-          item.created_at,
-        ]);
-        return res.changes?.lastId || 1;
-      } catch {}
-    }
-    const list = readStorage<DictionaryItem[]>(STORAGE_KEYS.DICTIONARY, []);
-    const maxId = list.reduce((max, d) => Math.max(max, d.id || 0), 0);
-    const newId = maxId + 1;
-    list.unshift({
-      id: newId,
-      ...item,
+    return await this.saveVocabularyWord({
+      book_id: item.book_id || null,
+      book_title: null,
+      word: item.source_text,
+      lemma: null,
+      part_of_speech: null,
+      phonetic: null,
+      translation: item.translated_text,
+      contextual_definition: item.translated_text,
+      general_definition: null,
+      synonyms_json: null,
+      example_sentence: null,
+      context_sentence: null,
+      created_at: item.created_at || Date.now(),
     });
-    writeStorage(STORAGE_KEYS.DICTIONARY, list);
-    return newId;
   }
 
   async deleteDictionaryItem(id: number): Promise<void> {
