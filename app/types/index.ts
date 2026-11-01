@@ -7,6 +7,7 @@ export * from './highlight';
 export * from './export';
 export * from './scanner';
 export * from './ai';
+export * from './sort';
 
 export type BookFormat = 'pdf' | 'epub' | 'fb2';
 
@@ -28,6 +29,7 @@ export interface BookRecord {
   pinned_at?: number | null;
   file_size?: number;
   file_hash?: string;
+  created_at?: number;
 }
 
 export interface DictionaryItem {

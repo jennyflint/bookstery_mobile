@@ -55,6 +55,18 @@
     "pinnedSection": "Pinned Books",
     "allBooksSection": "All Books"
   },
+  "sort": {
+    "label": "Sort by",
+    "lastRead": "Recently Read",
+    "dateAdded": "Date Added",
+    "title": "Title",
+    "author": "Author",
+    "format": "Format",
+    "progress": "Reading Progress",
+    "fileSize": "File Size",
+    "asc": "Ascending",
+    "desc": "Descending"
+  },
   "scanner": {
     "title": "Scan Device For Books",
     "description": "Bookstery will index local storage for supported ebooks.",

@@ -4,19 +4,22 @@ import { useLibraryStore } from '../../stores/libraryStore';
 import { useCollectionStore } from '../../stores/collectionStore';
 import { useCollectionNavigation } from '../../composables/useCollectionNavigation';
 import type { BookFormat, BookRecord } from '../../types';
+import { useBookSort } from '../../composables/useBookSort';
 import BookCard from './BookCard.vue';
 import BookActionMenu from './BookActionMenu.vue';
 import CollectionAssignModal from './CollectionAssignModal.vue';
+import BookSortControl from './BookSortControl.vue';
 
 const emit = defineEmits<{
   (e: 'select-book', book: BookRecord): void;
   (e: 'open-scanner'): void;
 }>();
 
-const { t } = useI18n();
+const { t, locale } = useI18n();
 const libraryStore = useLibraryStore();
 const collectionStore = useCollectionStore();
 const { activeCollectionId, activeCollectionName, selectCollection } = useCollectionNavigation();
+const bookSort = useBookSort('bookstery_book_sort');
 
 const selectedMenuBook = ref<BookRecord | null>(null);
 const isActionMenuOpen = ref(false);
@@ -102,21 +105,7 @@ const displayBooks = computed((): BookRecord[] => {
     return matchesQuery && matchesFormat;
   });
 
-  return [...filtered].sort((a, b) => {
-    const pinA = a.is_pinned ?? 0;
-    const pinB = b.is_pinned ?? 0;
-    if (pinA !== pinB) {
-      return pinB - pinA;
-    }
-    if (pinA === 1) {
-      const timeA = a.pinned_at ?? 0;
-      const timeB = b.pinned_at ?? 0;
-      if (timeA !== timeB) {
-        return timeB - timeA;
-      }
-    }
-    return b.last_read_at - a.last_read_at;
-  });
+  return bookSort.applySort(filtered, locale.value, { keepPinnedOnTop: true });
 });
 
 const pinnedBooks = computed((): BookRecord[] => {
@@ -213,55 +202,64 @@ const unpinnedBooks = computed((): BookRecord[] => {
       </button>
     </div>
 
-    <div class="scrollbar-none flex items-center gap-2 overflow-x-auto pb-1">
-      <button
-        type="button"
-        class="whitespace-nowrap rounded-xl px-4 py-2 text-xs font-semibold transition-all"
-        :class="
-          libraryStore.formatFilter === 'all'
-            ? 'bg-zinc-900 text-white shadow-sm'
-            : 'bg-zinc-100 text-zinc-600 hover:bg-zinc-200'
-        "
-        @click="setFormat('all')"
-      >
-        {{ t('library.filterAll') }}
-      </button>
-      <button
-        type="button"
-        class="whitespace-nowrap rounded-xl px-4 py-2 text-xs font-semibold transition-all"
-        :class="
-          libraryStore.formatFilter === 'pdf'
-            ? 'bg-zinc-900 text-white shadow-sm'
-            : 'bg-zinc-100 text-zinc-600 hover:bg-zinc-200'
-        "
-        @click="setFormat('pdf')"
-      >
-        {{ t('library.filterPdf') }}
-      </button>
-      <button
-        type="button"
-        class="whitespace-nowrap rounded-xl px-4 py-2 text-xs font-semibold transition-all"
-        :class="
-          libraryStore.formatFilter === 'epub'
-            ? 'bg-zinc-900 text-white shadow-sm'
-            : 'bg-zinc-100 text-zinc-600 hover:bg-zinc-200'
-        "
-        @click="setFormat('epub')"
-      >
-        {{ t('library.filterEpub') }}
-      </button>
-      <button
-        type="button"
-        class="whitespace-nowrap rounded-xl px-4 py-2 text-xs font-semibold transition-all"
-        :class="
-          libraryStore.formatFilter === 'fb2'
-            ? 'bg-zinc-900 text-white shadow-sm'
-            : 'bg-zinc-100 text-zinc-600 hover:bg-zinc-200'
-        "
-        @click="setFormat('fb2')"
-      >
-        {{ t('library.filterFb2') }}
-      </button>
+    <div class="flex flex-wrap items-center justify-between gap-3">
+      <div class="scrollbar-none flex items-center gap-2 overflow-x-auto pb-1">
+        <button
+          type="button"
+          class="whitespace-nowrap rounded-xl px-4 py-2 text-xs font-semibold transition-all"
+          :class="
+            libraryStore.formatFilter === 'all'
+              ? 'bg-zinc-900 text-white shadow-sm'
+              : 'bg-zinc-100 text-zinc-600 hover:bg-zinc-200'
+          "
+          @click="setFormat('all')"
+        >
+          {{ t('library.filterAll') }}
+        </button>
+        <button
+          type="button"
+          class="whitespace-nowrap rounded-xl px-4 py-2 text-xs font-semibold transition-all"
+          :class="
+            libraryStore.formatFilter === 'pdf'
+              ? 'bg-zinc-900 text-white shadow-sm'
+              : 'bg-zinc-100 text-zinc-600 hover:bg-zinc-200'
+          "
+          @click="setFormat('pdf')"
+        >
+          {{ t('library.filterPdf') }}
+        </button>
+        <button
+          type="button"
+          class="whitespace-nowrap rounded-xl px-4 py-2 text-xs font-semibold transition-all"
+          :class="
+            libraryStore.formatFilter === 'epub'
+              ? 'bg-zinc-900 text-white shadow-sm'
+              : 'bg-zinc-100 text-zinc-600 hover:bg-zinc-200'
+          "
+          @click="setFormat('epub')"
+        >
+          {{ t('library.filterEpub') }}
+        </button>
+        <button
+          type="button"
+          class="whitespace-nowrap rounded-xl px-4 py-2 text-xs font-semibold transition-all"
+          :class="
+            libraryStore.formatFilter === 'fb2'
+              ? 'bg-zinc-900 text-white shadow-sm'
+              : 'bg-zinc-100 text-zinc-600 hover:bg-zinc-200'
+          "
+          @click="setFormat('fb2')"
+        >
+          {{ t('library.filterFb2') }}
+        </button>
+      </div>
+
+      <BookSortControl
+        :model-value-field="bookSort.sortField.value"
+        :model-value-order="bookSort.sortOrder.value"
+        @update:model-value-field="bookSort.setSortField"
+        @update:model-value-order="(order) => (bookSort.sortOrder.value = order)"
+      />
     </div>
 
     <div
