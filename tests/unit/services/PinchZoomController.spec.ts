@@ -25,4 +25,29 @@ describe('PinchZoomController pan limits', () => {
     expect(negative.x).toBe(-100);
     expect(Math.abs(negative.y)).toBe(0);
   });
+
+  it('allows zoom out down to 0.5 and keeps centered translation at scale <= 1.0', () => {
+    const wrapper = createWrapper();
+    const controller = new PinchZoomController({
+      wrapper,
+      minScale: 0.5,
+      maxScale: 4.0,
+    });
+
+    controller.setScale(0.5);
+    expect(controller.getState().scale).toBe(0.5);
+    expect(controller.getState().cssScale).toBe(0.5);
+    expect(controller.getState().translateX).toBe(0);
+    expect(controller.getState().translateY).toBe(0);
+
+    // Below minScale clamps to 0.5
+    controller.setScale(0.2);
+    expect(controller.getState().scale).toBe(0.5);
+
+    // resetZoom snaps cleanly back to 1.0
+    controller.resetZoom();
+    expect(controller.getState().scale).toBe(1.0);
+    expect(controller.getState().translateX).toBe(0);
+    expect(controller.getState().translateY).toBe(0);
+  });
 });

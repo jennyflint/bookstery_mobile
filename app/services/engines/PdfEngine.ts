@@ -131,6 +131,7 @@ export class PdfEngine extends BaseEngine {
   private baseScale: number = 1.0;
   private currentScale: number = 1.0;
   private zoomScale: number = 1.0;
+  private fitWholePage: boolean = false;
   private gestureController: PinchZoomController | null = null;
   private visibilityHandler: (() => void) | null = null;
   private currentColors: { bg: string; text: string } | null = null;
@@ -167,29 +168,78 @@ export class PdfEngine extends BaseEngine {
     return Math.max(Math.sqrt(MAX_CANVAS_PIXELS / area), 0.25);
   }
 
+  public get baseFitScale(): number {
+    return this.baseScale;
+  }
+
+  public setFitWholePage(fit: boolean): void {
+    this.fitWholePage = fit;
+    void this.relayout();
+  }
+
+  public isFitWholePage(): boolean {
+    return this.fitWholePage;
+  }
+
   /** Available reader size in CSS pixels, with window fallbacks while layout is not settled yet. */
   private getContainerSize(): { width: number; height: number } {
-    const width = this.container?.clientWidth ?? 0;
-    const height = this.container?.clientHeight ?? 0;
+    const windowWidth = typeof window !== 'undefined' && window.innerWidth > 0 ? window.innerWidth : 360;
+    const windowHeight = typeof window !== 'undefined' && window.innerHeight > 0 ? window.innerHeight : 640;
+    const containerWidth = this.container?.clientWidth ?? 0;
+    // When container clientWidth is available (> 0), strictly bound it to window.innerWidth
+    // so an oversized PDF or child element cannot expand the measured width beyond the screen.
+    // If container clientWidth is 0 (e.g. before layout or in test environments), fallback to 320px.
+    const measuredWidth = containerWidth > 0 ? Math.min(containerWidth, windowWidth) : Math.min(windowWidth, 320);
+
+    let horizontalPadding = 0;
+    let verticalPadding = 0;
+    if (this.container && typeof window !== 'undefined') {
+      try {
+        const computed = window.getComputedStyle(this.container);
+        horizontalPadding = (parseFloat(computed.paddingLeft) || 0) + (parseFloat(computed.paddingRight) || 0);
+        verticalPadding = (parseFloat(computed.paddingTop) || 0) + (parseFloat(computed.paddingBottom) || 0);
+      } catch {
+        horizontalPadding = 0;
+        verticalPadding = 0;
+      }
+    }
+
+    const marginX = horizontalPadding > 0 ? horizontalPadding : FIT_MARGIN_PX;
+    const availableWidth = Math.max(0, measuredWidth - marginX);
+
+    const containerHeight = this.container?.clientHeight ?? 0;
+    const measuredHeight = containerHeight > 0 ? containerHeight : windowHeight;
+    const marginY = verticalPadding > 0 ? verticalPadding : FIT_MARGIN_PX;
+    const availableHeight = Math.max(0, measuredHeight - marginY);
+
     return {
-      width: width > 0 ? width : window.innerWidth || 360,
-      height: height > 0 ? height : window.innerHeight || 640,
+      width: availableWidth,
+      height: availableHeight,
     };
   }
 
   /**
-   * Fit-to-screen scale for a page. `getViewport` already applies the page's built-in
-   * rotation, so landscape scans and rotated pages are measured in their displayed orientation.
+   * Fit-to-screen scale for a page. `getViewport({ scale: 1 })` already applies the page's built-in
+   * rotation (rotation: page.rotate must not be passed manually to avoid double-rotation).
+   * Calculates both scaleX and scaleY, guaranteeing page never exceeds screen width (scaleX),
+   * and automatically applies bounding-box fit (Math.min(scaleX, scaleY)) when page is wider than tall.
    */
   private computeFitScale(page: pdfjsLib.PDFPageProxy): number {
-    const intrinsic = page.getViewport({ scale: 1 });
-    if (!(intrinsic.width > 0) || !(intrinsic.height > 0)) {
+    const unscaledViewport = page.getViewport({ scale: 1 });
+    if (!(unscaledViewport.width > 0) || !(unscaledViewport.height > 0)) {
       return 1;
     }
-    const { width, height } = this.getContainerSize();
-    const scaleX = (width - FIT_MARGIN_PX) / intrinsic.width;
-    const scaleY = (height - FIT_MARGIN_PX) / intrinsic.height;
-    return Math.max(Math.min(scaleX, scaleY, 2.5), 0.2);
+    const { width: availableWidth, height: availableHeight } = this.getContainerSize();
+    const scaleX = availableWidth / unscaledViewport.width;
+    const scaleY = availableHeight / unscaledViewport.height;
+
+    const isWiderThanTall = unscaledViewport.width > unscaledViewport.height;
+    const fitScale = isWiderThanTall || this.fitWholePage || this.paginationMode === 'buttons'
+      ? Math.min(scaleX, scaleY)
+      : scaleX;
+
+    // Guaranteed to never exceed screen width (scaleX), clamped between 0.2 and 2.5
+    return Math.max(Math.min(fitScale, scaleX, 2.5), 0.2);
   }
 
   /** Resolves once the container has a real size (first layout pass), or after a short timeout. */
@@ -238,8 +288,8 @@ export class PdfEngine extends BaseEngine {
       if (
         this.isPageTurnInProgress ||
         this.isGestureActive() ||
-        this.zoomScale > 1.0 ||
-        gestureScale > 1.0
+        this.zoomScale !== 1.0 ||
+        gestureScale !== 1.0
       ) {
         return;
       }
@@ -344,7 +394,7 @@ export class PdfEngine extends BaseEngine {
       this.gestureController = new PinchZoomController({
         wrapper: container,
         target: container,
-        minScale: 1.0,
+        minScale: 0.5,
         maxScale: 4.0,
         doubleTapScale: 2.5,
         doubleTapDelayMs: 300,
@@ -487,6 +537,7 @@ export class PdfEngine extends BaseEngine {
     }
     const clampedZoom = Math.min(Math.max(zoom, 0.5), 4.0);
     this.zoomScale = clampedZoom;
+    this.gestureController?.setScale(clampedZoom);
     this.pageCache.clear();
 
     if (this.paginationMode === 'scroll') {
@@ -495,15 +546,23 @@ export class PdfEngine extends BaseEngine {
     await this.renderButtonsMode(this.currentPageNumber, clampedZoom, true);
   }
 
+  async zoomIn(step: number = 0.25): Promise<void> {
+    await this.setZoom(this.zoomScale + step);
+  }
+
+  async zoomOut(step: number = 0.25): Promise<void> {
+    await this.setZoom(this.zoomScale - step);
+  }
+
   override async setFontSize(size: number): Promise<void> {
     this.currentFontSize = Math.min(Math.max(Math.round(size), 12), 36);
     const fontScale = this.currentFontSize / 18;
-    const targetScale = Math.min(Math.max(fontScale, 0.6), 3.0);
+    const targetScale = Math.min(Math.max(fontScale, 0.5), 4.0);
     await this.setZoom(targetScale);
   }
 
   override getZoom(): number {
-    return this.gestureController ? this.gestureController.getState().scale : this.zoomScale;
+    return this.zoomScale;
   }
 
   override resetZoom(skipReRender: boolean = false): void {
@@ -554,7 +613,7 @@ export class PdfEngine extends BaseEngine {
 
     const scrollWrapper = document.createElement('div');
     scrollWrapper.className =
-      'pdf-scroll-container relative w-full h-full overflow-y-auto overflow-x-hidden flex flex-col items-center py-6 px-2 space-y-6 select-text';
+      'pdf-scroll-container relative w-full max-w-full min-w-0 h-full overflow-y-auto overflow-x-hidden flex flex-col items-center py-6 px-2 space-y-6 select-text';
     (scrollWrapper.style as any).webkitOverflowScrolling = 'touch';
     scrollWrapper.style.contain = 'paint';
     scrollWrapper.style.willChange = 'scroll-position';
@@ -562,12 +621,7 @@ export class PdfEngine extends BaseEngine {
     this.scrollContainer = scrollWrapper;
 
     const firstPage = await this.pdfDocument.getPage(1);
-    const initialViewport = firstPage.getViewport({ scale: 1 });
-    const containerWidth = Math.max(this.container.clientWidth, 320);
-    const targetScale = Math.max(
-      Math.min((containerWidth - FIT_MARGIN_PX) / (initialViewport.width || 1), 2.0),
-      0.4,
-    );
+    const targetScale = this.computeFitScale(firstPage);
     this.baseScale = targetScale;
     this.currentScale = targetScale;
     const scaledViewport = firstPage.getViewport({ scale: targetScale });
@@ -1185,7 +1239,7 @@ export class PdfEngine extends BaseEngine {
 
       viewportContainer = document.createElement('div');
       viewportContainer.className =
-        'pdf-page-container relative flex justify-center items-center select-text w-full h-full overflow-hidden';
+        'pdf-page-container relative flex justify-center items-center select-text w-full max-w-full min-w-0 h-full overflow-hidden';
       viewportContainer.style.contain = 'layout paint';
       viewportContainer.style.willChange = 'transform';
       viewportContainer.style.backfaceVisibility = 'hidden';
@@ -1200,6 +1254,7 @@ export class PdfEngine extends BaseEngine {
       pageWrapper.style.backfaceVisibility = 'hidden';
       (pageWrapper.style as any).webkitBackfaceVisibility = 'hidden';
       pageWrapper.style.transform = 'translateZ(0)';
+      pageWrapper.style.transformOrigin = 'center top';
 
       visibleCanvas = document.createElement('canvas');
       visibleCanvas.className = 'pdf-canvas block shadow-md rounded bg-white';

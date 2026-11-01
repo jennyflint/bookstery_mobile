@@ -2,6 +2,7 @@
 import { ref } from 'vue';
 import { Capacitor } from '@capacitor/core';
 import { FilePicker } from '@capawesome/capacitor-file-picker';
+import { isNativeReaderBridgeAvailable } from '../../services/NativeReaderBridge';
 import { useDeviceScanner } from '../../composables/useDeviceScanner';
 
 defineProps<{
@@ -81,7 +82,8 @@ const handleImportClick = async () => {
           '*/*',
         ],
         limit: 0,
-        readData: true,
+        // File content is copied natively; reading it here would push the whole file through the bridge as Base64.
+        readData: !isNativeReaderBridgeAvailable(),
       });
 
       if (result && result.files && result.files.length > 0) {
@@ -99,6 +101,8 @@ const handleImportClick = async () => {
           duplicateMessage.value = t('scanner.duplicateDetected', {
             title: importRes.duplicates.join(', '),
           });
+        } else if (importRes.failed.length > 0) {
+          duplicateMessage.value = t('scanner.importFailed', { title: importRes.failed.join(', ') });
         }
         return;
       }

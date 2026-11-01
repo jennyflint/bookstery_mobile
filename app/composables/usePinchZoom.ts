@@ -58,6 +58,31 @@ export function usePinchZoom(
     }
   };
 
+  const setZoom = (targetScale: number): void => {
+    if (controller) {
+      controller.setScale(targetScale);
+    } else {
+      scale.value = targetScale;
+      cssScale.value = targetScale;
+    }
+  };
+
+  const zoomIn = (step: number = 0.25): void => {
+    if (controller) {
+      controller.zoomIn(step);
+    } else {
+      setZoom(scale.value + step);
+    }
+  };
+
+  const zoomOut = (step: number = 0.25): void => {
+    if (controller) {
+      controller.zoomOut(step);
+    } else {
+      setZoom(scale.value - step);
+    }
+  };
+
   const didInteractRecently = (): boolean => {
     return controller?.didInteractRecently() ?? false;
   };
@@ -87,6 +112,9 @@ export function usePinchZoom(
     isPanning,
     isAnimating,
     resetZoom,
+    setZoom,
+    zoomIn,
+    zoomOut,
     didInteractRecently,
     bindTouchSource,
   };

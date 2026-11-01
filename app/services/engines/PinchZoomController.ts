@@ -83,7 +83,7 @@ export class PinchZoomController {
   constructor(config: PinchZoomControllerConfig) {
     this.wrapper = config.wrapper;
     this.target = config.target || config.wrapper;
-    this.minScale = config.minScale ?? 1.0;
+    this.minScale = config.minScale ?? 0.5;
     this.maxScale = config.maxScale ?? 4.0;
     this.doubleTapScale = config.doubleTapScale ?? 2.5;
     this.doubleTapDelayMs = config.doubleTapDelayMs ?? 300;
@@ -185,7 +185,7 @@ export class PinchZoomController {
   private applyTransform(): void {
     const transformValue = `translate3d(${this.translateX}px, ${this.translateY}px, 0) scale(${this.cssScale})`;
     this.target.style.transform = transformValue;
-    this.target.style.transformOrigin = 'center center';
+    this.target.style.transformOrigin = this.cssScale < 1.0 ? 'center top' : 'center center';
     this.target.style.willChange = 'transform';
     this.target.style.transition = this.isAnimating
       ? `transform ${ZOOM_ANIMATION_MS}ms cubic-bezier(0.22, 1, 0.36, 1)`
@@ -399,7 +399,7 @@ export class PinchZoomController {
         return;
       }
 
-      if (this.scale === 1.0 && Math.abs(deltaX) > 50 && Math.abs(deltaX) > Math.abs(deltaY) * 1.2) {
+      if (this.scale <= 1.0 && Math.abs(deltaX) > 50 && Math.abs(deltaX) > Math.abs(deltaY) * 1.2) {
         this.lastTapTime = 0;
         this.didGestureMove = true;
         if (deltaX < -50) {
@@ -434,7 +434,7 @@ export class PinchZoomController {
 
   private handleDoubleTap(tapX: number, tapY: number): void {
     this.isAnimating = true;
-    if (this.scale > 1.0) {
+    if (this.scale !== 1.0) {
       this.scale = 1.0;
       this.translateX = 0;
       this.translateY = 0;
@@ -494,6 +494,26 @@ export class PinchZoomController {
     if (wasZoomed && !skipRenderCallback && this.isRenderZoomSupported?.()) {
       this.onZoomRender?.(1.0);
     }
+  }
+
+  public setScale(newScale: number): void {
+    const clamped = Number(
+      Math.min(Math.max(newScale, this.minScale), this.maxScale).toFixed(4),
+    );
+    this.scale = clamped;
+    this.cssScale = Number((this.scale / this.renderedScale).toFixed(4));
+    const clampedTranslation = this.clampTranslation(this.translateX, this.translateY, this.scale);
+    this.translateX = Math.round(clampedTranslation.x);
+    this.translateY = Math.round(clampedTranslation.y);
+    this.applyTransform();
+  }
+
+  public zoomIn(step: number = 0.25): void {
+    this.setScale(this.scale + step);
+  }
+
+  public zoomOut(step: number = 0.25): void {
+    this.setScale(this.scale - step);
   }
 
   /**

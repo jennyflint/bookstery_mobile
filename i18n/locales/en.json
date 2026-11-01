@@ -106,6 +106,7 @@
     "duplicateDetected": "Book \"{title}\" is already in your library and cannot be added again.",
     "duplicateNotice": "This book is already in your library.",
     "duplicatesSkipped": "Skipped duplicates: {count}",
+    "importFailed": "Could not import: {title}. Make sure the file is accessible and the device has enough free space.",
     "noNewFilesToImport": "All selected files are already in your library.",
     "autoScanSettings": "Auto-Scan Settings",
     "autoScanOnStartup": "Auto-scan for new books on launch",

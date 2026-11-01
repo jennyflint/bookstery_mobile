@@ -1,5 +1,10 @@
 # Building Bookstery Mobile for Android (APK Guide)
 
+
+```Don't Forget move Java Plugins to anroid directory```
+``` see docs/android ```
+
+
 This guide provides step-by-step instructions for building the **Bookstery Mobile** application into an Android Package Kit (**APK**).
 
 The project uses **Nuxt 4** (SPA mode, `ssr: false`) coupled with **Capacitor 7** (`@capacitor/android`). The web assets are generated into `.output/public` and synced to the native Android Gradle project.

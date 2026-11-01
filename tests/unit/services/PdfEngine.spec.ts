@@ -383,5 +383,95 @@ describe('PdfEngine', () => {
     // Only the settled target page (page 7) should execute full render, skipped intermediate pages do not
     expect(engine.getCurrentLocation().currentPage).toBe(7);
   });
+
+  it('should cap measured container width by window.innerWidth to prevent oversized flex expansion from overflowing screen', async () => {
+    const origInnerWidth = window.innerWidth;
+    const origInnerHeight = window.innerHeight;
+    Object.defineProperty(window, 'innerWidth', { value: 375, configurable: true, writable: true });
+    Object.defineProperty(window, 'innerHeight', { value: 667, configurable: true, writable: true });
+
+    Object.defineProperty(container, 'clientWidth', { value: 1200, configurable: true, writable: true });
+    Object.defineProperty(container, 'clientHeight', { value: 667, configurable: true, writable: true });
+
+    mockPdfPage.getViewport.mockImplementation(({ scale }: { scale: number }) => ({
+      width: 600 * scale,
+      height: 800 * scale,
+      scale,
+    }));
+
+    try {
+      await engine.init(container, new Uint8Array([1, 2, 3]));
+      await engine.setPaginationMode('buttons');
+
+      const canvas = container.querySelector<HTMLCanvasElement>('.pdf-canvas');
+      expect(canvas).not.toBeNull();
+      // Measured width should be capped by window.innerWidth (375 - 32 = 343)
+      // Logical canvas width should be <= 343px, NOT 1200px
+      const renderedWidth = parseFloat(canvas!.style.width);
+      expect(renderedWidth).toBeLessThanOrEqual(375);
+      expect(renderedWidth).toBeCloseTo(343, 0);
+    } finally {
+      Object.defineProperty(window, 'innerWidth', { value: origInnerWidth, configurable: true, writable: true });
+      Object.defineProperty(window, 'innerHeight', { value: origInnerHeight, configurable: true, writable: true });
+    }
+  });
+
+  it('should apply bounding-box fit (Math.min(scaleX, scaleY)) for landscape pages wider than tall', async () => {
+    const origInnerWidth = window.innerWidth;
+    const origInnerHeight = window.innerHeight;
+    Object.defineProperty(window, 'innerWidth', { value: 400, configurable: true, writable: true });
+    Object.defineProperty(window, 'innerHeight', { value: 300, configurable: true, writable: true });
+
+    Object.defineProperty(container, 'clientWidth', { value: 400, configurable: true, writable: true });
+    Object.defineProperty(container, 'clientHeight', { value: 300, configurable: true, writable: true });
+
+    // Page wider than tall: 1000 width x 500 height
+    mockPdfPage.getViewport.mockImplementation(({ scale }: { scale: number }) => ({
+      width: 1000 * scale,
+      height: 500 * scale,
+      scale,
+    }));
+
+    try {
+      await engine.init(container, new Uint8Array([1, 2, 3]));
+      await engine.setPaginationMode('buttons');
+
+      const canvas = container.querySelector<HTMLCanvasElement>('.pdf-canvas');
+      expect(canvas).not.toBeNull();
+
+      const renderedWidth = parseFloat(canvas!.style.width);
+      const renderedHeight = parseFloat(canvas!.style.height);
+
+      // Available: (400 - 32) = 368 width, (300 - 32) = 268 height
+      // scaleX = 368 / 1000 = 0.368, scaleY = 268 / 500 = 0.536
+      // Bounding box fit uses Math.min(scaleX, scaleY) = 0.368
+      expect(renderedWidth).toBeLessThanOrEqual(400);
+      expect(renderedHeight).toBeLessThanOrEqual(300);
+      expect(engine.baseFitScale).toBeCloseTo(0.368, 2);
+    } finally {
+      Object.defineProperty(window, 'innerWidth', { value: origInnerWidth, configurable: true, writable: true });
+      Object.defineProperty(window, 'innerHeight', { value: origInnerHeight, configurable: true, writable: true });
+    }
+  });
+
+  it('should allow zooming out below 1.0 down to 0.5 and snap back cleanly on resetZoom', async () => {
+    await engine.init(container, new Uint8Array([1, 2, 3]));
+    await engine.setPaginationMode('buttons');
+
+    await engine.setZoom(0.5);
+    expect(engine.getZoom()).toBe(0.5);
+
+    // Zooming out below 0.5 should clamp to 0.5
+    await engine.setZoom(0.2);
+    expect(engine.getZoom()).toBe(0.5);
+
+    // Zooming in above 4.0 should clamp to 4.0
+    await engine.setZoom(5.0);
+    expect(engine.getZoom()).toBe(4.0);
+
+    // Reset zoom should snap cleanly to 1.0
+    engine.resetZoom();
+    expect(engine.getZoom()).toBe(1.0);
+  });
 });
 

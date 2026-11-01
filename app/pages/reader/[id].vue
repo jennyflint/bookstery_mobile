@@ -270,7 +270,7 @@ const handleCloseReader = async (): Promise<void> => {
 const handleBackButtonPress = async (): Promise<void> => {
   // Priority 1: Reset zoom & pan if page is zoomed
   if (viewportRef.value) {
-    const isZoomed = viewportRef.value.scale > 1.01;
+    const isZoomed = viewportRef.value.scale > 1.01 || viewportRef.value.scale < 0.99;
     const isPanned =
       Math.abs(viewportRef.value.translateX) > 1 || Math.abs(viewportRef.value.translateY) > 1;
     if (isZoomed || isPanned) {

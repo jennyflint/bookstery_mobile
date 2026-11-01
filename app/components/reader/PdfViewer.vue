@@ -49,7 +49,7 @@ const forwardPrev = (): void => {
 <template>
   <div
     data-testid="pdf-viewer"
-    class="relative w-full h-full overflow-hidden select-text"
+    class="relative w-full max-w-full min-w-0 h-full overflow-auto select-text flex flex-col items-center justify-center"
     style="contain: layout paint; backface-visibility: hidden; -webkit-backface-visibility: hidden; will-change: transform;"
   >
     <!-- Reflow Mode -->

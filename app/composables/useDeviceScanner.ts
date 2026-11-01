@@ -4,6 +4,12 @@ import { DeviceFileScannerService } from '../services/scanner/DeviceFileScannerS
 import { FileHashService } from '../services/scanner/FileHashService';
 import { AutoScanService } from '../services/scanner/AutoScanService';
 import { ScanDirectoryRepository } from '../services/database/ScanDirectoryRepository';
+import {
+  NativeReaderBridge,
+  fetchBookBytes,
+  isNativeReaderBridgeAvailable,
+  toWebViewUrl,
+} from '../services/NativeReaderBridge';
 import { CoverGenerationQueueService } from '../services/covers/CoverGenerationQueueService';
 import { useLibraryStore } from '../stores/libraryStore';
 import type { AddBookResult, BookRecord, ImportFilesResult, ScannedFile } from '../types';
@@ -226,13 +232,97 @@ export function useDeviceScanner() {
     }
   };
 
+  /**
+   * Imports a picked file entirely natively (stream copy + hash), so large books never pass
+   * through the JS bridge as one huge Base64 string.
+   */
+  const importViaBridge = async (
+    sourcePath: string,
+    fileName: string,
+    candidateTitle: string,
+  ): Promise<{ status: 'imported' | 'duplicate' | 'skipped'; title?: string }> => {
+    const format = scannerService.determineFormat(fileName);
+    if (!format) {
+      return { status: 'skipped' };
+    }
+
+    const copy = await NativeReaderBridge.copyToAppStorage({
+      uriOrPath: sourcePath,
+      fileName,
+      destDir: 'books',
+    });
+
+    const existingByHash = libraryStore.findDuplicate({ id: copy.hash });
+    if (existingByHash) {
+      if (existingByHash.file_path !== copy.relativePath) {
+        try {
+          await Filesystem.deleteFile({ path: copy.relativePath, directory: Directory.Data });
+        } catch {}
+      }
+      return { status: 'duplicate', title: existingByHash.title };
+    }
+
+    const now = Date.now();
+    const bookRecord: BookRecord = {
+      id: copy.hash,
+      title: candidateTitle,
+      author: null,
+      format,
+      file_path: copy.relativePath,
+      cover_path: null,
+      locator: format === 'pdf' ? '1' : format === 'fb2' ? 'fb2-p-0' : '',
+      progress_percentage: 0,
+      total_items: 0,
+      last_read_at: now,
+      updated_at: now,
+      file_size: copy.size,
+      file_hash: copy.hash,
+    };
+
+    const addResult = await libraryStore.addBook(bookRecord);
+    if (!addResult.success) {
+      return { status: 'duplicate', title: candidateTitle };
+    }
+
+    void (async () => {
+      try {
+        if (format === 'pdf') {
+          try {
+            const thumbnail = await NativeReaderBridge.generatePdfThumbnail({
+              uriOrPath: copy.path,
+              bookId: bookRecord.id,
+              maxWidth: 360,
+            });
+            await libraryStore.updateCover(bookRecord.id, toWebViewUrl(thumbnail.path));
+            return;
+          } catch {
+            // Encrypted or malformed PDF: try the JS extractor.
+          }
+        }
+        const coverPath = await coverQueue.enqueue(
+          bookRecord.id,
+          bookRecord.format,
+          await fetchBookBytes(copy.path),
+        );
+        if (coverPath) {
+          await libraryStore.updateCover(bookRecord.id, coverPath);
+        }
+      } catch {
+        // A missing cover must never fail the import.
+      }
+    })();
+
+    return { status: 'imported' };
+  };
+
   const importNativeFiles = async (
     files: Array<{ name: string; path?: string; data?: string; size?: number }>,
-  ): Promise<{ importedCount: number; duplicates: string[] }> => {
+  ): Promise<{ importedCount: number; duplicates: string[]; failed: string[] }> => {
     isScanning.value = true;
     scanProgress.value = 0;
     let importedCount = 0;
     const duplicates: string[] = [];
+    const failed: string[] = [];
 
     try {
       await libraryStore.loadBooks();
@@ -245,6 +335,22 @@ export function useDeviceScanner() {
         const existingByTitle = libraryStore.findDuplicate({ title: candidateTitle });
         if (existingByTitle) {
           duplicates.push(candidateTitle);
+          scanProgress.value = Math.round(((i + 1) / files.length) * 100);
+          continue;
+        }
+
+        if (f.path && isNativeReaderBridgeAvailable()) {
+          try {
+            const outcome = await importViaBridge(f.path, fileName, candidateTitle);
+            if (outcome.status === 'imported') {
+              importedCount++;
+            } else if (outcome.status === 'duplicate') {
+              duplicates.push(outcome.title ?? candidateTitle);
+            }
+          } catch (err) {
+            console.warn(`[DeviceScanner] Native import failed for ${fileName}:`, err);
+            failed.push(fileName);
+          }
           scanProgress.value = Math.round(((i + 1) / files.length) * 100);
           continue;
         }
@@ -321,7 +427,7 @@ export function useDeviceScanner() {
         scanProgress.value = Math.round(((i + 1) / files.length) * 100);
       }
 
-      return { importedCount, duplicates };
+      return { importedCount, duplicates, failed };
     } finally {
       isScanning.value = false;
       scanProgress.value = 0;

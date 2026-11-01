@@ -31,10 +31,13 @@ const {
   translateY,
   isAnimating,
   resetZoom,
+  setZoom,
+  zoomIn,
+  zoomOut,
   didInteractRecently,
   bindTouchSource,
 } = usePinchZoom(viewportWrapperRef, gestureTargetRef, {
-  minScale: 1.0,
+  minScale: 0.5,
   maxScale: 4.0,
   doubleTapScale: 2.5,
   doubleTapDelayMs: 300,
@@ -96,7 +99,7 @@ const containerPaddingStyle = {
 
 const containerTransformStyle = computed(() => ({
   transform: `translate3d(${translateX.value}px, ${translateY.value}px, 0) scale(${cssScale.value})`,
-  transformOrigin: 'center center',
+  transformOrigin: cssScale.value < 1.0 ? 'center top' : 'center center',
   transition: isAnimating.value ? 'transform 250ms cubic-bezier(0.22, 1, 0.36, 1)' : 'none',
   willChange: 'transform',
 }));
@@ -127,6 +130,9 @@ const handleContainerClick = (event: MouseEvent) => {
 defineExpose({
   containerRef,
   resetZoom,
+  setZoom,
+  zoomIn,
+  zoomOut,
   scale,
   cssScale,
   translateX,
@@ -154,7 +160,7 @@ defineExpose({
       <div
         ref="containerRef"
         data-testid="reader-engine-container"
-        class="w-full h-full flex flex-col items-center justify-center overflow-auto"
+        class="w-full max-w-full min-w-0 h-full flex flex-col items-center justify-center overflow-auto"
         :style="containerPaddingStyle"
       />
 
