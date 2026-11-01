@@ -1,24 +1,15 @@
-import { registerPlugin } from '@capacitor/core';
 import type { VolumeButtonsPlugin } from '../../types/volume';
+import { NativeReaderBridge } from '../NativeReaderBridge';
 
 /**
- * Native Capacitor bridge adapter for intercepting hardware volume buttons.
- * On Android, intercepts KEYCODE_VOLUME_UP and KEYCODE_VOLUME_DOWN at the Activity level.
- * On web/desktop platforms, provides a fallback implementation.
+ * Volume key adapter used by the page-turn composable. The hardware keys are intercepted
+ * natively by `NativeReaderBridge` (MainActivity.dispatchKeyEvent); on web/desktop the
+ * bridge's web fallback keeps this a harmless no-op.
  */
-export const VolumeButtons = registerPlugin<VolumeButtonsPlugin>('VolumeButtons', {
-  web: () => ({
-    async setVolumeInterception(options: { enabled: boolean }) {
-      return { enabled: options.enabled };
-    },
-    async isInterceptionEnabled() {
-      return { enabled: false };
-    },
-    async addListener() {
-      return {
-        remove: async () => {},
-      };
-    },
-    async removeAllListeners() {},
-  }),
-});
+export const VolumeButtons: VolumeButtonsPlugin = {
+  setVolumeInterception: (options) => NativeReaderBridge.setVolumeInterception(options),
+  isInterceptionEnabled: () => NativeReaderBridge.isInterceptionEnabled(),
+  addListener: (_eventName, listenerFunc) =>
+    NativeReaderBridge.addListener('volumeKeyPressed', listenerFunc),
+  removeAllListeners: () => NativeReaderBridge.removeAllListeners(),
+};

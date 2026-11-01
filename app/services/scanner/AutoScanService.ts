@@ -1,6 +1,11 @@
 import { Filesystem, Directory } from '@capacitor/filesystem';
 import { Capacitor } from '@capacitor/core';
-import { StorageAccess } from './StorageAccess';
+import {
+  NativeReaderBridge,
+  fetchBookBytes,
+  isNativeReaderBridgeAvailable,
+  toWebViewUrl,
+} from '../NativeReaderBridge';
 import { FileHashService } from './FileHashService';
 import { ScanDirectoryRepository, normalizeDirectoryUri } from '../database/ScanDirectoryRepository';
 import { SqliteService } from '../database/SqliteService';
@@ -13,6 +18,9 @@ import type {
   ScanDirectory,
   ScanResultSummary,
 } from '../../types';
+
+const NATIVE_SCAN_EXTENSIONS = ['.pdf', '.epub', '.fb2', '.fb2.zip'];
+const SANDBOX_BOOK_PATH = /^books\/[0-9a-f]{8,}_(.+)$/i;
 
 export function deriveDisplayNameFromUri(uri: string): string {
   try {
@@ -95,19 +103,20 @@ export class AutoScanService {
         return true;
       }
 
-      try {
-        const access = await StorageAccess.getStatus();
-        if (access.allFilesAccessRequired) {
-          if (access.granted) {
+      if (isNativeReaderBridgeAvailable()) {
+        try {
+          const status = await NativeReaderBridge.checkStoragePermission();
+          if (status.granted) {
             return true;
           }
-          if (requestIfMissing) {
-            await StorageAccess.openAllFilesAccessSettings();
+          if (!requestIfMissing) {
+            return false;
           }
-          return false;
+          const requested = await NativeReaderBridge.requestStoragePermission();
+          return requested.granted;
+        } catch {
+          // Bridge call failed: fall back to the Filesystem plugin below.
         }
-      } catch {
-        // Native bridge missing (older build): fall back to the Filesystem plugin.
       }
 
       const status = await Filesystem.checkPermissions();
@@ -134,6 +143,19 @@ export class AutoScanService {
     const hasPermission = await this.ensureFilesystemPermissions();
     if (!hasPermission) {
       return false;
+    }
+
+    if (isNativeReaderBridgeAvailable()) {
+      try {
+        await NativeReaderBridge.scanDirectory({
+          uriOrPath: normalized,
+          extensions: NATIVE_SCAN_EXTENSIONS,
+          maxDepth: 0,
+        });
+        return true;
+      } catch {
+        // Fall through to the Filesystem based check.
+      }
     }
 
     const { path, directory } = this.resolveDirectoryTarget(normalized);
@@ -228,7 +250,8 @@ export class AutoScanService {
     baseFileCount: number = 0,
   ): Promise<ScanResultSummary> {
     const summary = this.createEmptySummary();
-    const crawledFiles = await this.crawlDirectory(dirUri, isRecursive);
+    const nativeFiles = await this.crawlDirectoryNative(dirUri, isRecursive);
+    const crawledFiles = nativeFiles ?? (await this.crawlDirectory(dirUri, isRecursive));
 
     if (crawledFiles.length === 0) {
       return summary;
@@ -242,6 +265,17 @@ export class AutoScanService {
     for (const book of existingBooks) {
       existingByPath.set(book.file_path, book);
       existingById.set(book.id, book);
+    }
+
+    // Books already imported by the native pipeline are recognised by (original file name, size).
+    const importedByNameAndSize = new Set<string>();
+    if (nativeFiles) {
+      for (const book of existingBooks) {
+        const originalName = SANDBOX_BOOK_PATH.exec(book.file_path)?.[1];
+        if (originalName && book.file_size) {
+          importedByNameAndSize.add(`${originalName}|${book.file_size}`);
+        }
+      }
     }
 
     let progressCounter = baseFileCount;
@@ -264,6 +298,20 @@ export class AutoScanService {
         existingRecordByPath.file_size === file.size
       ) {
         summary.skippedBooksCount++;
+        continue;
+      }
+
+      if (nativeFiles) {
+        try {
+          if (importedByNameAndSize.has(`${file.name}|${file.size}`)) {
+            summary.skippedBooksCount++;
+          } else {
+            await this.importNativeFile(file, summary, existingById, importedByNameAndSize);
+          }
+        } catch {
+          summary.failedCount++;
+        }
+        await this.yieldThread();
         continue;
       }
 
@@ -340,6 +388,118 @@ export class AutoScanService {
     }
 
     return summary;
+  }
+
+  /** Single native call instead of a JS-level recursive readdir loop. Returns null when unavailable. */
+  private async crawlDirectoryNative(
+    dirUri: string,
+    isRecursive: boolean,
+  ): Promise<CrawledBookFile[] | null> {
+    if (!isNativeReaderBridgeAvailable()) {
+      return null;
+    }
+    try {
+      const result = await NativeReaderBridge.scanDirectory({
+        uriOrPath: normalizeDirectoryUri(dirUri),
+        extensions: NATIVE_SCAN_EXTENSIONS,
+        maxDepth: isRecursive ? undefined : 0,
+      });
+      const files: CrawledBookFile[] = [];
+      for (const entry of result.files) {
+        const format = this.determineFormat(entry.name);
+        if (format) {
+          files.push({
+            name: entry.name,
+            path: entry.uri,
+            size: entry.size,
+            mtime: entry.lastModified,
+            format,
+          });
+        }
+      }
+      return files;
+    } catch (err) {
+      console.warn('[AutoScanService] Native scan failed, using the JS scanner:', err);
+      return null;
+    }
+  }
+
+  /** Copies, hashes and registers one book without moving its content through the JS bridge. */
+  private async importNativeFile(
+    file: CrawledBookFile,
+    summary: ScanResultSummary,
+    existingById: Map<string, BookRecord>,
+    importedByNameAndSize: Set<string>,
+  ): Promise<void> {
+    const copy = await NativeReaderBridge.copyToAppStorage({
+      uriOrPath: file.path,
+      fileName: file.name,
+      destDir: 'books',
+    });
+    importedByNameAndSize.add(`${file.name}|${copy.size}`);
+
+    const existing = existingById.get(copy.hash);
+    if (existing) {
+      if (existing.file_size !== copy.size) {
+        await this.sqliteService.updateFilePathAndSize(existing.id, existing.file_path, copy.size);
+        existing.file_size = copy.size;
+        summary.updatedBooksCount++;
+      } else {
+        summary.skippedBooksCount++;
+      }
+      return;
+    }
+
+    const now = Date.now();
+    const newBook: BookRecord = {
+      id: copy.hash,
+      title: this.extractTitleFromFileName(file.name),
+      author: null,
+      format: file.format,
+      file_path: copy.relativePath,
+      cover_path: null,
+      locator: file.format === 'pdf' ? '1' : file.format === 'fb2' ? 'fb2-p-0' : '',
+      progress_percentage: 0,
+      total_items: 0,
+      last_read_at: now,
+      updated_at: now,
+      is_pinned: 0,
+      pinned_at: null,
+      file_size: copy.size,
+      file_hash: copy.hash,
+    };
+
+    await this.sqliteService.upsertBook(newBook);
+    existingById.set(newBook.id, newBook);
+
+    await this.generateNativeCover(newBook, copy.path);
+
+    summary.newBooksCount++;
+    summary.newBookIds.push(newBook.id);
+  }
+
+  private async generateNativeCover(book: BookRecord, localPath: string): Promise<void> {
+    if (book.format === 'pdf') {
+      try {
+        const thumbnail = await NativeReaderBridge.generatePdfThumbnail({
+          uriOrPath: localPath,
+          bookId: book.id,
+          maxWidth: 360,
+        });
+        const coverUrl = toWebViewUrl(thumbnail.path);
+        await this.sqliteService.updateCoverPath(book.id, coverUrl);
+        book.cover_path = coverUrl;
+        return;
+      } catch {
+        // Encrypted or malformed PDF: use the JS extractor below.
+      }
+    }
+
+    try {
+      await this.coverQueue.enqueue(book.id, book.format, await fetchBookBytes(localPath));
+    } catch {
+      // A missing cover must never fail the import.
+    }
   }
 
   private async crawlDirectory(

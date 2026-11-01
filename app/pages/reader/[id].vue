@@ -1,7 +1,6 @@
 <script setup lang="ts">
 import { ref, computed, watch, onMounted, onUnmounted, nextTick } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
-import { Directory, Filesystem } from '@capacitor/filesystem';
 import { App } from '@capacitor/app';
 import type { PluginListenerHandle } from '@capacitor/core';
 import { useLibraryStore } from '../../stores/libraryStore';
@@ -11,6 +10,7 @@ import { useReader } from '../../composables/useReader';
 import { useBookSync } from '../../composables/useBookSync';
 import { useAppLifecycle } from '../../composables/useAppLifecycle';
 import { useTextSelection } from '../../composables/useTextSelection';
+import { loadBookBytesNative, readBookViaFilesystem } from '../../services/BookFileLoader';
 import { TranslationService } from '../../services/translation/TranslationService';
 import type { EnginePageTapDetail, EngineSelectionDetail, TranslationResult } from '../../types';
 import ReaderViewport from '../../components/reader/ReaderViewport.vue';
@@ -128,39 +128,8 @@ onMounted(async () => {
   if (viewportRef.value?.containerRef) {
     let rawData: Uint8Array | ArrayBuffer | string = '';
     try {
-      let fileRes;
-      try {
-        fileRes = await Filesystem.readFile({
-          path: book.file_path,
-          directory: Directory.Data,
-        });
-      } catch {
-        try {
-          fileRes = await Filesystem.readFile({
-            path: book.file_path,
-            directory: Directory.Documents,
-          });
-        } catch {
-          fileRes = await Filesystem.readFile({
-            path: book.file_path,
-          });
-        }
-      }
-
-      if (typeof fileRes.data === 'string') {
-        const base64Clean = fileRes.data.includes(',') ? fileRes.data.split(',')[1] : fileRes.data;
-        const binary = atob(base64Clean);
-        const bytes = new Uint8Array(binary.length);
-        for (let i = 0; i < binary.length; i++) {
-          bytes[i] = binary.charCodeAt(i);
-        }
-        rawData = bytes;
-      } else if (typeof Blob !== 'undefined' && fileRes.data instanceof Blob) {
-        const arrayBuf = await fileRes.data.arrayBuffer();
-        rawData = new Uint8Array(arrayBuf);
-      } else {
-        rawData = fileRes.data;
-      }
+      rawData =
+        (await loadBookBytesNative(book.file_path)) ?? (await readBookViaFilesystem(book.file_path));
     } catch (readErr) {
       console.warn('[Reader] Failed to read book from filesystem, using fallback sample:', readErr);
       if (book.format === 'fb2') {

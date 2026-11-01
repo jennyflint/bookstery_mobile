@@ -3,6 +3,12 @@ import { Directory, Filesystem } from '@capacitor/filesystem';
 import { SqliteService } from '../services/database/SqliteService';
 import { BookRepository } from '../services/database/BookRepository';
 import { CoverGenerationQueueService } from '../services/covers/CoverGenerationQueueService';
+import {
+  NativeReaderBridge,
+  isNativeReaderBridgeAvailable,
+  toWebViewUrl,
+} from '../services/NativeReaderBridge';
+import { loadBookBytesNative, resolveStoredBookUri } from '../services/BookFileLoader';
 import type { AddBookResult, BookFormat, BookRecord } from '../types';
 
 function sortLibraryBooks(books: BookRecord[]): BookRecord[] {
@@ -69,6 +75,10 @@ export const useLibraryStore = defineStore('library', {
       const queue = CoverGenerationQueueService.getInstance();
 
       for (const book of missing) {
+        if (isNativeReaderBridgeAvailable() && (await this.generateNativeCover(book, queue))) {
+          continue;
+        }
+
         try {
           const fileData = await Filesystem.readFile({
             path: book.file_path,
@@ -97,6 +107,43 @@ export const useLibraryStore = defineStore('library', {
             }
           } catch {}
         }
+      }
+    },
+    /** Native cover pipeline: PdfRenderer thumbnails for PDFs, binary streaming for the JS extractor otherwise. */
+    async generateNativeCover(
+      book: BookRecord,
+      queue: CoverGenerationQueueService,
+    ): Promise<boolean> {
+      try {
+        if (book.format === 'pdf') {
+          const uri = await resolveStoredBookUri(book.file_path);
+          if (uri) {
+            try {
+              const thumbnail = await NativeReaderBridge.generatePdfThumbnail({
+                uriOrPath: uri,
+                bookId: book.id,
+                maxWidth: 360,
+              });
+              await this.updateCover(book.id, toWebViewUrl(thumbnail.path));
+              return true;
+            } catch {
+              // Encrypted or malformed PDF: let the JS extractor try below.
+            }
+          }
+        }
+
+        const bytes = await loadBookBytesNative(book.file_path);
+        if (!bytes) {
+          return false;
+        }
+        queue.enqueue(book.id, book.format, bytes).then((coverPath) => {
+          if (coverPath) {
+            this.updateCover(book.id, coverPath);
+          }
+        });
+        return true;
+      } catch {
+        return false;
       }
     },
     findDuplicate(candidate: {
