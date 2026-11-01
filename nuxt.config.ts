@@ -2,6 +2,7 @@ export default defineNuxtConfig({
   compatibilityDate: '2026-10-31',
   ssr: false,
   devtools: { enabled: false },
+  telemetry: false,
   modules: ['@nuxt/eslint', '@nuxtjs/i18n', '@nuxtjs/tailwindcss', '@pinia/nuxt'],
   app: {
     head: {
@@ -36,6 +37,7 @@ export default defineNuxtConfig({
         '@capacitor/share',
         '@capacitor-community/keep-awake',
         '@capacitor-community/text-to-speech',
+        '@capacitor/screen-orientation',
         'ai',
         '@ai-sdk/vue',
         '@ai-sdk/openai',

@@ -8,7 +8,12 @@ import {
   mockNetwork,
   mockFilePicker,
   mockTextToSpeech,
+  mockScreenOrientation,
 } from './mocks/capacitor-plugins';
+
+vi.mock('@capacitor/screen-orientation', () => ({
+  ScreenOrientation: mockScreenOrientation,
+}));
 
 vi.mock('@capawesome/capacitor-file-picker', () => ({
   FilePicker: mockFilePicker,
@@ -89,7 +94,9 @@ if (typeof window !== 'undefined') {
   };
 
   HTMLCanvasElement.prototype.getContext = vi.fn().mockReturnValue(dummyContext);
-  HTMLCanvasElement.prototype.toDataURL = vi.fn().mockReturnValue('data:image/png;base64,mockCanvasData');
+  HTMLCanvasElement.prototype.toDataURL = vi
+    .fn()
+    .mockReturnValue('data:image/png;base64,mockCanvasData');
 
   if (!window.matchMedia) {
     window.matchMedia = vi.fn().mockImplementation((query: string) => ({
@@ -123,6 +130,19 @@ if (typeof window !== 'undefined') {
     }
     window.IntersectionObserver =
       MockIntersectionObserver as unknown as typeof IntersectionObserver;
+  }
+
+  if (typeof window.screen !== 'undefined' && !window.screen.orientation) {
+    Object.defineProperty(window.screen, 'orientation', {
+      value: {
+        lock: vi.fn().mockResolvedValue(undefined),
+        unlock: vi.fn().mockReturnValue(undefined),
+        type: 'portrait-primary',
+        angle: 0,
+      },
+      writable: true,
+      configurable: true,
+    });
   }
 
   (globalThis as unknown as { useI18n: () => { t: (k: string) => string } }).useI18n = () => ({

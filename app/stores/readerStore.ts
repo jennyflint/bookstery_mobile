@@ -8,6 +8,7 @@ import type {
   ReflowBlock,
   ReflowFontFamily,
   ReflowTheme,
+  ScreenOrientationMode,
   TextSelectionDetail,
 } from '../types';
 
@@ -39,8 +40,7 @@ function getStoredReflowSettings(): Required<StoredReflowSettings> {
     if (raw) {
       return { ...DEFAULT_REFLOW_SETTINGS, ...JSON.parse(raw) };
     }
-  } catch {
-  }
+  } catch {}
   return { ...DEFAULT_REFLOW_SETTINGS };
 }
 
@@ -50,8 +50,7 @@ function persistReflowSettings(settings: StoredReflowSettings): void {
   }
   try {
     localStorage.setItem(REFLOW_STORAGE_KEY, JSON.stringify(settings));
-  } catch {
-  }
+  } catch {}
 }
 
 const DEFAULT_SETTINGS: ReaderSettings = {
@@ -62,6 +61,9 @@ const DEFAULT_SETTINGS: ReaderSettings = {
   paginationMode: 'scroll',
   customBackgroundColor: '#ffffff',
   customTextColor: '#18181b',
+  keepScreenAwake: true,
+  orientationLock: 'auto',
+  applyOrientationOnlyInReader: true,
 };
 
 function getStoredSettings(): ReaderSettings {
@@ -73,8 +75,7 @@ function getStoredSettings(): ReaderSettings {
     if (raw) {
       return { ...DEFAULT_SETTINGS, ...JSON.parse(raw) };
     }
-  } catch {
-  }
+  } catch {}
   return { ...DEFAULT_SETTINGS };
 }
 
@@ -84,8 +85,7 @@ function persistSettings(settings: ReaderSettings): void {
   }
   try {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(settings));
-  } catch {
-  }
+  } catch {}
 }
 
 export const useReaderStore = defineStore('reader', {
@@ -217,8 +217,7 @@ export const useReaderStore = defineStore('reader', {
       const clampedPage = Math.max(1, Math.min(total, Math.round(targetPage)));
       this.currentPage = clampedPage;
       this.locator = String(clampedPage);
-      this.progressPercentage =
-        total > 0 ? Number(((clampedPage / total) * 100).toFixed(2)) : 0;
+      this.progressPercentage = total > 0 ? Number(((clampedPage / total) * 100).toFixed(2)) : 0;
       if (this.pageNavigator) {
         await this.pageNavigator(clampedPage);
       }
@@ -273,6 +272,18 @@ export const useReaderStore = defineStore('reader', {
     },
     setRendering(val: boolean): void {
       this.isRendering = val;
+    },
+    setKeepScreenAwake(enabled: boolean): void {
+      this.settings.keepScreenAwake = enabled;
+      persistSettings(this.settings);
+    },
+    setOrientationLock(mode: ScreenOrientationMode): void {
+      this.settings.orientationLock = mode;
+      persistSettings(this.settings);
+    },
+    setApplyOrientationOnlyInReader(onlyInReader: boolean): void {
+      this.settings.applyOrientationOnlyInReader = onlyInReader;
+      persistSettings(this.settings);
     },
     resetToDefault(): void {
       this.settings = { ...DEFAULT_SETTINGS };

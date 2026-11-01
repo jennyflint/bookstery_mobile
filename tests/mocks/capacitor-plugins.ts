@@ -7,11 +7,13 @@ export const mockNetworkStatus = {
 
 export const mockNetwork = {
   getStatus: vi.fn().mockImplementation(async () => mockNetworkStatus),
-  addListener: vi.fn().mockImplementation((_event: string, callback: (status: typeof mockNetworkStatus) => void) => {
-    return {
-      remove: vi.fn(),
-    };
-  }),
+  addListener: vi
+    .fn()
+    .mockImplementation((_event: string, callback: (status: typeof mockNetworkStatus) => void) => {
+      return {
+        remove: vi.fn(),
+      };
+    }),
 };
 
 export const mockFilesystem = {
@@ -42,6 +44,16 @@ export const mockKeepAwake = {
   isSupported: vi.fn().mockResolvedValue({ isSupported: true }),
 };
 
+export const mockScreenOrientation = {
+  lock: vi.fn().mockResolvedValue(undefined),
+  unlock: vi.fn().mockResolvedValue(undefined),
+  orientation: vi.fn().mockResolvedValue({ type: 'portrait-primary' }),
+  addListener: vi.fn().mockResolvedValue({ remove: vi.fn() }),
+  removeAllListeners: vi.fn().mockResolvedValue(undefined),
+};
+
+export const ScreenOrientation = mockScreenOrientation;
+
 export const mockTextToSpeech = {
   speak: vi.fn().mockResolvedValue(undefined),
   stop: vi.fn().mockResolvedValue(undefined),
@@ -58,11 +70,13 @@ export const mockTextToSpeech = {
 };
 
 export const mockApp = {
-  addListener: vi.fn().mockImplementation(async (_event: string, _callback: (...args: any[]) => void) => {
-    return {
-      remove: vi.fn().mockResolvedValue(undefined),
-    };
-  }),
+  addListener: vi
+    .fn()
+    .mockImplementation(async (_event: string, _callback: (...args: any[]) => void) => {
+      return {
+        remove: vi.fn().mockResolvedValue(undefined),
+      };
+    }),
   exitApp: vi.fn(),
 };
 

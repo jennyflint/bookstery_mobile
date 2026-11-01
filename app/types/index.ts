@@ -10,6 +10,7 @@ export * from './ai';
 export * from './sort';
 export * from './tts';
 export * from './reflow';
+export * from './settings';
 
 export type BookFormat = 'pdf' | 'epub' | 'fb2';
 
@@ -119,6 +120,9 @@ export interface ReaderSettings {
   paginationMode: ReaderPaginationMode;
   customBackgroundColor: string;
   customTextColor: string;
+  keepScreenAwake?: boolean;
+  orientationLock?: import('./settings').ScreenOrientationMode;
+  applyOrientationOnlyInReader?: boolean;
 }
 
 export interface TextSelectionDetail {

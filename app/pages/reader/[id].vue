@@ -27,6 +27,7 @@ import AiSettingsModal from '../../components/ai/AiSettingsModal.vue';
 import TtsPlayerBar from '../../components/reader/TtsPlayerBar.vue';
 import { useAiStore } from '../../stores/aiStore';
 import { useTtsStore } from '../../stores/ttsStore';
+import { useSettingsStore } from '../../stores/useSettingsStore';
 import { useAiReader } from '../../composables/useAiReader';
 
 const { t } = useI18n();
@@ -34,11 +35,22 @@ const route = useRoute();
 const router = useRouter();
 const libraryStore = useLibraryStore();
 const readerStore = useReaderStore();
+const settingsStore = useSettingsStore();
 const highlightStore = useHighlightStore();
 const aiStore = useAiStore();
 const ttsStore = useTtsStore();
 const { triggerChapterTldr } = useAiReader();
-const { openBook, nextPage, prevPage, goToLocator, goToPage, setPaginationMode, applyTheme, closeBook, activeEngine } = useReader();
+const {
+  openBook,
+  nextPage,
+  prevPage,
+  goToLocator,
+  goToPage,
+  setPaginationMode,
+  applyTheme,
+  closeBook,
+  activeEngine,
+} = useReader();
 const { queueProgress } = useBookSync();
 const { enableKeepAwake, disableKeepAwake } = useAppLifecycle();
 const { clearSelection, bindIframeSelection } = useTextSelection();
@@ -80,7 +92,7 @@ onMounted(async () => {
     console.warn('[Reader] Capacitor App backButton listener registration failed:', err);
   }
 
-  await enableKeepAwake();
+  await settingsStore.enterReader();
   await libraryStore.loadBooks();
   const book = libraryStore.books.find((b) => b.id === bookId);
 
@@ -104,9 +116,7 @@ onMounted(async () => {
       });
 
       if (typeof fileRes.data === 'string') {
-        const base64Clean = fileRes.data.includes(',')
-          ? fileRes.data.split(',')[1]
-          : fileRes.data;
+        const base64Clean = fileRes.data.includes(',') ? fileRes.data.split(',')[1] : fileRes.data;
         const binary = atob(base64Clean);
         const bytes = new Uint8Array(binary.length);
         for (let i = 0; i < binary.length; i++) {
@@ -155,12 +165,9 @@ startxref
 
     try {
       await openBook(viewportRef.value.containerRef, book, rawData);
-      activeEngine.value?.setHighlights?.(
-        highlightStore.highlights,
-        (hl) => {
-          highlightStore.selectedHighlight = hl;
-        },
-      );
+      activeEngine.value?.setHighlights?.(highlightStore.highlights, (hl) => {
+        highlightStore.selectedHighlight = hl;
+      });
 
       if (activeEngine.value) {
         const engineAny = activeEngine.value as any;
@@ -206,11 +213,14 @@ onUnmounted(async () => {
     } catch {}
     backButtonListener = null;
   }
-  try {
-    await ttsStore.stop();
-  } catch {}
+  const isTtsPlaying = ttsStore.isPlaying;
+  if (!isTtsPlaying) {
+    try {
+      await ttsStore.stop();
+    } catch {}
+  }
   activeEngine.value?.clearTtsHighlight?.();
-  await disableKeepAwake();
+  await settingsStore.leaveReader(isTtsPlaying);
   readerStore.clearReflowCache();
   closeBook();
 });
@@ -220,8 +230,14 @@ const handleCloseReader = async (): Promise<void> => {
   isNavigating.value = true;
 
   try {
-    await ttsStore.stop();
+    const isTtsPlaying = ttsStore.isPlaying;
+    if (!isTtsPlaying) {
+      try {
+        await ttsStore.stop();
+      } catch {}
+    }
     activeEngine.value?.clearTtsHighlight?.();
+    await settingsStore.leaveReader(isTtsPlaying);
 
     // 1. Save reading progress to store, SQLite, and sync queue before navigating
     if (activeEngine.value && readerStore.currentBook) {
@@ -353,8 +369,7 @@ const handleTranslate = async (text: string) => {
     activeTranslationResult.value = res;
     isTranslationOpen.value = true;
     clearSelection();
-  } catch {
-  }
+  } catch {}
 };
 
 const handleCloseTranslation = () => {
@@ -453,7 +468,7 @@ defineExpose({
 </script>
 
 <template>
-  <div class="fixed inset-0 w-full h-full overflow-hidden bg-black select-text">
+  <div class="fixed inset-0 h-full w-full select-text overflow-hidden bg-black">
     <ReaderViewport
       ref="viewportRef"
       :active-engine="activeEngine"
@@ -485,13 +500,25 @@ defineExpose({
     >
       <div
         v-if="aiStore.showInactivityBanner"
-        class="fixed top-16 left-4 right-4 z-40 mx-auto max-w-lg rounded-2xl border border-gray-200 bg-white p-3.5 shadow-xl dark:border-[#C8E695]/30 dark:bg-zinc-900"
+        class="fixed left-4 right-4 top-16 z-40 mx-auto max-w-lg rounded-2xl border border-gray-200 bg-white p-3.5 shadow-xl dark:border-[#C8E695]/30 dark:bg-zinc-900"
       >
         <div class="flex items-center justify-between gap-3">
           <div class="flex items-center gap-2.5">
-            <div class="flex h-8 w-8 items-center justify-center rounded-xl bg-[#C8E695] text-[#3E5725]">
-              <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z" />
+            <div
+              class="flex h-8 w-8 items-center justify-center rounded-xl bg-[#C8E695] text-[#3E5725]"
+            >
+              <svg
+                class="h-4 w-4"
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+              >
+                <path
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  stroke-width="2"
+                  d="M13 10V3L4 14h7v7l9-11h-7z"
+                />
               </svg>
             </div>
             <div>
@@ -507,7 +534,10 @@ defineExpose({
             <button
               type="button"
               class="rounded-xl bg-[#3E5725] px-3 py-1.5 text-xs font-bold text-white shadow-sm transition hover:bg-[#3E5725]/90 active:scale-95 dark:bg-[#C8E695] dark:text-[#3E5725]"
-              @click="triggerChapterTldr(); aiStore.dismissInactivityBanner()"
+              @click="
+                triggerChapterTldr();
+                aiStore.dismissInactivityBanner();
+              "
             >
               {{ t('ai.viewCatchup') }}
             </button>
@@ -516,8 +546,18 @@ defineExpose({
               class="rounded-lg p-1 text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200"
               @click="aiStore.dismissInactivityBanner"
             >
-              <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+              <svg
+                class="h-4 w-4"
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+              >
+                <path
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  stroke-width="2"
+                  d="M6 18L18 6M6 6l12 12"
+                />
               </svg>
             </button>
           </div>
@@ -531,9 +571,7 @@ defineExpose({
       @change-pagination="setPaginationMode"
     />
 
-    <ReaderSelectionBar
-      @translate="handleTranslate"
-    />
+    <ReaderSelectionBar @translate="handleTranslate" />
 
     <TranslationBottomSheet
       :is-open="isTranslationOpen"
@@ -544,9 +582,7 @@ defineExpose({
 
     <HighlightNoteModal />
 
-    <BookNotesDrawer
-      @navigate="goToLocator"
-    />
+    <BookNotesDrawer @navigate="goToLocator" />
 
     <QuoteCardModal />
 

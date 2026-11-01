@@ -1,33 +1,25 @@
 import { onMounted, onUnmounted } from 'vue';
 import { App, type AppState } from '@capacitor/app';
 import { Capacitor } from '@capacitor/core';
-import { KeepAwake } from '@capacitor-community/keep-awake';
 import { useReaderStore } from '../stores/readerStore';
+import { useSettingsStore } from '../stores/useSettingsStore';
+import { ScreenControlService } from '../services/ScreenControlService';
 import { SqliteService } from '../services/database/SqliteService';
 
 export function useAppLifecycle() {
   const readerStore = useReaderStore();
+  const settingsStore = useSettingsStore();
   let appStateListener: { remove: () => void } | null = null;
   let webVisibilityHandler: (() => void) | null = null;
 
   const enableKeepAwake = async (): Promise<void> => {
-    if (!Capacitor.isNativePlatform()) {
-      return;
-    }
-    try {
-      await KeepAwake.keepAwake();
-    } catch {
+    if (settingsStore.keepScreenAwake) {
+      await ScreenControlService.setKeepAwake(true);
     }
   };
 
   const disableKeepAwake = async (): Promise<void> => {
-    if (!Capacitor.isNativePlatform()) {
-      return;
-    }
-    try {
-      await KeepAwake.allowSleep();
-    } catch {
-    }
+    await ScreenControlService.setKeepAwake(false);
   };
 
   const persistCurrentProgress = async (): Promise<void> => {
@@ -40,6 +32,7 @@ export function useAppLifecycle() {
           readerStore.progressPercentage,
         );
       } catch {
+        // Silently catch SQLite update errors on lifecycle transitions
       }
     }
   };
@@ -53,14 +46,20 @@ export function useAppLifecycle() {
             await disableKeepAwake();
           } else if (readerStore.currentBook) {
             await enableKeepAwake();
+            await ScreenControlService.applyOrientation(settingsStore.orientationLock);
           }
         });
       } catch {
+        // Silently handle listener registration failure
       }
     } else if (typeof document !== 'undefined') {
       webVisibilityHandler = async () => {
         if (document.visibilityState === 'hidden') {
           await persistCurrentProgress();
+          await disableKeepAwake();
+        } else if (document.visibilityState === 'visible' && readerStore.currentBook) {
+          await enableKeepAwake();
+          await ScreenControlService.applyOrientation(settingsStore.orientationLock);
         }
       };
       document.addEventListener('visibilitychange', webVisibilityHandler);
