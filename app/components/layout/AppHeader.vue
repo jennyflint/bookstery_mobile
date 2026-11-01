@@ -26,12 +26,12 @@ const closeDrawer = (): void => {
     class="app-header sticky top-0 z-30 border-b border-zinc-200 bg-white/90 px-4 py-3 backdrop-blur"
     :style="{ paddingTop: 'calc(0.75rem + env(safe-area-inset-top, 0px))' }"
   >
-    <div class="mx-auto flex max-w-5xl items-center justify-between gap-3">
-      <div class="flex items-center gap-2">
+    <div class="mx-auto flex max-w-5xl items-center justify-between gap-2">
+      <div class="flex items-center gap-2 shrink-0 min-w-0">
         <button
           type="button"
           data-testid="hamburger-menu-btn"
-          class="-ml-1 rounded-xl p-2 text-zinc-700 transition-all hover:bg-zinc-100 hover:text-zinc-900 active:scale-95"
+          class="-ml-1 shrink-0 rounded-xl p-2 text-zinc-700 transition-all hover:bg-zinc-100 hover:text-zinc-900 active:scale-95"
           :title="t('nav.menu')"
           @click="openDrawer"
         >
@@ -50,12 +50,16 @@ const closeDrawer = (): void => {
           </svg>
         </button>
 
-        <AppLogo :subtitle="activeCollectionName || t('library.title')" />
+        <div class="shrink-0 min-w-0">
+          <AppLogo :subtitle="activeCollectionName || t('library.title')" />
+        </div>
       </div>
 
-      <div class="flex items-center gap-2">
-        <SyncButton />
-        <SyncStatusBadge />
+      <div class="flex items-center gap-2 shrink-0">
+        <div class="shrink-0">
+          <SyncButton />
+        </div>
+        <SyncStatusBadge class="hidden sm:inline-flex" />
         <LanguageSwitcher />
       </div>
     </div>

@@ -158,8 +158,8 @@
   },
   "sync": {
     "status": "Sync Status",
-    "online": "Connected",
-    "offline": "Offline (Queued)",
+    "online": "sync on",
+    "offline": "sync off",
     "syncing": "Syncing progress...",
     "synced": "Up to date",
     "pending": "{count} pending syncs",

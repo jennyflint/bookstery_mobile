@@ -158,8 +158,8 @@
   },
   "sync": {
     "status": "Стан синхронізації",
-    "online": "В мережі",
-    "offline": "Офлайн (в черзі)",
+    "online": "sync on",
+    "offline": "sync off",
     "syncing": "Синхронізація...",
     "synced": "Актуально",
     "pending": "Очікує: {count}",
