@@ -53,7 +53,18 @@ export function useAiReader() {
   };
 
   const triggerDictionary = async (selectedText: string) => {
-    await triggerAiAction('dictionary', selectedText);
+    const surrounding = getSurroundingBookContext(selectedText, 300);
+    await aiStore.lookupWordInDictionary({
+      word: selectedText,
+      contextSentence: surrounding,
+      bookId: readerStore.currentBook?.id,
+      bookTitle: readerStore.currentBook?.title,
+    });
+  };
+
+  const triggerAskInChat = async (selectedText: string) => {
+    if (!readerStore.currentBook?.id) return;
+    await aiStore.openChat(readerStore.currentBook.id, selectedText);
   };
 
   const triggerChapterTldr = async (chapterTitle?: string, rawChapterText?: string) => {
@@ -109,6 +120,7 @@ export function useAiReader() {
     triggerExplain,
     triggerCharacter,
     triggerDictionary,
+    triggerAskInChat,
     triggerChapterTldr,
     saveAiResponseAsNote,
     getSurroundingBookContext,

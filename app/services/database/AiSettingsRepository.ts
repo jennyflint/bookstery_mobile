@@ -15,6 +15,9 @@ const DEFAULT_SETTINGS: LlmSettingsRecord = {
   temperature: 0.5,
   max_tokens: 1000,
   is_enabled: 0,
+  target_language: 'uk',
+  custom_system_prompt: null,
+  custom_prompts_json: null,
   updated_at: 0,
 };
 
@@ -60,13 +63,16 @@ export class AiSettingsRepository {
     if (this.sqliteService.isNativePlatform()) {
       try {
         const query = `
-          SELECT id, provider, api_key, base_url, model_id, temperature, max_tokens, is_enabled, updated_at
+          SELECT id, provider, api_key, base_url, model_id, temperature, max_tokens, is_enabled, target_language, custom_system_prompt, custom_prompts_json, updated_at
           FROM llm_settings
           WHERE id = 1;
         `;
         const rows = await this.sqliteService.querySql<LlmSettingsRecord>(query);
         if (rows.length > 0) {
-          return rows[0];
+          return {
+            ...DEFAULT_SETTINGS,
+            ...rows[0],
+          };
         }
       } catch {}
     }
@@ -89,6 +95,9 @@ export class AiSettingsRepository {
       temperature: partial.temperature ?? current.temperature,
       max_tokens: partial.max_tokens ?? current.max_tokens,
       is_enabled: partial.is_enabled ?? current.is_enabled,
+      target_language: partial.target_language ?? current.target_language ?? 'uk',
+      custom_system_prompt: partial.custom_system_prompt !== undefined ? partial.custom_system_prompt : current.custom_system_prompt,
+      custom_prompts_json: partial.custom_prompts_json !== undefined ? partial.custom_prompts_json : current.custom_prompts_json,
       updated_at: now,
     };
 
@@ -97,8 +106,8 @@ export class AiSettingsRepository {
     if (this.sqliteService.isNativePlatform()) {
       try {
         const query = `
-          INSERT INTO llm_settings (id, provider, api_key, base_url, model_id, temperature, max_tokens, is_enabled, updated_at)
-          VALUES (1, ?, ?, ?, ?, ?, ?, ?, ?)
+          INSERT INTO llm_settings (id, provider, api_key, base_url, model_id, temperature, max_tokens, is_enabled, target_language, custom_system_prompt, custom_prompts_json, updated_at)
+          VALUES (1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
           ON CONFLICT(id) DO UPDATE SET
             provider = excluded.provider,
             api_key = excluded.api_key,
@@ -107,6 +116,9 @@ export class AiSettingsRepository {
             temperature = excluded.temperature,
             max_tokens = excluded.max_tokens,
             is_enabled = excluded.is_enabled,
+            target_language = excluded.target_language,
+            custom_system_prompt = excluded.custom_system_prompt,
+            custom_prompts_json = excluded.custom_prompts_json,
             updated_at = excluded.updated_at;
         `;
         await this.sqliteService.runSql(query, [
@@ -117,6 +129,9 @@ export class AiSettingsRepository {
           updated.temperature,
           updated.max_tokens,
           updated.is_enabled,
+          updated.target_language,
+          updated.custom_system_prompt,
+          updated.custom_prompts_json,
           now,
         ]);
         return updated;

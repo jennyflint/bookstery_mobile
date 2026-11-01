@@ -5,6 +5,7 @@ import { useHighlightStore } from '../../stores/highlightStore';
 import { useTextSelection } from '../../composables/useTextSelection';
 import { TranslationService } from '../../services/translation/TranslationService';
 import { useAiReader } from '../../composables/useAiReader';
+import { useAiStore } from '../../stores/aiStore';
 import { HIGHLIGHT_COLORS, type HighlightColor } from '../../types';
 
 const emit = defineEmits<{
@@ -14,9 +15,10 @@ const emit = defineEmits<{
 const { t } = useI18n();
 const readerStore = useReaderStore();
 const highlightStore = useHighlightStore();
+const aiStore = useAiStore();
 const { clearSelection } = useTextSelection();
 const translationService = TranslationService.getInstance();
-const { triggerExplain, triggerCharacter, triggerDictionary } = useAiReader();
+const { triggerExplain, triggerCharacter, triggerDictionary, triggerAskInChat } = useAiReader();
 
 const colors: HighlightColor[] = ['yellow', 'green', 'pink', 'blue', 'purple'];
 
@@ -162,6 +164,10 @@ const handleTranslate = () => {
 const handleAiExplain = async () => {
   const text = getSelectionText();
   if (text) {
+    if (!aiStore.isConfigured) {
+      aiStore.openOnboardingModal();
+      return;
+    }
     handleDismiss();
     await triggerExplain(text);
   }
@@ -170,6 +176,10 @@ const handleAiExplain = async () => {
 const handleAiCharacter = async () => {
   const text = getSelectionText();
   if (text) {
+    if (!aiStore.isConfigured) {
+      aiStore.openOnboardingModal();
+      return;
+    }
     handleDismiss();
     await triggerCharacter(text);
   }
@@ -178,8 +188,24 @@ const handleAiCharacter = async () => {
 const handleAiDictionary = async () => {
   const text = getSelectionText();
   if (text) {
+    if (!aiStore.isConfigured) {
+      aiStore.openOnboardingModal();
+      return;
+    }
     handleDismiss();
     await triggerDictionary(text);
+  }
+};
+
+const handleAskInChat = async () => {
+  const text = getSelectionText();
+  if (text) {
+    if (!aiStore.isConfigured) {
+      aiStore.openOnboardingModal();
+      return;
+    }
+    handleDismiss();
+    await triggerAskInChat(text);
   }
 };
 
@@ -304,8 +330,14 @@ const handleDismiss = () => {
         <button
           type="button"
           data-testid="ai-explain-action"
-          class="min-h-[40px] px-3 py-2 flex-grow sm:flex-grow-0 flex items-center justify-center gap-1.5 rounded-xl bg-zinc-800/90 hover:bg-zinc-700/90 active:scale-95 transition-all text-[#C8E695] text-xs font-semibold shadow-sm"
-          :title="t('ai.explainSnippet')"
+          class="min-h-[40px] px-3 py-2 flex-grow sm:flex-grow-0 flex items-center justify-center gap-1.5 rounded-xl transition-all text-xs font-semibold shadow-sm"
+          :class="
+            !aiStore.isConfigured
+              ? 'bg-zinc-800/50 text-zinc-500 opacity-60 cursor-not-allowed'
+              : 'bg-zinc-800/90 hover:bg-zinc-700/90 active:scale-95 text-[#C8E695]'
+          "
+          :aria-disabled="!aiStore.isConfigured"
+          :title="!aiStore.isConfigured ? t('ai.keyRequiredTooltip') : t('ai.explainSnippet')"
           @click="handleAiExplain"
         >
           <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -318,8 +350,14 @@ const handleDismiss = () => {
         <button
           type="button"
           data-testid="ai-character-action"
-          class="min-h-[40px] px-3 py-2 flex-grow sm:flex-grow-0 flex items-center justify-center gap-1.5 rounded-xl bg-zinc-800/90 hover:bg-zinc-700/90 active:scale-95 transition-all text-sky-300 text-xs font-semibold shadow-sm"
-          :title="t('ai.whoIsCharacter')"
+          class="min-h-[40px] px-3 py-2 flex-grow sm:flex-grow-0 flex items-center justify-center gap-1.5 rounded-xl transition-all text-xs font-semibold shadow-sm"
+          :class="
+            !aiStore.isConfigured
+              ? 'bg-zinc-800/50 text-zinc-500 opacity-60 cursor-not-allowed'
+              : 'bg-zinc-800/90 hover:bg-zinc-700/90 active:scale-95 text-sky-300'
+          "
+          :aria-disabled="!aiStore.isConfigured"
+          :title="!aiStore.isConfigured ? t('ai.keyRequiredTooltip') : t('ai.whoIsCharacter')"
           @click="handleAiCharacter"
         >
           <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -332,14 +370,40 @@ const handleDismiss = () => {
         <button
           type="button"
           data-testid="ai-dictionary-action"
-          class="min-h-[40px] px-3 py-2 flex-grow sm:flex-grow-0 flex items-center justify-center gap-1.5 rounded-xl bg-zinc-800/90 hover:bg-zinc-700/90 active:scale-95 transition-all text-teal-300 text-xs font-semibold shadow-sm"
-          :title="t('ai.contextualDictionary')"
+          class="min-h-[40px] px-3 py-2 flex-grow sm:flex-grow-0 flex items-center justify-center gap-1.5 rounded-xl transition-all text-xs font-semibold shadow-sm"
+          :class="
+            !aiStore.isConfigured
+              ? 'bg-zinc-800/50 text-zinc-500 opacity-60 cursor-not-allowed'
+              : 'bg-zinc-800/90 hover:bg-zinc-700/90 active:scale-95 text-teal-300'
+          "
+          :aria-disabled="!aiStore.isConfigured"
+          :title="!aiStore.isConfigured ? t('ai.keyRequiredTooltip') : t('ai.contextualDictionary')"
           @click="handleAiDictionary"
         >
           <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
           </svg>
           <span>{{ t('ai.contextualDictionary') }}</span>
+        </button>
+
+        <!-- Ask AI in Chat -->
+        <button
+          type="button"
+          data-testid="ask-ai-chat-action"
+          class="min-h-[40px] px-3 py-2 flex-grow sm:flex-grow-0 flex items-center justify-center gap-1.5 rounded-xl transition-all text-xs font-semibold shadow-sm"
+          :class="
+            !aiStore.isConfigured
+              ? 'bg-zinc-800/50 text-zinc-500 opacity-60 cursor-not-allowed'
+              : 'bg-zinc-800/90 hover:bg-zinc-700/90 active:scale-95 text-amber-300'
+          "
+          :aria-disabled="!aiStore.isConfigured"
+          :title="!aiStore.isConfigured ? t('ai.keyRequiredTooltip') : t('ai.askInChat')"
+          @click="handleAskInChat"
+        >
+          <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z" />
+          </svg>
+          <span>{{ t('ai.askInChat') }}</span>
         </button>
 
         <!-- Delete Highlight (when highlight selected) -->

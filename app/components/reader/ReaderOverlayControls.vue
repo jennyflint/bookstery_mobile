@@ -11,6 +11,7 @@ const emit = defineEmits<{
   (e: 'open-settings'): void;
   (e: 'open-notes'): void;
   (e: 'chapter-tldr'): void;
+  (e: 'open-ai-chat'): void;
   (e: 'navigate', page: number): void;
   (e: 'toggle-tts'): void;
 }>();
@@ -36,6 +37,7 @@ const ttsStore = useTtsStore();
         @open-settings="emit('open-settings')"
         @open-notes="emit('open-notes')"
         @chapter-tldr="emit('chapter-tldr')"
+        @open-ai-chat="emit('open-ai-chat')"
         @toggle-tts="emit('toggle-tts')"
       />
     </transition>

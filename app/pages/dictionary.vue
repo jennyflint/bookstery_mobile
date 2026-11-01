@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onMounted } from 'vue';
+import { ref, onMounted } from 'vue';
 import { useDictionaryStore } from '../stores/dictionaryStore';
 import { TranslationService } from '../services/translation/TranslationService';
 import LanguageSwitcher from '../components/common/LanguageSwitcher.vue';
@@ -8,18 +8,33 @@ const { t } = useI18n();
 const dictionaryStore = useDictionaryStore();
 const translationService = TranslationService.getInstance();
 
+const activeTab = ref<'vocabulary' | 'history'>('vocabulary');
+const copyFeedbackId = ref<number | null>(null);
+
 onMounted(async () => {
-  await dictionaryStore.loadHistory();
+  await dictionaryStore.loadAll();
 });
 
-const handleDelete = async (id?: number) => {
+const handleDeleteVocabulary = async (id?: number) => {
+  if (id) {
+    await dictionaryStore.deleteVocabularyWord(id);
+  }
+};
+
+const handleDeleteHistory = async (id?: number) => {
   if (id) {
     await dictionaryStore.deleteItem(id);
   }
 };
 
-const handleCopy = async (text: string) => {
+const handleCopy = async (id: number, text: string) => {
   await translationService.copyToClipboard(text);
+  copyFeedbackId.value = id;
+  setTimeout(() => {
+    if (copyFeedbackId.value === id) {
+      copyFeedbackId.value = null;
+    }
+  }, 2000);
 };
 </script>
 
@@ -35,70 +50,219 @@ const handleCopy = async (text: string) => {
             {{ t('dictionary.title') }}
           </h1>
           <p class="text-xs text-zinc-400 font-medium">
-            {{ dictionaryStore.items.length }} {{ t('dictionary.title').toLowerCase() }}
+            {{ activeTab === 'vocabulary' ? dictionaryStore.filteredVocabulary.length : dictionaryStore.items.length }}
+            {{ t('dictionary.title').toLowerCase() }}
           </p>
         </div>
         <LanguageSwitcher />
       </div>
+
+      <!-- Tab Switcher -->
+      <div class="max-w-3xl mx-auto mt-3 flex items-center gap-2">
+        <button
+          type="button"
+          data-testid="vocab-tab-btn"
+          class="flex-1 py-1.5 px-3 rounded-xl text-xs font-bold transition-all"
+          :class="
+            activeTab === 'vocabulary'
+              ? 'bg-[#3E5725] text-white shadow-xs'
+              : 'bg-zinc-100 text-zinc-600 hover:text-zinc-900'
+          "
+          @click="activeTab = 'vocabulary'"
+        >
+          {{ t('ai.savedVocabulary') }} ({{ dictionaryStore.vocabularyWords.length }})
+        </button>
+        <button
+          type="button"
+          data-testid="history-tab-btn"
+          class="flex-1 py-1.5 px-3 rounded-xl text-xs font-bold transition-all"
+          :class="
+            activeTab === 'history'
+              ? 'bg-[#3E5725] text-white shadow-xs'
+              : 'bg-zinc-100 text-zinc-600 hover:text-zinc-900'
+          "
+          @click="activeTab = 'history'"
+        >
+          {{ t('translation.title') }} ({{ dictionaryStore.items.length }})
+        </button>
+      </div>
+
+      <!-- Search & Book Filter Bar (for Vocabulary) -->
+      <div v-if="activeTab === 'vocabulary'" class="max-w-3xl mx-auto mt-3 flex flex-col sm:flex-row items-stretch gap-2">
+        <!-- Search Input -->
+        <div class="relative flex-1">
+          <input
+            v-model="dictionaryStore.searchQuery"
+            type="search"
+            data-testid="vocab-search-input"
+            :placeholder="t('ai.searchVocabularyPlaceholder')"
+            class="w-full rounded-xl border border-zinc-200 bg-white py-1.5 pl-8 pr-3 text-xs placeholder-zinc-400 focus:border-[#3E5725] focus:outline-hidden focus:ring-1 focus:ring-[#3E5725]"
+          />
+          <svg class="absolute left-2.5 top-2 h-3.5 w-3.5 text-zinc-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+          </svg>
+        </div>
+
+        <!-- Book Filter Dropdown -->
+        <select
+          v-if="dictionaryStore.uniqueBooks.length > 0"
+          v-model="dictionaryStore.selectedBookFilter"
+          data-testid="vocab-book-filter"
+          class="rounded-xl border border-zinc-200 bg-white py-1.5 px-3 text-xs text-zinc-700 font-medium focus:border-[#3E5725] focus:outline-hidden"
+        >
+          <option value="">{{ t('ai.allBooks') }}</option>
+          <option v-for="b in dictionaryStore.uniqueBooks" :key="b.id" :value="b.id">
+            {{ b.title }}
+          </option>
+        </select>
+      </div>
     </header>
 
     <main class="flex-1 max-w-3xl w-full mx-auto p-4 sm:p-6 space-y-4">
-      <div v-if="dictionaryStore.items.length > 0" class="space-y-3">
-        <div
-          v-for="item in dictionaryStore.items"
-          :key="item.id"
-          class="app-card bg-white rounded-2xl border border-zinc-200 p-4 shadow-sm space-y-2"
-        >
-          <div class="flex items-start justify-between gap-4">
-            <div class="flex-1 min-w-0">
-              <span class="inline-block text-[10px] font-bold uppercase tracking-wider text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded mb-1">
-                {{ item.source_lang || 'auto' }} &rarr; {{ item.target_lang }}
-              </span>
-              <p class="text-sm font-semibold text-zinc-900 leading-snug">{{ item.source_text }}</p>
-              <p class="text-sm text-indigo-600 font-medium mt-1 leading-snug">{{ item.translated_text }}</p>
+      <!-- Vocabulary Tab Content -->
+      <div v-if="activeTab === 'vocabulary'" class="space-y-3">
+        <div v-if="dictionaryStore.filteredVocabulary.length > 0" class="space-y-3">
+          <div
+            v-for="word in dictionaryStore.filteredVocabulary"
+            :key="word.id"
+            data-testid="vocabulary-card"
+            class="app-card bg-white rounded-2xl border border-zinc-200 p-4 shadow-sm space-y-2.5"
+          >
+            <!-- Card Header: Word, phonetic, Part of Speech, Book Tag -->
+            <div class="flex items-start justify-between gap-3">
+              <div class="flex-1 min-w-0">
+                <div class="flex flex-wrap items-baseline gap-2">
+                  <h3 class="text-base font-extrabold text-zinc-900">{{ word.word }}</h3>
+                  <span v-if="word.phonetic" class="font-mono text-xs text-zinc-500">{{ word.phonetic }}</span>
+                  <span
+                    v-if="word.part_of_speech"
+                    class="rounded-md bg-teal-50 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-teal-800"
+                  >
+                    {{ word.part_of_speech }}
+                  </span>
+                </div>
+                <p v-if="word.book_title" class="text-[11px] font-semibold text-[#3E5725] mt-0.5 truncate">
+                  {{ word.book_title }}
+                </p>
+              </div>
+
+              <!-- Action Buttons -->
+              <div class="flex items-center gap-1 shrink-0">
+                <button
+                  type="button"
+                  class="p-2 rounded-xl text-zinc-400 hover:text-zinc-600 hover:bg-zinc-100 transition-colors active:scale-95"
+                  :title="t('translation.copy')"
+                  @click="handleCopy(word.id!, `${word.word} — ${word.translation}\n${word.contextual_definition}`)"
+                >
+                  <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                  </svg>
+                </button>
+
+                <button
+                  type="button"
+                  class="p-2 rounded-xl text-zinc-400 hover:text-rose-600 hover:bg-rose-50 transition-colors active:scale-95"
+                  :title="t('dictionary.delete')"
+                  @click="handleDeleteVocabulary(word.id)"
+                >
+                  <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                  </svg>
+                </button>
+              </div>
             </div>
 
-            <div class="flex items-center gap-1">
-              <button
-                type="button"
-                class="p-2 rounded-xl text-zinc-400 hover:text-zinc-600 hover:bg-zinc-100 transition-colors"
-                :title="t('translation.copy')"
-                @click="handleCopy(item.translated_text)"
-              >
-                <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
-                </svg>
-              </button>
+            <!-- Translation & Contextual Definition -->
+            <div class="rounded-xl border border-zinc-100 bg-zinc-50 p-3 space-y-1">
+              <p class="text-sm font-bold text-teal-900 leading-snug">
+                {{ word.translation }}
+              </p>
+              <p class="text-xs text-zinc-700 leading-relaxed">
+                {{ word.contextual_definition }}
+              </p>
+            </div>
 
-              <button
-                type="button"
-                class="p-2 rounded-xl text-zinc-400 hover:text-rose-600 hover:bg-rose-50 transition-colors"
-                :title="t('dictionary.delete')"
-                @click="handleDelete(item.id)"
-              >
-                <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                </svg>
-              </button>
+            <!-- Context Sentence Snippet -->
+            <div v-if="word.context_sentence" class="text-xs text-zinc-500 italic pl-1 border-l-2 border-zinc-200">
+              "{{ word.context_sentence }}"
             </div>
           </div>
         </div>
+
+        <div
+          v-else
+          class="flex flex-col items-center justify-center py-20 px-4 text-center rounded-3xl border border-dashed border-zinc-200 bg-zinc-50"
+        >
+          <div class="w-16 h-16 rounded-full bg-[#C8E695]/40 text-[#3E5725] flex items-center justify-center mb-4">
+            <svg class="w-8 h-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
+            </svg>
+          </div>
+          <h3 class="text-base font-bold text-zinc-900 mb-1">{{ t('ai.noVocabularySaved') }}</h3>
+          <p class="text-xs text-zinc-500 max-w-sm">{{ t('ai.noVocabularySubtitle') }}</p>
+        </div>
       </div>
 
-      <div
-        v-else
-        class="flex flex-col items-center justify-center py-20 px-4 text-center rounded-3xl border border-dashed border-zinc-200 bg-zinc-50"
-      >
-        <div class="w-16 h-16 rounded-full bg-indigo-50 text-indigo-600 flex items-center justify-center mb-4">
-          <svg class="w-8 h-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M3 5h12M9 3v2m1.048 9.5A18.022 18.022 0 016.412 9m6.088 9h7M11 21l5-10 5 10M12.751 5C11.783 10.77 8.07 15.61 3 18.129" />
-          </svg>
+      <!-- Quick Translation History Tab Content -->
+      <div v-else class="space-y-3">
+        <div v-if="dictionaryStore.items.length > 0" class="space-y-3">
+          <div
+            v-for="item in dictionaryStore.items"
+            :key="item.id"
+            class="app-card bg-white rounded-2xl border border-zinc-200 p-4 shadow-sm space-y-2"
+          >
+            <div class="flex items-start justify-between gap-4">
+              <div class="flex-1 min-w-0">
+                <span class="inline-block text-[10px] font-bold uppercase tracking-wider text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded mb-1">
+                  {{ item.source_lang || 'auto' }} &rarr; {{ item.target_lang }}
+                </span>
+                <p class="text-sm font-semibold text-zinc-900 leading-snug">{{ item.source_text }}</p>
+                <p class="text-sm text-indigo-600 font-medium mt-1 leading-snug">{{ item.translated_text }}</p>
+              </div>
+
+              <div class="flex items-center gap-1">
+                <button
+                  type="button"
+                  class="p-2 rounded-xl text-zinc-400 hover:text-zinc-600 hover:bg-zinc-100 transition-colors"
+                  :title="t('translation.copy')"
+                  @click="handleCopy(item.id!, item.translated_text)"
+                >
+                  <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                  </svg>
+                </button>
+
+                <button
+                  type="button"
+                  class="p-2 rounded-xl text-zinc-400 hover:text-rose-600 hover:bg-rose-50 transition-colors"
+                  :title="t('dictionary.delete')"
+                  @click="handleDeleteHistory(item.id)"
+                >
+                  <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                  </svg>
+                </button>
+              </div>
+            </div>
+          </div>
         </div>
-        <h3 class="text-base font-bold text-zinc-900 mb-1">{{ t('dictionary.empty') }}</h3>
-        <p class="text-xs text-zinc-500 max-w-sm">{{ t('dictionary.emptySubtitle') }}</p>
+
+        <div
+          v-else
+          class="flex flex-col items-center justify-center py-20 px-4 text-center rounded-3xl border border-dashed border-zinc-200 bg-zinc-50"
+        >
+          <div class="w-16 h-16 rounded-full bg-indigo-50 text-indigo-600 flex items-center justify-center mb-4">
+            <svg class="w-8 h-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M3 5h12M9 3v2m1.048 9.5A18.022 18.022 0 016.412 9m6.088 9h7M11 21l5-10 5 10M12.751 5C11.783 10.77 8.07 15.61 3 18.129" />
+            </svg>
+          </div>
+          <h3 class="text-base font-bold text-zinc-900 mb-1">{{ t('dictionary.empty') }}</h3>
+          <p class="text-xs text-zinc-500 max-w-sm">{{ t('dictionary.emptySubtitle') }}</p>
+        </div>
       </div>
     </main>
 
+    <!-- Bottom Navigation Bar -->
     <nav
       class="fixed bottom-0 left-0 right-0 z-40 app-nav bg-white/95 backdrop-blur border-t border-zinc-200 px-6 py-2"
       :style="{ paddingBottom: 'calc(0.5rem + env(safe-area-inset-bottom, 0px))' }"
@@ -116,7 +280,7 @@ const handleCopy = async (text: string) => {
 
         <NuxtLink
           to="/dictionary"
-          class="flex flex-col items-center gap-1 text-indigo-600 font-bold text-xs"
+          class="flex flex-col items-center gap-1 text-[#3E5725] font-bold text-xs"
         >
           <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 5h12M9 3v2m1.048 9.5A18.022 18.022 0 016.412 9m6.088 9h7M11 21l5-10 5 10M12.751 5C11.783 10.77 8.07 15.61 3 18.129" />

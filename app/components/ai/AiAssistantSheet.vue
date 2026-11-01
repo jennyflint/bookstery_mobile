@@ -200,40 +200,5 @@ const renderMarkdown = (text: string): string => {
         </div>
       </div>
     </Transition>
-
-    <div
-      v-if="aiStore.isOnboardingModalOpen"
-      class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
-    >
-      <div class="w-full max-w-sm rounded-3xl border border-gray-200 bg-white p-6 shadow-2xl dark:border-zinc-700 dark:bg-zinc-900">
-        <div class="mb-4 flex h-12 w-12 items-center justify-center rounded-2xl bg-[#C8E695] text-[#3E5725]">
-          <svg class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z" />
-          </svg>
-        </div>
-        <h3 class="mb-2 text-base font-bold text-gray-900 dark:text-[#C8E695]">
-          {{ t('ai.onboardingTitle') }}
-        </h3>
-        <p class="mb-6 text-xs leading-relaxed text-gray-600 dark:text-zinc-400">
-          {{ t('ai.onboardingSubtitle') }}
-        </p>
-        <div class="flex flex-col gap-2">
-          <button
-            type="button"
-            class="w-full rounded-2xl bg-[#3E5725] py-2.5 text-xs font-bold text-white shadow-sm transition hover:bg-[#3E5725]/90 active:scale-95 dark:bg-[#C8E695] dark:text-[#3E5725]"
-            @click="aiStore.openSettingsModal()"
-          >
-            {{ t('ai.connectKey') }}
-          </button>
-          <button
-            type="button"
-            class="w-full rounded-2xl py-2 text-xs font-semibold text-zinc-500 hover:text-zinc-800 dark:text-zinc-400 dark:hover:text-zinc-200"
-            @click="aiStore.closeOnboardingModal()"
-          >
-            {{ t('ai.maybeLater') }}
-          </button>
-        </div>
-      </div>
-    </div>
   </div>
 </template>

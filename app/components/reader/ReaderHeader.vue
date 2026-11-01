@@ -2,6 +2,7 @@
 import { ref, computed } from 'vue';
 import { useReaderStore } from '../../stores/readerStore';
 import { useTtsStore } from '../../stores/ttsStore';
+import { useAiStore } from '../../stores/aiStore';
 import SyncStatusBadge from '../common/SyncStatusBadge.vue';
 import type { ReflowFontFamily, ReflowTheme } from '../../types/reflow';
 
@@ -10,18 +11,36 @@ const emit = defineEmits<{
   (e: 'open-settings'): void;
   (e: 'open-notes'): void;
   (e: 'chapter-tldr'): void;
+  (e: 'open-ai-chat'): void;
   (e: 'toggle-tts'): void;
 }>();
 
 const { t } = useI18n();
 const readerStore = useReaderStore();
 const ttsStore = useTtsStore();
+const aiStore = useAiStore();
 
 const isTypographyOpen = ref<boolean>(false);
 
 const isPdf = computed<boolean>(() => {
   return readerStore.currentBook?.format === 'pdf';
 });
+
+function handleAiChatClick(): void {
+  if (!aiStore.isConfigured) {
+    aiStore.openOnboardingModal();
+    return;
+  }
+  emit('open-ai-chat');
+}
+
+function handleChapterTldrClick(): void {
+  if (!aiStore.isConfigured) {
+    aiStore.openOnboardingModal();
+    return;
+  }
+  emit('chapter-tldr');
+}
 
 function toggleTypography(): void {
   isTypographyOpen.value = !isTypographyOpen.value;
@@ -145,13 +164,43 @@ defineExpose({
           </svg>
         </button>
 
+        <!-- AI Book Chat Action -->
+        <button
+          type="button"
+          data-testid="ai-chat-header-btn"
+          class="p-2 rounded-xl transition-all active:scale-95"
+          :class="
+            !aiStore.isConfigured
+              ? 'text-gray-400 bg-gray-100 opacity-60 cursor-not-allowed'
+              : 'text-[#3E5725] bg-[#C8E695]/30 hover:bg-[#C8E695]/60'
+          "
+          :aria-disabled="!aiStore.isConfigured"
+          :title="!aiStore.isConfigured ? t('ai.keyRequiredTooltip') : t('ai.chatTitle')"
+          @click="handleAiChatClick"
+        >
+          <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              stroke-width="2"
+              d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z"
+            />
+          </svg>
+        </button>
+
         <!-- Chapter TL;DR AI Action -->
         <button
           type="button"
           data-testid="chapter-tldr-action"
-          class="p-2 rounded-xl text-[#3E5725] bg-[#C8E695]/30 hover:bg-[#C8E695]/60 active:scale-95 transition-all dark:text-[#C8E695] dark:bg-[#C8E695]/20"
-          :title="t('ai.chapterTldr')"
-          @click="emit('chapter-tldr')"
+          class="p-2 rounded-xl transition-all active:scale-95"
+          :class="
+            !aiStore.isConfigured
+              ? 'text-gray-400 bg-gray-100 opacity-60 cursor-not-allowed'
+              : 'text-[#3E5725] bg-[#C8E695]/30 hover:bg-[#C8E695]/60 dark:text-[#C8E695] dark:bg-[#C8E695]/20'
+          "
+          :aria-disabled="!aiStore.isConfigured"
+          :title="!aiStore.isConfigured ? t('ai.keyRequiredTooltip') : t('ai.chapterTldr')"
+          @click="handleChapterTldrClick"
         >
           <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z" />

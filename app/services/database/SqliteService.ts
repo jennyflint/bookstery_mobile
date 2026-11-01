@@ -4,13 +4,22 @@ import {
   type SQLiteDBConnection,
 } from '@capacitor-community/sqlite';
 import { Capacitor } from '@capacitor/core';
-import { SCHEMA_V1, SCHEMA_HIGHLIGHTS, SCHEMA_SCAN_DIRECTORIES, SCHEMA_AI } from './migrations';
+import {
+  SCHEMA_V1,
+  SCHEMA_HIGHLIGHTS,
+  SCHEMA_SCAN_DIRECTORIES,
+  SCHEMA_AI,
+  SCHEMA_AI_CHAT,
+  SCHEMA_VOCABULARY,
+} from './migrations';
 import type {
+  AiChatMessage,
   BookRecord,
   DictionaryItem,
   SyncQueueItem,
   SyncStatus,
   UserSession,
+  VocabularyWordRecord,
 } from '../../types';
 
 const STORAGE_KEYS = {
@@ -144,6 +153,26 @@ export class SqliteService {
 
       try {
         await this.db.execute(SCHEMA_AI);
+      } catch {}
+
+      try {
+        await this.db.execute(SCHEMA_AI_CHAT);
+      } catch {}
+
+      try {
+        await this.db.execute(SCHEMA_VOCABULARY);
+      } catch {}
+
+      try {
+        await this.db.execute("ALTER TABLE llm_settings ADD COLUMN target_language TEXT DEFAULT 'uk';");
+      } catch {}
+
+      try {
+        await this.db.execute('ALTER TABLE llm_settings ADD COLUMN custom_system_prompt TEXT DEFAULT NULL;');
+      } catch {}
+
+      try {
+        await this.db.execute('ALTER TABLE llm_settings ADD COLUMN custom_prompts_json TEXT DEFAULT NULL;');
       } catch {}
 
       try {
@@ -639,6 +668,147 @@ export class SqliteService {
     if (this.isNative && this.db) {
       await this.db.run(sql, params);
     }
+  }
+
+  async getAiChatMessages(bookId: string): Promise<AiChatMessage[]> {
+    if (this.isNative && this.db) {
+      try {
+        const rows = await this.querySql<{
+          id: string;
+          book_id: string;
+          role: 'user' | 'assistant' | 'system';
+          content: string;
+          context_snippet: string | null;
+          created_at: number;
+        }>(
+          'SELECT id, book_id, role, content, context_snippet, created_at FROM ai_chat_messages WHERE book_id = ? ORDER BY created_at ASC;',
+          [bookId],
+        );
+        return rows.map((r) => ({
+          id: r.id,
+          bookId: r.book_id,
+          role: r.role,
+          content: r.content,
+          contextSnippet: r.context_snippet || undefined,
+          createdAt: r.created_at,
+        }));
+      } catch {}
+    }
+    return readStorage<AiChatMessage[]>(`bookstery_web_ai_chat_${bookId}`, []);
+  }
+
+  async saveAiChatMessage(message: AiChatMessage): Promise<void> {
+    if (this.isNative && this.db) {
+      try {
+        await this.runSql(
+          'INSERT INTO ai_chat_messages (id, book_id, role, content, context_snippet, created_at) VALUES (?, ?, ?, ?, ?, ?);',
+          [
+            message.id,
+            message.bookId,
+            message.role,
+            message.content,
+            message.contextSnippet || null,
+            message.createdAt,
+          ],
+        );
+        return;
+      } catch {}
+    }
+    const current = readStorage<AiChatMessage[]>(`bookstery_web_ai_chat_${message.bookId}`, []);
+    current.push(message);
+    writeStorage(`bookstery_web_ai_chat_${message.bookId}`, current);
+  }
+
+  async clearAiChatMessages(bookId: string): Promise<void> {
+    if (this.isNative && this.db) {
+      try {
+        await this.runSql('DELETE FROM ai_chat_messages WHERE book_id = ?;', [bookId]);
+        return;
+      } catch {}
+    }
+    writeStorage(`bookstery_web_ai_chat_${bookId}`, []);
+  }
+
+  async getVocabularyWords(bookId?: string, search?: string): Promise<VocabularyWordRecord[]> {
+    if (this.isNative && this.db) {
+      try {
+        let sql = 'SELECT * FROM vocabulary_words WHERE 1=1';
+        const params: unknown[] = [];
+        if (bookId) {
+          sql += ' AND book_id = ?';
+          params.push(bookId);
+        }
+        if (search && search.trim()) {
+          sql += ' AND (word LIKE ? OR translation LIKE ? OR contextual_definition LIKE ?)';
+          const term = `%${search.trim()}%`;
+          params.push(term, term, term);
+        }
+        sql += ' ORDER BY created_at DESC;';
+        return await this.querySql<VocabularyWordRecord>(sql, params);
+      } catch {}
+    }
+
+    let items = readStorage<VocabularyWordRecord[]>('bookstery_web_vocabulary', []);
+    if (bookId) {
+      items = items.filter((i) => i.book_id === bookId);
+    }
+    if (search && search.trim()) {
+      const q = search.trim().toLowerCase();
+      items = items.filter(
+        (i) =>
+          i.word.toLowerCase().includes(q) ||
+          i.translation.toLowerCase().includes(q) ||
+          i.contextual_definition.toLowerCase().includes(q),
+      );
+    }
+    return items;
+  }
+
+  async saveVocabularyWord(word: Omit<VocabularyWordRecord, 'id'>): Promise<number> {
+    const id = Date.now();
+    if (this.isNative && this.db) {
+      try {
+        const query = `
+          INSERT INTO vocabulary_words (book_id, book_title, word, lemma, part_of_speech, phonetic, translation, contextual_definition, general_definition, synonyms_json, example_sentence, context_sentence, created_at)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
+        `;
+        await this.runSql(query, [
+          word.book_id || null,
+          word.book_title || null,
+          word.word,
+          word.lemma || null,
+          word.part_of_speech || null,
+          word.phonetic || null,
+          word.translation,
+          word.contextual_definition,
+          word.general_definition || null,
+          word.synonyms_json || null,
+          word.example_sentence || null,
+          word.context_sentence || null,
+          word.created_at,
+        ]);
+        return id;
+      } catch {}
+    }
+
+    const items = readStorage<VocabularyWordRecord[]>('bookstery_web_vocabulary', []);
+    const record: VocabularyWordRecord = { id, ...word };
+    items.unshift(record);
+    writeStorage('bookstery_web_vocabulary', items);
+    return id;
+  }
+
+  async deleteVocabularyWord(id: number): Promise<void> {
+    if (this.isNative && this.db) {
+      try {
+        await this.runSql('DELETE FROM vocabulary_words WHERE id = ?;', [id]);
+        return;
+      } catch {}
+    }
+
+    const items = readStorage<VocabularyWordRecord[]>('bookstery_web_vocabulary', []);
+    const filtered = items.filter((i) => i.id !== id);
+    writeStorage('bookstery_web_vocabulary', filtered);
   }
 
   async close(): Promise<void> {

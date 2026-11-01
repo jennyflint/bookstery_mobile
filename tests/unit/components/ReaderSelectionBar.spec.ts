@@ -4,6 +4,7 @@ import { setActivePinia, createPinia } from 'pinia';
 import ReaderSelectionBar from '~/components/reader/ReaderSelectionBar.vue';
 import { useReaderStore } from '~/stores/readerStore';
 import { useHighlightStore } from '~/stores/highlightStore';
+import { useAiStore } from '~/stores/aiStore';
 import { mockShare } from '../../mocks/capacitor-plugins';
 
 const mockTriggerExplain = vi.fn().mockResolvedValue(undefined);
@@ -276,7 +277,10 @@ describe('ReaderSelectionBar Component', () => {
       expect(readerStore.selection).toBeNull();
     });
 
-    it('should trigger AI explanation and clear selection when AI Explain is clicked', async () => {
+    it('should trigger AI explanation and clear selection when AI Explain is clicked with configured key', async () => {
+      const aiStore = useAiStore();
+      aiStore.settings.api_key = 'sk-mock-key';
+
       const readerStore = useReaderStore();
       readerStore.setSelection({
         text: 'Complex scientific hypothesis',
@@ -296,6 +300,40 @@ describe('ReaderSelectionBar Component', () => {
 
       expect(mockTriggerExplain).toHaveBeenCalledWith('Complex scientific hypothesis');
       expect(readerStore.selection).toBeNull();
+    });
+
+    it('should mark AI buttons as aria-disabled when API key is missing and open onboarding instruction popup on click', async () => {
+      const aiStore = useAiStore();
+      aiStore.settings.api_key = null;
+      const modalSpy = vi.spyOn(aiStore, 'openOnboardingModal');
+
+      const readerStore = useReaderStore();
+      readerStore.setSelection({
+        text: 'Unknown word to explain',
+        x: 10,
+        y: 20,
+        width: 80,
+        height: 15,
+      });
+
+      const wrapper = mountBar();
+      await wrapper.vm.$nextTick();
+
+      const explainBtn = wrapper.find('[data-testid="ai-explain-action"]');
+      const characterBtn = wrapper.find('[data-testid="ai-character-action"]');
+      const dictBtn = wrapper.find('[data-testid="ai-dictionary-action"]');
+      const chatBtn = wrapper.find('[data-testid="ask-ai-chat-action"]');
+
+      expect(explainBtn.attributes('aria-disabled')).toBe('true');
+      expect(characterBtn.attributes('aria-disabled')).toBe('true');
+      expect(dictBtn.attributes('aria-disabled')).toBe('true');
+      expect(chatBtn.attributes('aria-disabled')).toBe('true');
+
+      expect(explainBtn.classes()).toContain('cursor-not-allowed');
+
+      await explainBtn.trigger('click');
+      expect(modalSpy).toHaveBeenCalled();
+      expect(mockTriggerExplain).not.toHaveBeenCalled();
     });
 
     it('should show delete button and delete highlight when existing highlight is selected', async () => {

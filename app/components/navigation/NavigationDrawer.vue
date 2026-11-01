@@ -232,6 +232,23 @@ const handleConfirmDelete = async (id: number): Promise<void> => {
             </span>
           </button>
 
+          <NuxtLink
+            to="/dictionary"
+            data-testid="drawer-dictionary-link"
+            class="flex w-full items-center justify-between rounded-2xl border border-gray-200 bg-white px-3.5 py-3 text-sm font-bold text-gray-900 transition-all hover:bg-gray-50 active:scale-95"
+            @click="emit('close')"
+          >
+            <div class="flex items-center gap-3">
+              <svg class="h-5 w-5 shrink-0 text-teal-700" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
+              </svg>
+              <span>{{ t('nav.dictionary') }}</span>
+            </div>
+            <span class="rounded-full bg-teal-50 px-2 py-0.5 text-xs font-bold text-teal-800">
+              {{ t('ai.dictionaryTitle') }}
+            </span>
+          </NuxtLink>
+
           <div class="border-t border-gray-200 pt-2">
             <div class="mb-1 flex items-center justify-between px-2 py-1">
               <button

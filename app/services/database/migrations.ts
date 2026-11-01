@@ -133,16 +133,19 @@ CREATE TABLE IF NOT EXISTS llm_settings (
   temperature REAL NOT NULL DEFAULT 0.5,
   max_tokens INTEGER NOT NULL DEFAULT 1000,
   is_enabled INTEGER NOT NULL DEFAULT 0 CHECK (is_enabled IN (0, 1)),
+  target_language TEXT DEFAULT 'uk',
+  custom_system_prompt TEXT DEFAULT NULL,
+  custom_prompts_json TEXT DEFAULT NULL,
   updated_at INTEGER NOT NULL
 );
 
-INSERT OR IGNORE INTO llm_settings (id, provider, api_key, base_url, model_id, temperature, max_tokens, is_enabled, updated_at)
-VALUES (1, 'openai', NULL, NULL, 'gpt-4o-mini', 0.5, 1000, 0, 0);
+INSERT OR IGNORE INTO llm_settings (id, provider, api_key, base_url, model_id, temperature, max_tokens, is_enabled, target_language, updated_at)
+VALUES (1, 'openai', NULL, NULL, 'gpt-4o-mini', 0.5, 1000, 0, 'uk', 0);
 
 CREATE TABLE IF NOT EXISTS ai_cache (
   id TEXT PRIMARY KEY,
   book_id TEXT NOT NULL REFERENCES books(id) ON DELETE CASCADE,
-  prompt_type TEXT NOT NULL CHECK (prompt_type IN ('explain', 'character', 'tldr', 'dictionary', 'ping')),
+  prompt_type TEXT NOT NULL CHECK (prompt_type IN ('explain', 'character', 'tldr', 'dictionary', 'ping', 'chat')),
   response_text TEXT NOT NULL,
   model_used TEXT NOT NULL,
   created_at INTEGER NOT NULL
@@ -150,4 +153,40 @@ CREATE TABLE IF NOT EXISTS ai_cache (
 
 CREATE INDEX IF NOT EXISTS idx_ai_cache_book ON ai_cache(book_id, prompt_type);
 `;
+
+export const SCHEMA_AI_CHAT = `
+CREATE TABLE IF NOT EXISTS ai_chat_messages (
+  id TEXT PRIMARY KEY,
+  book_id TEXT NOT NULL REFERENCES books(id) ON DELETE CASCADE,
+  role TEXT NOT NULL CHECK (role IN ('user', 'assistant', 'system')),
+  content TEXT NOT NULL,
+  context_snippet TEXT,
+  created_at INTEGER NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_ai_chat_book ON ai_chat_messages(book_id, created_at ASC);
+`;
+
+export const SCHEMA_VOCABULARY = `
+CREATE TABLE IF NOT EXISTS vocabulary_words (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  book_id TEXT REFERENCES books(id) ON DELETE SET NULL,
+  book_title TEXT,
+  word TEXT NOT NULL,
+  lemma TEXT,
+  part_of_speech TEXT,
+  phonetic TEXT,
+  translation TEXT NOT NULL,
+  contextual_definition TEXT NOT NULL,
+  general_definition TEXT,
+  synonyms_json TEXT,
+  example_sentence TEXT,
+  context_sentence TEXT,
+  created_at INTEGER NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_vocab_created ON vocabulary_words(created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_vocab_book ON vocabulary_words(book_id);
+`;
+
 

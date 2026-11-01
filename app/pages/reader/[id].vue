@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, watch, onMounted, onUnmounted, nextTick } from 'vue';
+import { ref, computed, watch, onMounted, onUnmounted, nextTick } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { Directory, Filesystem } from '@capacitor/filesystem';
 import { App } from '@capacitor/app';
@@ -24,6 +24,9 @@ import QuoteCardModal from '../../components/export/QuoteCardModal.vue';
 import NotesExportModal from '../../components/export/NotesExportModal.vue';
 import AiAssistantSheet from '../../components/ai/AiAssistantSheet.vue';
 import AiSettingsModal from '../../components/ai/AiSettingsModal.vue';
+import AiChatDrawer from '../../components/ai/AiChatDrawer.vue';
+import AiDictionaryModal from '../../components/ai/AiDictionaryModal.vue';
+import AiKeyInstructionModal from '../../components/ai/AiKeyInstructionModal.vue';
 import TtsPlayerBar from '../../components/reader/TtsPlayerBar.vue';
 import { useAiStore } from '../../stores/aiStore';
 import { useTtsStore } from '../../stores/ttsStore';
@@ -467,6 +470,16 @@ const handleNavigatePage = async (page: number): Promise<void> => {
   }
 };
 
+const activePageText = computed((): string => {
+  return activeEngine.value?.getCurrentPageText?.() || '';
+});
+
+const handleOpenAiChat = async (): Promise<void> => {
+  if (bookId.value) {
+    await aiStore.openChat(bookId.value);
+  }
+};
+
 defineExpose({
   viewportRef,
   isNavigating,
@@ -493,6 +506,7 @@ defineExpose({
       @open-settings="handleOpenSettings"
       @open-notes="highlightStore.openNotesDrawer"
       @chapter-tldr="triggerChapterTldr"
+      @open-ai-chat="handleOpenAiChat"
       @toggle-tts="handleToggleTts"
     />
 
@@ -597,6 +611,16 @@ defineExpose({
     <NotesExportModal />
 
     <AiAssistantSheet />
+
+    <AiChatDrawer :page-text="activePageText" @close="aiStore.closeChat" />
+
+    <AiDictionaryModal @close="aiStore.closeDictionaryModal" />
+
+    <AiKeyInstructionModal
+      v-if="aiStore.isOnboardingModalOpen"
+      @close="aiStore.closeOnboardingModal"
+      @open-settings="aiStore.openSettingsModal"
+    />
 
     <AiSettingsModal
       :is-open="aiStore.isSettingsModalOpen"

@@ -4,6 +4,7 @@ import { setActivePinia, createPinia } from 'pinia';
 import ReaderHeader from '~/components/reader/ReaderHeader.vue';
 import { useReaderStore } from '~/stores/readerStore';
 import { useTtsStore } from '~/stores/ttsStore';
+import { useAiStore } from '~/stores/aiStore';
 
 describe('ReaderHeader Component', () => {
   let pinia: ReturnType<typeof createPinia>;
@@ -150,5 +151,48 @@ describe('ReaderHeader Component', () => {
     await wrapper.find('[data-testid="reflow-typography-close"]').trigger('click');
     await wrapper.vm.$nextTick();
     expect(wrapper.find('[data-testid="reflow-typography-popover"]').exists()).toBe(false);
+  });
+
+  it('should emit open-ai-chat and chapter-tldr when clicked and API key is configured', async () => {
+    const aiStore = useAiStore();
+    aiStore.settings.api_key = 'sk-mock-key';
+
+    const wrapper = createWrapper();
+
+    const chatBtn = wrapper.find('[data-testid="ai-chat-header-btn"]');
+    const tldrBtn = wrapper.find('[data-testid="chapter-tldr-action"]');
+
+    expect(chatBtn.attributes('aria-disabled')).toBe('false');
+    expect(tldrBtn.attributes('aria-disabled')).toBe('false');
+
+    await chatBtn.trigger('click');
+    expect(wrapper.emitted('open-ai-chat')).toBeTruthy();
+
+    await tldrBtn.trigger('click');
+    expect(wrapper.emitted('chapter-tldr')).toBeTruthy();
+  });
+
+  it('should mark AI header buttons as aria-disabled and trigger onboarding modal on click when API key is missing', async () => {
+    const aiStore = useAiStore();
+    aiStore.settings.api_key = null;
+    const modalSpy = vi.spyOn(aiStore, 'openOnboardingModal');
+
+    const wrapper = createWrapper();
+
+    const chatBtn = wrapper.find('[data-testid="ai-chat-header-btn"]');
+    const tldrBtn = wrapper.find('[data-testid="chapter-tldr-action"]');
+
+    expect(chatBtn.attributes('aria-disabled')).toBe('true');
+    expect(tldrBtn.attributes('aria-disabled')).toBe('true');
+    expect(chatBtn.classes()).toContain('cursor-not-allowed');
+    expect(tldrBtn.classes()).toContain('cursor-not-allowed');
+
+    await chatBtn.trigger('click');
+    expect(modalSpy).toHaveBeenCalledTimes(1);
+    expect(wrapper.emitted('open-ai-chat')).toBeFalsy();
+
+    await tldrBtn.trigger('click');
+    expect(modalSpy).toHaveBeenCalledTimes(2);
+    expect(wrapper.emitted('chapter-tldr')).toBeFalsy();
   });
 });
