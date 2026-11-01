@@ -34,6 +34,8 @@ const readerStore = useReaderStore();
       >
         <button
           type="button"
+          data-testid="reader-back-btn"
+          aria-label="Back"
           class="p-2 rounded-xl text-zinc-600 hover:bg-zinc-100 active:scale-95 transition-all"
           @click="emit('back')"
         >

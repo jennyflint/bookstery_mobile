@@ -8,7 +8,6 @@ import { SqliteService } from '../services/database/SqliteService';
 export function useAppLifecycle() {
   const readerStore = useReaderStore();
   let appStateListener: { remove: () => void } | null = null;
-  let backButtonListener: { remove: () => void } | null = null;
   let webVisibilityHandler: (() => void) | null = null;
 
   const enableKeepAwake = async (): Promise<void> => {
@@ -56,17 +55,6 @@ export function useAppLifecycle() {
             await enableKeepAwake();
           }
         });
-
-        backButtonListener = await App.addListener('backButton', () => {
-          if (readerStore.selection) {
-            readerStore.setSelection(null);
-            return;
-          }
-          if (!readerStore.isImmersiveMode) {
-            readerStore.setImmersiveMode(true);
-            return;
-          }
-        });
       } catch {
       }
     } else if (typeof document !== 'undefined') {
@@ -86,11 +74,6 @@ export function useAppLifecycle() {
     if (appStateListener) {
       appStateListener.remove();
       appStateListener = null;
-    }
-
-    if (backButtonListener) {
-      backButtonListener.remove();
-      backButtonListener = null;
     }
 
     if (webVisibilityHandler && typeof document !== 'undefined') {

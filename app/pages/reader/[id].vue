@@ -1,11 +1,14 @@
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted, nextTick } from 'vue';
+import { ref, watch, onMounted, onUnmounted, nextTick } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { Directory, Filesystem } from '@capacitor/filesystem';
+import { App } from '@capacitor/app';
+import type { PluginListenerHandle } from '@capacitor/core';
 import { useLibraryStore } from '../../stores/libraryStore';
 import { useReaderStore } from '../../stores/readerStore';
 import { useHighlightStore } from '../../stores/highlightStore';
 import { useReader } from '../../composables/useReader';
+import { useBookSync } from '../../composables/useBookSync';
 import { useAppLifecycle } from '../../composables/useAppLifecycle';
 import { useTextSelection } from '../../composables/useTextSelection';
 import { TranslationService } from '../../services/translation/TranslationService';
@@ -33,6 +36,7 @@ const highlightStore = useHighlightStore();
 const aiStore = useAiStore();
 const { triggerChapterTldr } = useAiReader();
 const { openBook, nextPage, prevPage, goToLocator, goToPage, setPaginationMode, applyTheme, closeBook, activeEngine } = useReader();
+const { queueProgress } = useBookSync();
 const { enableKeepAwake, disableKeepAwake } = useAppLifecycle();
 const { clearSelection } = useTextSelection();
 const translationService = TranslationService.getInstance();
@@ -59,10 +63,20 @@ const viewportRef = ref<InstanceType<typeof ReaderViewport> | null>(null);
 const isSettingsOpen = ref(false);
 const isTranslationOpen = ref(false);
 const activeTranslationResult = ref<TranslationResult | null>(null);
+const isNavigating = ref(false);
+let backButtonListener: PluginListenerHandle | null = null;
 
 const bookId = route.params.id as string;
 
 onMounted(async () => {
+  try {
+    backButtonListener = await App.addListener('backButton', () => {
+      handleBackButtonPress();
+    });
+  } catch (err) {
+    console.warn('[Reader] Capacitor App backButton listener registration failed:', err);
+  }
+
   await enableKeepAwake();
   await libraryStore.loadBooks();
   const book = libraryStore.books.find((b) => b.id === bookId);
@@ -151,12 +165,122 @@ startxref
 });
 
 onUnmounted(async () => {
+  if (backButtonListener) {
+    await backButtonListener.remove();
+    backButtonListener = null;
+  }
   await disableKeepAwake();
   closeBook();
 });
 
-const handleBack = () => {
-  router.push('/');
+const handleCloseReader = async (): Promise<void> => {
+  if (isNavigating.value) return;
+  isNavigating.value = true;
+
+  try {
+    // 1. Save reading progress to store, SQLite, and sync queue before navigating
+    if (activeEngine.value && readerStore.currentBook) {
+      try {
+        const location = activeEngine.value.getCurrentLocation();
+        if (location) {
+          readerStore.updateLocation(location);
+          await libraryStore.updateProgress(
+            readerStore.currentBook.id,
+            location.locator,
+            location.progressPercentage,
+          );
+          await queueProgress(
+            readerStore.currentBook.id,
+            location.locator,
+            location.progressPercentage,
+          );
+        }
+      } catch (saveErr) {
+        console.warn('[Reader] Failed to persist progress before exit:', saveErr);
+      }
+    }
+
+    // 2. Resource cleanup
+    closeBook();
+
+    // 3. Route navigation fallback
+    if (typeof window !== 'undefined' && window.history.state?.back) {
+      router.back();
+    } else {
+      await router.push('/');
+    }
+  } catch (err) {
+    console.error('[Reader] Navigation failed during reader close:', err);
+    try {
+      await router.push('/');
+    } catch {}
+  }
+};
+
+const handleBackButtonPress = async (): Promise<void> => {
+  // Priority 1: Reset zoom & pan if page is zoomed
+  if (viewportRef.value) {
+    const isZoomed = viewportRef.value.scale > 1.01;
+    const isPanned =
+      Math.abs(viewportRef.value.translateX) > 1 || Math.abs(viewportRef.value.translateY) > 1;
+    if (isZoomed || isPanned) {
+      viewportRef.value.resetZoom();
+      return;
+    }
+  }
+
+  // Priority 2: Dismiss active overlays, modals, and sheets
+  if (isSettingsOpen.value) {
+    isSettingsOpen.value = false;
+    return;
+  }
+  if (isTranslationOpen.value) {
+    handleCloseTranslation();
+    return;
+  }
+  if (highlightStore.isNoteModalOpen) {
+    highlightStore.closeNoteModal();
+    return;
+  }
+  if (highlightStore.isQuoteCardModalOpen) {
+    highlightStore.closeQuoteCardModal();
+    return;
+  }
+  if (highlightStore.isExportModalOpen) {
+    highlightStore.closeExportModal();
+    return;
+  }
+  if (highlightStore.isNotesDrawerOpen) {
+    highlightStore.closeNotesDrawer();
+    return;
+  }
+  if (highlightStore.selectedHighlight) {
+    highlightStore.selectedHighlight = null;
+    return;
+  }
+  if (aiStore.isSheetOpen) {
+    aiStore.closeSheet();
+    return;
+  }
+  if (aiStore.isSettingsModalOpen) {
+    aiStore.closeSettingsModal();
+    return;
+  }
+  if (aiStore.isOnboardingModalOpen) {
+    aiStore.closeOnboardingModal();
+    return;
+  }
+  if (aiStore.showInactivityBanner) {
+    aiStore.dismissInactivityBanner();
+    return;
+  }
+  if (readerStore.selection) {
+    clearSelection();
+    return;
+  }
+
+  // Priority 3: Reader Exit
+  await handleCloseReader();
 };
 
 const handleCenterTap = () => {
@@ -185,6 +309,13 @@ const handleCloseTranslation = () => {
   isTranslationOpen.value = false;
   activeTranslationResult.value = null;
 };
+
+defineExpose({
+  viewportRef,
+  isNavigating,
+  handleCloseReader,
+  handleBackButtonPress,
+});
 </script>
 
 <template>
@@ -197,7 +328,7 @@ const handleCloseTranslation = () => {
     />
 
     <ReaderOverlayControls
-      @back="handleBack"
+      @back="handleCloseReader"
       @next="nextPage"
       @prev="prevPage"
       @navigate="goToPage"

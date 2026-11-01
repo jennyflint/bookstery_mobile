@@ -40,9 +40,9 @@ export const mockKeepAwake = {
 };
 
 export const mockApp = {
-  addListener: vi.fn().mockImplementation((event: string, callback: (state: { isActive: boolean }) => void) => {
+  addListener: vi.fn().mockImplementation(async (_event: string, _callback: (...args: any[]) => void) => {
     return {
-      remove: vi.fn(),
+      remove: vi.fn().mockResolvedValue(undefined),
     };
   }),
   exitApp: vi.fn(),
