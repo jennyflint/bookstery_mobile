@@ -50,6 +50,42 @@ describe('Fb2Engine', () => {
     await engine.goTo('fb2-p-1');
     const location = engine.getCurrentLocation();
     expect(location.locator).toBeDefined();
+    expect(location.currentPage).toBeDefined();
+    expect(location.totalPages).toBeGreaterThanOrEqual(1);
+    expect(location.chapterTitle).toBe('Chapter One');
+  });
+
+  it('should calculate virtual pages and support numeric page navigation', async () => {
+    // Generate FB2 XML with 25 paragraphs
+    const manyParagraphs = Array.from({ length: 25 }, (_, i) => `<p>Paragraph content ${i}</p>`).join('\n');
+    const multiPageFb2Xml = `<?xml version="1.0" encoding="utf-8"?>
+<FictionBook xmlns="http://www.gribuser.ru/xml/fictionbook/2.0">
+  <description><title-info><book-title>Multi-page FB2</book-title></title-info></description>
+  <body>
+    <section>
+      <title><p>Chapter One: Beginning</p></title>
+      ${manyParagraphs}
+    </section>
+  </body>
+</FictionBook>`;
+
+    await engine.init(container, multiPageFb2Xml);
+
+    const initialLoc = engine.getCurrentLocation();
+    expect(initialLoc.totalPages).toBeGreaterThan(1);
+    expect(initialLoc.currentPage).toBe(1);
+    expect(initialLoc.chapterTitle).toBe('Chapter One: Beginning');
+
+    // Navigate to page 3
+    await engine.goTo('3');
+    const page3Loc = engine.getCurrentLocation();
+    expect(page3Loc.currentPage).toBe(3);
+    expect(page3Loc.progressPercentage).toBeGreaterThan(0);
+
+    // Percentage navigation
+    await engine.goTo('100%');
+    const endLoc = engine.getCurrentLocation();
+    expect(endLoc.progressPercentage).toBe(100);
   });
 
   it('should throw an error on invalid XML structure', async () => {

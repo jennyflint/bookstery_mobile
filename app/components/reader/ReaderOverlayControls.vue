@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { useReaderStore } from '../../stores/readerStore';
 import SyncStatusBadge from '../common/SyncStatusBadge.vue';
+import ReaderProgressBar from './ReaderProgressBar.vue';
 
 const emit = defineEmits<{
   (e: 'back'): void;
@@ -9,6 +10,7 @@ const emit = defineEmits<{
   (e: 'open-settings'): void;
   (e: 'open-notes'): void;
   (e: 'chapter-tldr'): void;
+  (e: 'navigate', page: number): void;
 }>();
 
 const { t } = useI18n();
@@ -100,15 +102,20 @@ const readerStore = useReaderStore();
           <span v-if="readerStore.totalPages > 1">
             {{ t('reader.page') }} {{ readerStore.currentPage }} {{ t('reader.of') }} {{ readerStore.totalPages }}
           </span>
+          <span v-else-if="readerStore.currentPage && readerStore.currentPage > 1">
+            {{ t('reader.page') }} {{ readerStore.currentPage }}
+          </span>
           <span v-else>{{ readerStore.locator }}</span>
         </div>
 
-        <div class="w-full bg-zinc-100 rounded-full h-1.5 overflow-hidden">
-          <div
-            class="bg-indigo-600 h-1.5 rounded-full transition-all duration-200"
-            :style="{ width: `${Math.min(Math.max(readerStore.progressPercentage, 0), 100)}%` }"
-          />
-        </div>
+        <ReaderProgressBar
+          :current-page="readerStore.currentPage"
+          :total-pages="readerStore.totalPages"
+          :progress-percentage="readerStore.progressPercentage"
+          :chapter-title="readerStore.currentChapterTitle"
+          :locator="readerStore.locator"
+          @navigate="emit('navigate', $event)"
+        />
 
         <div class="flex items-center justify-between pt-2">
           <button

@@ -63,6 +63,9 @@ export function useReader() {
 
       const initialLoc = engine.getCurrentLocation();
       readerStore.updateLocation(initialLoc);
+      readerStore.registerPageNavigator(async (page: number) => {
+        await goToLocator(String(page));
+      });
 
       // Attach location listener after initial position restoration so start position doesn't overwrite saved locator
       engine.onLocationChange = (location) => {
@@ -176,11 +179,16 @@ export function useReader() {
     }
   };
 
+  const goToPage = async (page: number): Promise<void> => {
+    await readerStore.goToPage(page);
+  };
+
   const applyTheme = (colors: { bg: string; text: string }): void => {
     activeEngine.value?.applyTheme?.(colors);
   };
 
   const closeBook = (): void => {
+    readerStore.registerPageNavigator(null);
     if (activeEngine.value) {
       activeEngine.value.destroy();
       activeEngine.value = null;
@@ -193,6 +201,7 @@ export function useReader() {
     nextPage,
     prevPage,
     goToLocator,
+    goToPage,
     setPaginationMode,
     applyTheme,
     resetZoom,

@@ -1,3 +1,5 @@
+import type { HighlightRecord } from './highlight';
+
 export * from './auth';
 export * from './sync';
 export * from './collection';
@@ -49,6 +51,15 @@ export interface ReaderLocation {
   progressPercentage: number;
   currentPage?: number;
   totalPages?: number;
+  chapterTitle?: string | null;
+}
+
+export interface ReaderProgressBarProps {
+  currentPage?: number;
+  totalPages?: number;
+  progressPercentage?: number;
+  chapterTitle?: string | null;
+  locator?: string;
 }
 
 export type ReaderPaginationMode = 'buttons' | 'scroll';

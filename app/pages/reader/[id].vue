@@ -32,7 +32,7 @@ const readerStore = useReaderStore();
 const highlightStore = useHighlightStore();
 const aiStore = useAiStore();
 const { triggerChapterTldr } = useAiReader();
-const { openBook, nextPage, prevPage, goToLocator, setPaginationMode, applyTheme, closeBook, activeEngine } = useReader();
+const { openBook, nextPage, prevPage, goToLocator, goToPage, setPaginationMode, applyTheme, closeBook, activeEngine } = useReader();
 const { enableKeepAwake, disableKeepAwake } = useAppLifecycle();
 const { clearSelection } = useTextSelection();
 const translationService = TranslationService.getInstance();
@@ -200,6 +200,7 @@ const handleCloseTranslation = () => {
       @back="handleBack"
       @next="nextPage"
       @prev="prevPage"
+      @navigate="goToPage"
       @open-settings="handleOpenSettings"
       @open-notes="highlightStore.openNotesDrawer"
       @chapter-tldr="triggerChapterTldr"

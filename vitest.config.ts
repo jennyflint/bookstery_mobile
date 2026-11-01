@@ -26,6 +26,7 @@ export default defineConfig({
       '~~': resolve(__dirname, './'),
       '@@': resolve(__dirname, './'),
       '@capacitor/share': resolve(__dirname, './tests/mocks/capacitor-plugins.ts'),
+      '@capacitor/haptics': resolve(__dirname, './tests/mocks/capacitor-plugins.ts'),
     },
   },
   resolve: {
@@ -35,6 +36,7 @@ export default defineConfig({
       '~~': resolve(__dirname, './'),
       '@@': resolve(__dirname, './'),
       '@capacitor/share': resolve(__dirname, './tests/mocks/capacitor-plugins.ts'),
+      '@capacitor/haptics': resolve(__dirname, './tests/mocks/capacitor-plugins.ts'),
     },
   },
 });

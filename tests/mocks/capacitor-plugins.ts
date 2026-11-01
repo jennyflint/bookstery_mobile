@@ -96,3 +96,18 @@ export const mockSqliteDatabase = {
   query: vi.fn().mockResolvedValue({ values: [] }),
   isDBOpen: vi.fn().mockResolvedValue({ result: true }),
 };
+
+export const ImpactStyle = {
+  Heavy: 'HEAVY',
+  Medium: 'MEDIUM',
+  Light: 'LIGHT',
+};
+
+export const mockHaptics = {
+  impact: vi.fn().mockResolvedValue(undefined),
+  selectionChanged: vi.fn().mockResolvedValue(undefined),
+  selectionStart: vi.fn().mockResolvedValue(undefined),
+  selectionEnd: vi.fn().mockResolvedValue(undefined),
+};
+
+export const Haptics = mockHaptics;

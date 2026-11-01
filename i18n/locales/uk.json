@@ -104,6 +104,7 @@
     "loading": "Завантаження книги...",
     "page": "Сторінка",
     "of": "з",
+    "scrubberTooltip": "Сторінка {page} з {total}",
     "theme": "Тема",
     "fontSize": "Розмір шрифту",
     "immersiveMode": "Режим повного екрана",

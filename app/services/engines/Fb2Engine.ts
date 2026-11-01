@@ -275,12 +275,22 @@ export class Fb2Engine extends BaseEngine {
     };
     wrapper.addEventListener('scroll', this.scrollHandler, { passive: true });
 
-    if (this.paragraphElements.length > 0) {
-      this.location = {
-        locator: this.paragraphElements[0].id,
-        progressPercentage: 0,
-      };
+    this.updateLocationOnScroll();
+  }
+
+  private calculateTotalPages(): number {
+    if (!this.scrollContainer || this.paragraphElements.length === 0) {
+      return 1;
     }
+    const containerHeight =
+      this.scrollContainer.clientHeight ||
+      (typeof window !== 'undefined' && window.innerHeight ? window.innerHeight : 600);
+    const scrollHeight = this.scrollContainer.scrollHeight;
+    if (scrollHeight > containerHeight && containerHeight > 0) {
+      return Math.max(1, Math.ceil(scrollHeight / containerHeight));
+    }
+    // Fallback based on paragraph density (e.g. 5 paragraphs per virtual page)
+    return Math.max(1, Math.ceil(this.paragraphElements.length / 5));
   }
 
   private convertInlineTags(node: Element, binaryMap: Map<string, string>): string {
@@ -316,26 +326,59 @@ export class Fb2Engine extends BaseEngine {
     }
 
     const containerTop = this.scrollContainer.scrollTop;
-    const containerHeight = this.scrollContainer.clientHeight;
+    const containerHeight =
+      this.scrollContainer.clientHeight ||
+      (typeof window !== 'undefined' && window.innerHeight ? window.innerHeight : 600);
     const scrollHeight = this.scrollContainer.scrollHeight;
 
-    for (let i = 0; i < this.paragraphElements.length; i++) {
-      const p = this.paragraphElements[i];
-      if (p.offsetTop >= containerTop) {
-        this.currentParagraphIndex = i;
-        break;
+    const hasLayoutHeights = this.paragraphElements.some((p) => p.offsetTop > 0);
+    if (hasLayoutHeights) {
+      for (let i = 0; i < this.paragraphElements.length; i++) {
+        const p = this.paragraphElements[i];
+        if (p.offsetTop >= containerTop) {
+          this.currentParagraphIndex = i;
+          break;
+        }
       }
     }
 
-    const maxScroll = scrollHeight - containerHeight;
-    const progress = maxScroll > 0
-      ? Number(((containerTop / maxScroll) * 100).toFixed(2))
-      : 0;
+    const maxScroll = Math.max(0, scrollHeight - containerHeight);
+    const totalPages = this.calculateTotalPages();
 
+    let progress = 0;
+    let currentPage = 1;
+
+    if (maxScroll > 0) {
+      progress = Number(((containerTop / maxScroll) * 100).toFixed(2));
+      currentPage = totalPages > 1
+        ? Math.min(totalPages, Math.max(1, Math.round((progress / 100) * (totalPages - 1)) + 1))
+        : 1;
+    } else if (this.paragraphElements.length > 1) {
+      progress = Number(((this.currentParagraphIndex / (this.paragraphElements.length - 1)) * 100).toFixed(2));
+      currentPage = totalPages > 1
+        ? Math.min(
+            totalPages,
+            Math.max(1, Math.round((this.currentParagraphIndex / (this.paragraphElements.length - 1)) * (totalPages - 1)) + 1),
+          )
+        : 1;
+    }
+
+    let chapterTitle: string | null = null;
     const currentElem = this.paragraphElements[this.currentParagraphIndex];
+    if (currentElem) {
+      const section = currentElem.closest('.fb2-section');
+      const titleElem = section?.querySelector('h2');
+      if (titleElem && titleElem.textContent) {
+        chapterTitle = titleElem.textContent.trim();
+      }
+    }
+
     this.location = {
       locator: currentElem ? currentElem.id : `fb2-p-${this.currentParagraphIndex}`,
       progressPercentage: Math.min(Math.max(progress, 0), 100),
+      currentPage,
+      totalPages,
+      chapterTitle,
     };
     this.onLocationChange?.(this.location);
   }
@@ -345,17 +388,76 @@ export class Fb2Engine extends BaseEngine {
       return;
     }
 
+    // 1. Direct paragraph element by id (e.g. "fb2-p-42")
     const target = this.paragraphElements.find((p) => p.id === locator);
     if (target) {
-      this.scrollContainer.scrollTo({
-        top: Math.max(0, target.offsetTop - 16),
-        behavior: 'auto',
-      });
+      const topOffset = Math.max(0, target.offsetTop - 16);
+      if (typeof this.scrollContainer.scrollTo === 'function') {
+        this.scrollContainer.scrollTo({
+          top: topOffset,
+          behavior: 'auto',
+        });
+      }
+      this.scrollContainer.scrollTop = topOffset;
+
       const index = this.paragraphElements.indexOf(target);
       if (index !== -1) {
         this.currentParagraphIndex = index;
       }
       this.updateLocationOnScroll();
+      return;
+    }
+
+    // 2. Numeric page number or percentage (e.g. "5" or "50%")
+    const isPercentage = locator.endsWith('%');
+    const numericValue = parseFloat(locator);
+    if (!isNaN(numericValue) && !locator.startsWith('fb2-p-')) {
+      const containerHeight =
+        this.scrollContainer.clientHeight ||
+        (typeof window !== 'undefined' && window.innerHeight ? window.innerHeight : 600);
+      const scrollHeight = this.scrollContainer.scrollHeight;
+      const maxScroll = Math.max(0, scrollHeight - containerHeight);
+      const totalPages = this.calculateTotalPages();
+
+      let targetScroll = 0;
+      if (isPercentage) {
+        targetScroll = Math.max(0, Math.min(maxScroll, (numericValue / 100) * maxScroll));
+        if (this.paragraphElements.length > 0) {
+          this.currentParagraphIndex = Math.min(
+            this.paragraphElements.length - 1,
+            Math.max(0, Math.round((numericValue / 100) * (this.paragraphElements.length - 1))),
+          );
+        }
+      } else {
+        const targetPage = Math.max(1, Math.min(totalPages, Math.round(numericValue)));
+        if (totalPages > 1 && maxScroll > 0) {
+          targetScroll = ((targetPage - 1) / (totalPages - 1)) * maxScroll;
+        } else if (this.paragraphElements.length > 0) {
+          const targetParaIndex = Math.min(
+            this.paragraphElements.length - 1,
+            Math.max(
+              0,
+              Math.round(((targetPage - 1) / Math.max(1, totalPages - 1)) * (this.paragraphElements.length - 1)),
+            ),
+          );
+          const pElem = this.paragraphElements[targetParaIndex];
+          if (pElem) {
+            targetScroll = Math.max(0, pElem.offsetTop - 16);
+          }
+          this.currentParagraphIndex = targetParaIndex;
+        }
+      }
+
+      if (typeof this.scrollContainer.scrollTo === 'function') {
+        this.scrollContainer.scrollTo({
+          top: targetScroll,
+          behavior: 'auto',
+        });
+      }
+      this.scrollContainer.scrollTop = targetScroll;
+
+      this.updateLocationOnScroll();
+      return;
     }
   }
 
@@ -364,11 +466,12 @@ export class Fb2Engine extends BaseEngine {
       return;
     }
     const current = this.scrollContainer.scrollTop;
-    const pageDelta = this.scrollContainer.clientHeight * 0.9;
+    const pageDelta = (this.scrollContainer.clientHeight || (typeof window !== 'undefined' && window.innerHeight ? window.innerHeight : 600)) * 0.9;
     this.scrollContainer.scrollTo({
       top: current + pageDelta,
       behavior: 'smooth',
     });
+    setTimeout(() => this.updateLocationOnScroll(), 100);
   }
 
   async prev(): Promise<void> {
@@ -376,11 +479,12 @@ export class Fb2Engine extends BaseEngine {
       return;
     }
     const current = this.scrollContainer.scrollTop;
-    const pageDelta = this.scrollContainer.clientHeight * 0.9;
+    const pageDelta = (this.scrollContainer.clientHeight || (typeof window !== 'undefined' && window.innerHeight ? window.innerHeight : 600)) * 0.9;
     this.scrollContainer.scrollTo({
       top: Math.max(0, current - pageDelta),
       behavior: 'smooth',
     });
+    setTimeout(() => this.updateLocationOnScroll(), 100);
   }
 
   applyTheme(colors: { bg: string; text: string }): void {
@@ -390,8 +494,13 @@ export class Fb2Engine extends BaseEngine {
     }
   }
 
-  getCurrentLocation(): ReaderLocation {
-    return { ...this.location };
+  override getCurrentLocation(): ReaderLocation {
+    const totalPages = this.calculateTotalPages();
+    return {
+      ...this.location,
+      currentPage: this.location.currentPage || 1,
+      totalPages: this.location.totalPages || totalPages,
+    };
   }
 
   destroy(): void {

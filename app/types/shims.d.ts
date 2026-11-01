@@ -15,6 +15,9 @@ declare module '@capacitor/haptics' {
   }
   export interface HapticsPlugin {
     impact(options?: ImpactOptions): Promise<void>;
+    selectionChanged(): Promise<void>;
+    selectionStart(): Promise<void>;
+    selectionEnd(): Promise<void>;
   }
   export const Haptics: HapticsPlugin;
 }

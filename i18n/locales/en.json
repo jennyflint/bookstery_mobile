@@ -104,6 +104,7 @@
     "loading": "Loading book...",
     "page": "Page",
     "of": "of",
+    "scrubberTooltip": "Page {page} of {total}",
     "theme": "Theme",
     "fontSize": "Font Size",
     "immersiveMode": "Immersive Mode",

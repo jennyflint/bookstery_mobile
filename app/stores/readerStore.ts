@@ -51,6 +51,8 @@ export const useReaderStore = defineStore('reader', {
     progressPercentage: 0,
     currentPage: 1,
     totalPages: 1,
+    currentChapterTitle: null as string | null,
+    pageNavigator: null as ((page: number) => Promise<void> | void) | null,
     settings: getStoredSettings(),
     isImmersiveMode: true,
     isRendering: false,
@@ -91,6 +93,26 @@ export const useReaderStore = defineStore('reader', {
       }
       if (location.totalPages !== undefined) {
         this.totalPages = location.totalPages;
+      }
+      if (location.chapterTitle !== undefined) {
+        this.currentChapterTitle = location.chapterTitle;
+      }
+    },
+    setChapterTitle(title: string | null): void {
+      this.currentChapterTitle = title;
+    },
+    registerPageNavigator(navigator: ((page: number) => Promise<void> | void) | null): void {
+      this.pageNavigator = navigator;
+    },
+    async goToPage(targetPage: number): Promise<void> {
+      const total = Math.max(1, this.totalPages);
+      const clampedPage = Math.max(1, Math.min(total, Math.round(targetPage)));
+      this.currentPage = clampedPage;
+      this.locator = String(clampedPage);
+      this.progressPercentage =
+        total > 0 ? Number(((clampedPage / total) * 100).toFixed(2)) : 0;
+      if (this.pageNavigator) {
+        await this.pageNavigator(clampedPage);
       }
     },
     toggleImmersiveMode(): void {
