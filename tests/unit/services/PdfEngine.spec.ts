@@ -5,6 +5,21 @@ import { mockPdfDocument, mockPdfPage, mockRenderTask } from '../../mocks/book-e
 
 vi.mock('pdfjs-dist', () => ({
   getDocument: vi.fn(),
+  renderTextLayer: vi.fn().mockImplementation((params: any) => {
+    if (params?.container && params?.textContentSource?.items) {
+      for (const item of params.textContentSource.items) {
+        if (!item.str) continue;
+        const span = document.createElement('span');
+        span.textContent = item.str;
+        params.container.appendChild(span);
+      }
+    }
+    return {
+      promise: Promise.resolve(),
+      cancel: vi.fn(),
+    };
+  }),
+  version: '3.11.174',
   GlobalWorkerOptions: { workerSrc: '' },
 }));
 
@@ -180,5 +195,32 @@ describe('PdfEngine', () => {
     await engine.next();
     expect(resetSpy).toHaveBeenCalled();
     expect(engine.getZoom()).toBe(1);
+  });
+
+  it('should align .textLayer with exact viewport dimensions and invoke pdfjsLib.renderTextLayer', async () => {
+    await engine.init(container, new Uint8Array([1, 2, 3]));
+    await engine.setPaginationMode('buttons');
+
+    const pageWrapper = container.querySelector<HTMLElement>('.pdf-page-wrapper');
+    expect(pageWrapper).not.toBeNull();
+    expect(pageWrapper!.style.position).toBe('relative');
+
+    const canvas = pageWrapper!.querySelector<HTMLCanvasElement>('.pdf-canvas');
+    const textLayer = pageWrapper!.querySelector<HTMLElement>('.textLayer');
+
+    expect(canvas).not.toBeNull();
+    expect(textLayer).not.toBeNull();
+    expect(canvas!.style.pointerEvents).toBe('none');
+
+    expect(pdfjsLib.renderTextLayer).toHaveBeenCalledWith(
+      expect.objectContaining({
+        container: textLayer,
+        viewport: expect.any(Object),
+        textDivs: [],
+      }),
+    );
+
+    expect(textLayer!.classList.contains('textLayer')).toBe(true);
+    expect(textLayer!.style.getPropertyValue('--scale-factor')).toBeDefined();
   });
 });

@@ -9,6 +9,8 @@ export class EpubEngine extends BaseEngine {
   private currentCfi: string = '';
   private currentPercentage: number = 0;
   private currentColors: { bg: string; text: string } | null = null;
+  public onIframeReady?: (iframe: HTMLIFrameElement) => void;
+  public onSelectionChange?: (detail: { text: string; locator?: string }) => void;
 
   override setHighlights(
     highlights: HighlightRecord[],
@@ -62,6 +64,26 @@ export class EpubEngine extends BaseEngine {
     if (this.currentColors) {
       this.applyTheme(this.currentColors);
     }
+
+    this.rendition.hooks.content.register((contents: any) => {
+      const doc = contents?.document;
+      if (doc?.body) {
+        doc.body.style.userSelect = 'text';
+        doc.body.style.webkitUserSelect = 'text';
+      }
+      const iframe = contents?.document?.defaultView?.frameElement as HTMLIFrameElement;
+      if (iframe && this.onIframeReady) {
+        this.onIframeReady(iframe);
+      }
+    });
+
+    this.rendition.on('selected', (cfiRange: string, contents: any) => {
+      const sel = contents?.window?.getSelection();
+      const text = sel ? sel.toString().trim() : '';
+      if (text) {
+        this.onSelectionChange?.({ text, locator: cfiRange });
+      }
+    });
 
     this.rendition.on('relocated', (location: Location) => {
       if (location && location.start) {
@@ -142,6 +164,24 @@ export class EpubEngine extends BaseEngine {
       if (this.currentColors) {
         this.applyTheme(this.currentColors);
       }
+      this.rendition.hooks.content.register((contents: any) => {
+        const doc = contents?.document;
+        if (doc?.body) {
+          doc.body.style.userSelect = 'text';
+          doc.body.style.webkitUserSelect = 'text';
+        }
+        const iframe = contents?.document?.defaultView?.frameElement as HTMLIFrameElement;
+        if (iframe && this.onIframeReady) {
+          this.onIframeReady(iframe);
+        }
+      });
+      this.rendition.on('selected', (cfiRange: string, contents: any) => {
+        const sel = contents?.window?.getSelection();
+        const text = sel ? sel.toString().trim() : '';
+        if (text) {
+          this.onSelectionChange?.({ text, locator: cfiRange });
+        }
+      });
       this.rendition.on('relocated', (location: Location) => {
         if (location && location.start) {
           this.currentCfi = location.start.cfi;
@@ -167,9 +207,13 @@ export class EpubEngine extends BaseEngine {
         body: {
           'background-color': `${colors.bg} !important`,
           color: `${colors.text} !important`,
+          'user-select': 'text !important',
+          '-webkit-user-select': 'text !important',
         },
         'p, div, span, h1, h2, h3, h4, h5, h6, a, li, blockquote': {
           color: `${colors.text} !important`,
+          'user-select': 'text !important',
+          '-webkit-user-select': 'text !important',
         },
         '.hl-yellow': {
           'background-color': '#FEF08A !important',
@@ -197,6 +241,18 @@ export class EpubEngine extends BaseEngine {
           'fill-opacity': '0.55 !important',
         },
       });
+    }
+  }
+
+  clearSelection(): void {
+    if (this.rendition) {
+      try {
+        const currentContents = (this.rendition as any).getContents?.() || [];
+        for (const content of currentContents) {
+          content.window?.getSelection()?.removeAllRanges();
+        }
+      } catch {
+      }
     }
   }
 

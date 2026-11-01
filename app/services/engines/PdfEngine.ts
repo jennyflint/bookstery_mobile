@@ -420,12 +420,20 @@ export class PdfEngine extends BaseEngine {
         this.activeSlotRenderTasks.delete(pageNumber);
       }
 
+      slot.style.position = 'relative';
+      slot.style.width = `${Math.floor(viewport.width)}px`;
+      slot.style.height = `${Math.floor(viewport.height)}px`;
+      slot.style.minHeight = `${Math.floor(viewport.height)}px`;
+      slot.innerHTML = '';
+
       const canvas = document.createElement('canvas');
       canvas.className = 'pdf-canvas block bg-white';
       canvas.width = Math.floor(viewport.width * dpr);
       canvas.height = Math.floor(viewport.height * dpr);
       canvas.style.width = `${Math.floor(viewport.width)}px`;
       canvas.style.height = `${Math.floor(viewport.height)}px`;
+      canvas.style.display = 'block';
+      canvas.style.pointerEvents = 'none';
 
       const canvasContext = canvas.getContext('2d', { alpha: false });
 
@@ -437,9 +445,6 @@ export class PdfEngine extends BaseEngine {
       canvasContext.imageSmoothingEnabled = true;
       canvasContext.imageSmoothingQuality = 'high';
 
-      slot.style.width = `${Math.floor(viewport.width)}px`;
-      slot.style.minHeight = `${Math.floor(viewport.height)}px`;
-      slot.innerHTML = '';
       slot.appendChild(canvas);
       if (this.currentColors) {
         this.applySlotTheme(slot);
@@ -447,11 +452,10 @@ export class PdfEngine extends BaseEngine {
       }
 
       const textLayerDiv = document.createElement('div');
-      textLayerDiv.className =
-        'pdf-text-layer absolute top-0 left-0 overflow-hidden pointer-events-auto leading-none';
-      textLayerDiv.style.width = `${viewport.width}px`;
-      textLayerDiv.style.height = `${viewport.height}px`;
-      textLayerDiv.style.setProperty('--scale-factor', `${viewport.scale ?? scale}`);
+      textLayerDiv.className = 'textLayer pdf-text-layer';
+      textLayerDiv.style.width = `${Math.floor(viewport.width)}px`;
+      textLayerDiv.style.height = `${Math.floor(viewport.height)}px`;
+      textLayerDiv.style.setProperty('--scale-factor', String(viewport.scale));
       slot.appendChild(textLayerDiv);
 
       const transform = dpr !== 1 ? [dpr, 0, 0, dpr, 0, 0] : undefined;
@@ -472,14 +476,27 @@ export class PdfEngine extends BaseEngine {
 
       try {
         const textContent = await pageProxy.getTextContent();
-        for (const item of textContent.items as TextContentItem[]) {
-          if (!item.str) continue;
-          const span = document.createElement('span');
-          span.textContent = item.str;
-          span.className = 'text-transparent select-text cursor-text';
-          textLayerDiv.appendChild(span);
+        textLayerDiv.innerHTML = '';
+        if (typeof (pdfjsLib as any).renderTextLayer === 'function') {
+          const textLayerTask = (pdfjsLib as any).renderTextLayer({
+            textContentSource: textContent,
+            container: textLayerDiv,
+            viewport,
+            textDivs: [],
+          });
+          if (textLayerTask && textLayerTask.promise) {
+            await textLayerTask.promise;
+          }
+        } else {
+          for (const item of textContent.items as TextContentItem[]) {
+            if (!item.str) continue;
+            const span = document.createElement('span');
+            span.textContent = item.str;
+            textLayerDiv.appendChild(span);
+          }
         }
-      } catch {
+      } catch (textErr) {
+        console.warn('[PdfEngine] Failed to render text layer in slot:', textErr);
       }
 
       this.restoreHighlightsForPage(pageNumber, slot);
@@ -649,24 +666,33 @@ export class PdfEngine extends BaseEngine {
     const viewport = this.currentPageProxy.getViewport({ scale: targetScale });
     const dpr = this.getClampedDpr();
 
+    const pageWrapper = document.createElement('div');
+    pageWrapper.className = 'pdf-page-wrapper relative shadow-md rounded overflow-hidden select-text';
+    pageWrapper.style.position = 'relative';
+    pageWrapper.style.width = `${Math.floor(viewport.width)}px`;
+    pageWrapper.style.height = `${Math.floor(viewport.height)}px`;
+
     canvas.width = Math.floor(viewport.width * dpr);
     canvas.height = Math.floor(viewport.height * dpr);
     canvas.style.width = `${Math.floor(viewport.width)}px`;
     canvas.style.height = `${Math.floor(viewport.height)}px`;
+    canvas.style.display = 'block';
+    canvas.style.pointerEvents = 'none';
 
-    viewportContainer.appendChild(canvas);
+    pageWrapper.appendChild(canvas);
     if (this.currentColors) {
       this.applySlotTheme(viewportContainer);
       this.applyCanvasTheme(canvas);
     }
 
     const textLayerDiv = document.createElement('div');
-    textLayerDiv.className =
-      'pdf-text-layer absolute top-0 left-0 overflow-hidden pointer-events-auto leading-none';
-    textLayerDiv.style.width = `${viewport.width}px`;
-    textLayerDiv.style.height = `${viewport.height}px`;
-    textLayerDiv.style.setProperty('--scale-factor', `${viewport.scale ?? targetScale}`);
-    viewportContainer.appendChild(textLayerDiv);
+    textLayerDiv.className = 'textLayer pdf-text-layer';
+    textLayerDiv.style.width = `${Math.floor(viewport.width)}px`;
+    textLayerDiv.style.height = `${Math.floor(viewport.height)}px`;
+    textLayerDiv.style.setProperty('--scale-factor', String(viewport.scale));
+    pageWrapper.appendChild(textLayerDiv);
+
+    viewportContainer.appendChild(pageWrapper);
 
     // Mouse wheel navigation in buttons mode
     const handleWheel = (event: WheelEvent) => {
@@ -716,14 +742,27 @@ export class PdfEngine extends BaseEngine {
 
     try {
       const textContent = await this.currentPageProxy.getTextContent();
-      for (const item of textContent.items as TextContentItem[]) {
-        if (!item.str) continue;
-        const span = document.createElement('span');
-        span.textContent = item.str;
-        span.className = 'text-transparent select-text cursor-text';
-        textLayerDiv.appendChild(span);
+      textLayerDiv.innerHTML = '';
+      if (typeof (pdfjsLib as any).renderTextLayer === 'function') {
+        const textLayerTask = (pdfjsLib as any).renderTextLayer({
+          textContentSource: textContent,
+          container: textLayerDiv,
+          viewport,
+          textDivs: [],
+        });
+        if (textLayerTask && textLayerTask.promise) {
+          await textLayerTask.promise;
+        }
+      } else {
+        for (const item of textContent.items as TextContentItem[]) {
+          if (!item.str) continue;
+          const span = document.createElement('span');
+          span.textContent = item.str;
+          textLayerDiv.appendChild(span);
+        }
       }
-    } catch {
+    } catch (textErr) {
+      console.warn('[PdfEngine] Failed to render text layer in buttons mode:', textErr);
     }
 
     this.location = this.getCurrentLocation();

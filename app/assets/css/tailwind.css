@@ -50,3 +50,34 @@ body {
   background-color: var(--color-app-surface) !important;
   border-color: var(--color-app-border) !important;
 }
+
+/* PDF.js Text Layer styling to ensure exact canvas alignment and transparent selectable text */
+.textLayer {
+  position: absolute;
+  text-align: initial;
+  inset: 0;
+  overflow: hidden;
+  opacity: 1;
+  line-height: 1;
+  -webkit-text-size-adjust: none;
+  text-size-adjust: none;
+  forced-color-adjust: none;
+  transform-origin: 0 0;
+  z-index: 2;
+  user-select: text;
+  -webkit-user-select: text;
+}
+
+.textLayer :is(span, br) {
+  color: transparent !important;
+  position: absolute;
+  white-space: pre;
+  cursor: text;
+  transform-origin: 0% 0%;
+}
+
+.textLayer ::selection {
+  background: rgba(59, 130, 246, 0.35);
+  color: transparent !important;
+}
+

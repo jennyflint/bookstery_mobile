@@ -153,7 +153,7 @@ describe('Reader Back Button and Navigation', () => {
               emits: ['back', 'next', 'prev', 'navigate', 'open-settings', 'open-notes', 'chapter-tldr'],
             },
             ThemeSettingsSheet: true,
-            TextSelectionTooltip: true,
+            ReaderSelectionBar: true,
             TranslationBottomSheet: true,
             HighlightNoteModal: true,
             BookNotesDrawer: true,

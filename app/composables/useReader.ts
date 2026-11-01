@@ -6,12 +6,14 @@ import type { ReaderEngineInterface, BookRecord, ReaderPaginationMode } from '..
 import { useReaderStore } from '../stores/readerStore';
 import { useLibraryStore } from '../stores/libraryStore';
 import { useBookSync } from './useBookSync';
+import { useTextSelection } from './useTextSelection';
 
 export function useReader() {
   const activeEngine = shallowRef<ReaderEngineInterface | null>(null);
   const readerStore = useReaderStore();
   const libraryStore = useLibraryStore();
   const { queueProgress } = useBookSync();
+  const { clearSelection } = useTextSelection();
 
   const createEngine = (format: string): ReaderEngineInterface => {
     switch (format) {
@@ -106,6 +108,7 @@ export function useReader() {
 
   const nextPage = async (): Promise<void> => {
     if (!activeEngine.value) return;
+    clearSelection();
     resetZoom();
     readerStore.setRendering(true);
     try {
@@ -131,6 +134,7 @@ export function useReader() {
 
   const prevPage = async (): Promise<void> => {
     if (!activeEngine.value) return;
+    clearSelection();
     resetZoom();
     readerStore.setRendering(true);
     try {
@@ -156,6 +160,7 @@ export function useReader() {
 
   const goToLocator = async (locator: string): Promise<void> => {
     if (!activeEngine.value) return;
+    clearSelection();
     resetZoom();
     readerStore.setRendering(true);
     try {
@@ -180,6 +185,7 @@ export function useReader() {
   };
 
   const goToPage = async (page: number): Promise<void> => {
+    clearSelection();
     await readerStore.goToPage(page);
   };
 
@@ -188,6 +194,7 @@ export function useReader() {
   };
 
   const closeBook = (): void => {
+    clearSelection();
     readerStore.registerPageNavigator(null);
     if (activeEngine.value) {
       activeEngine.value.destroy();

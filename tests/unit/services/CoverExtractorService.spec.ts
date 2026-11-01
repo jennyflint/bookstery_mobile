@@ -5,6 +5,7 @@ import { CoverExtractorService } from '../../../app/services/covers/CoverExtract
 
 vi.mock('pdfjs-dist', () => ({
   getDocument: vi.fn(),
+  version: '3.11.174',
   GlobalWorkerOptions: {
     workerSrc: '',
   },

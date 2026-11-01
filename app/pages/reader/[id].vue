@@ -16,7 +16,7 @@ import type { TranslationResult } from '../../types';
 import ReaderViewport from '../../components/reader/ReaderViewport.vue';
 import ReaderOverlayControls from '../../components/reader/ReaderOverlayControls.vue';
 import ThemeSettingsSheet from '../../components/reader/ThemeSettingsSheet.vue';
-import TextSelectionTooltip from '../../components/reader/TextSelectionTooltip.vue';
+import ReaderSelectionBar from '../../components/reader/ReaderSelectionBar.vue';
 import TranslationBottomSheet from '../../components/translation/TranslationBottomSheet.vue';
 import HighlightNoteModal from '../../components/reader/HighlightNoteModal.vue';
 import BookNotesDrawer from '../../components/reader/BookNotesDrawer.vue';
@@ -38,7 +38,7 @@ const { triggerChapterTldr } = useAiReader();
 const { openBook, nextPage, prevPage, goToLocator, goToPage, setPaginationMode, applyTheme, closeBook, activeEngine } = useReader();
 const { queueProgress } = useBookSync();
 const { enableKeepAwake, disableKeepAwake } = useAppLifecycle();
-const { clearSelection } = useTextSelection();
+const { clearSelection, bindIframeSelection } = useTextSelection();
 const translationService = TranslationService.getInstance();
 
 watch(
@@ -158,6 +158,35 @@ startxref
           highlightStore.selectedHighlight = hl;
         },
       );
+
+      if (activeEngine.value) {
+        const engineAny = activeEngine.value as any;
+        if (typeof engineAny.onIframeReady !== 'undefined') {
+          engineAny.onIframeReady = (iframe: HTMLIFrameElement) => {
+            bindIframeSelection(iframe);
+          };
+        }
+        if (typeof engineAny.onSelectionChange !== 'undefined') {
+          engineAny.onSelectionChange = (detail: { text: string; locator?: string }) => {
+            readerStore.setSelection({
+              text: detail.text,
+              x: 0,
+              y: 0,
+              width: 0,
+              height: 0,
+            });
+            if (detail.locator) {
+              highlightStore.setActiveSelection({
+                text: detail.text,
+                locator: detail.locator,
+                format: (book.format || 'epub') as any,
+                x: 0,
+                y: 0,
+              });
+            }
+          };
+        }
+      }
     } catch (openErr) {
       console.error('[Reader] Failed to open book:', openErr);
     }
@@ -284,6 +313,12 @@ const handleBackButtonPress = async (): Promise<void> => {
 };
 
 const handleCenterTap = () => {
+  if (readerStore.selection || highlightStore.activeSelection || highlightStore.selectedHighlight) {
+    clearSelection();
+    highlightStore.setActiveSelection(null);
+    highlightStore.selectedHighlight = null;
+    return;
+  }
   readerStore.toggleImmersiveMode();
 };
 
@@ -393,7 +428,7 @@ defineExpose({
       @change-pagination="setPaginationMode"
     />
 
-    <TextSelectionTooltip
+    <ReaderSelectionBar
       @translate="handleTranslate"
     />
 
