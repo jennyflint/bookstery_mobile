@@ -12,11 +12,11 @@ interface TextContentItem {
 }
 
 function initPdfWorker(): void {
-  if (typeof window !== 'undefined' && pdfjsLib.GlobalWorkerOptions) {
+  if (typeof window !== 'undefined' && 'GlobalWorkerOptions' in pdfjsLib && pdfjsLib.GlobalWorkerOptions) {
     if (!pdfjsLib.GlobalWorkerOptions.workerSrc) {
       pdfjsLib.GlobalWorkerOptions.workerSrc =
         pdfWorkerUrl ||
-        `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version || '3.11.174'}/pdf.worker.min.js`;
+        `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${'version' in pdfjsLib ? pdfjsLib.version : '3.11.174'}/pdf.worker.min.js`;
     }
   }
 }
@@ -52,6 +52,11 @@ export class PdfEngine extends BaseEngine {
   private visibilityHandler: (() => void) | null = null;
   private currentColors: { bg: string; text: string } | null = null;
   private isProgrammaticScroll: boolean = false;
+
+  private getClampedDpr(): number {
+    const rawDpr = typeof window !== 'undefined' ? window.devicePixelRatio || 1 : 1;
+    return Math.min(rawDpr, 2.5);
+  }
 
   async init(
     container: HTMLElement,
@@ -239,6 +244,13 @@ export class PdfEngine extends BaseEngine {
       }
     }
 
+    const initialSlot = scrollWrapper.querySelector<HTMLElement>(
+      `#pdf-page-slot-${this.currentPageNumber}`,
+    );
+    if (initialSlot) {
+      await this.renderPageIntoSlot(this.currentPageNumber, initialSlot, targetScale);
+    }
+
     this.pageObserver = new IntersectionObserver(
       (entries) => {
         entries.forEach((entry) => {
@@ -306,20 +318,48 @@ export class PdfEngine extends BaseEngine {
       return;
     }
 
+    const existingTask = this.activeSlotRenderTasks.get(pageNumber);
+    if (existingTask) {
+      try {
+        existingTask.cancel();
+      } catch {
+      }
+      this.activeSlotRenderTasks.delete(pageNumber);
+    }
+
+    let pageProxy: pdfjsLib.PDFPageProxy | null = null;
+    let renderTask: pdfjsLib.RenderTask | null = null;
+
     try {
-      const pageProxy = await this.pdfDocument.getPage(pageNumber);
+      pageProxy = await this.pdfDocument.getPage(pageNumber);
       const viewport = pageProxy.getViewport({ scale });
+      const dpr = this.getClampedDpr();
+
+      const concurrentTask = this.activeSlotRenderTasks.get(pageNumber);
+      if (concurrentTask) {
+        try {
+          concurrentTask.cancel();
+        } catch {
+        }
+        this.activeSlotRenderTasks.delete(pageNumber);
+      }
 
       const canvas = document.createElement('canvas');
-      canvas.className = 'pdf-canvas block w-full h-auto bg-white';
-      canvas.width = Math.floor(viewport.width);
-      canvas.height = Math.floor(viewport.height);
-      const canvasContext = canvas.getContext('2d');
+      canvas.className = 'pdf-canvas block bg-white';
+      canvas.width = Math.floor(viewport.width * dpr);
+      canvas.height = Math.floor(viewport.height * dpr);
+      canvas.style.width = `${Math.floor(viewport.width)}px`;
+      canvas.style.height = `${Math.floor(viewport.height)}px`;
+
+      const canvasContext = canvas.getContext('2d', { alpha: false });
 
       if (!canvasContext) {
         pageProxy.cleanup();
         return;
       }
+
+      canvasContext.imageSmoothingEnabled = true;
+      canvasContext.imageSmoothingQuality = 'high';
 
       slot.innerHTML = '';
       slot.appendChild(canvas);
@@ -330,18 +370,27 @@ export class PdfEngine extends BaseEngine {
 
       const textLayerDiv = document.createElement('div');
       textLayerDiv.className =
-        'pdf-text-layer absolute top-0 left-0 overflow-hidden pointer-events-auto leading-none w-full h-full';
+        'pdf-text-layer absolute top-0 left-0 overflow-hidden pointer-events-auto leading-none';
+      textLayerDiv.style.width = `${viewport.width}px`;
+      textLayerDiv.style.height = `${viewport.height}px`;
+      textLayerDiv.style.setProperty('--scale-factor', `${viewport.scale ?? scale}`);
       slot.appendChild(textLayerDiv);
 
-      const renderTask = pageProxy.render({
+      const transform = dpr !== 1 ? [dpr, 0, 0, dpr, 0, 0] : undefined;
+      const renderContext = {
         canvasContext,
+        transform,
         viewport,
-      });
+      };
+
+      renderTask = pageProxy.render(renderContext);
       this.activeSlotRenderTasks.set(pageNumber, renderTask);
 
       await renderTask.promise;
       this.renderedPages.add(pageNumber);
-      this.activeSlotRenderTasks.delete(pageNumber);
+      if (this.activeSlotRenderTasks.get(pageNumber) === renderTask) {
+        this.activeSlotRenderTasks.delete(pageNumber);
+      }
 
       try {
         const textContent = await pageProxy.getTextContent();
@@ -358,9 +407,19 @@ export class PdfEngine extends BaseEngine {
       this.restoreHighlightsForPage(pageNumber, slot);
 
       pageProxy.cleanup();
-    } catch (err) {
+    } catch (err: unknown) {
+      if (renderTask && this.activeSlotRenderTasks.get(pageNumber) === renderTask) {
+        this.activeSlotRenderTasks.delete(pageNumber);
+      }
+      const error = err as { name?: string };
+      if (error && error.name === 'RenderingCancelledException') {
+        try {
+          pageProxy?.cleanup();
+        } catch {
+        }
+        return;
+      }
       this.renderedPages.delete(pageNumber);
-      this.activeSlotRenderTasks.delete(pageNumber);
       console.warn(`[PdfEngine] Error rendering page ${pageNumber} into slot:`, err);
     }
   }
@@ -458,7 +517,23 @@ export class PdfEngine extends BaseEngine {
     }
 
     this.currentPageNumber = pageNumber;
-    this.currentPageProxy = await this.pdfDocument.getPage(pageNumber);
+    const pageProxy = await this.pdfDocument.getPage(pageNumber);
+
+    if (this.activeRenderTask) {
+      try {
+        this.activeRenderTask.cancel();
+      } catch {
+      }
+      this.activeRenderTask = null;
+    }
+
+    if (this.currentPageProxy) {
+      try {
+        this.currentPageProxy.cleanup();
+      } catch {
+      }
+    }
+    this.currentPageProxy = pageProxy;
 
     this.container.innerHTML = '';
 
@@ -468,11 +543,14 @@ export class PdfEngine extends BaseEngine {
 
     const canvas = document.createElement('canvas');
     canvas.className = 'pdf-canvas block shadow-md rounded bg-white';
-    const canvasContext = canvas.getContext('2d');
+    const canvasContext = canvas.getContext('2d', { alpha: false });
 
     if (!canvasContext) {
       throw new Error('Failed to obtain 2D canvas context for PDF rendering');
     }
+
+    canvasContext.imageSmoothingEnabled = true;
+    canvasContext.imageSmoothingQuality = 'high';
 
     const containerWidth =
       this.container.clientWidth > 0 ? this.container.clientWidth : window.innerWidth || 360;
@@ -484,9 +562,10 @@ export class PdfEngine extends BaseEngine {
     const scaleY = (containerHeight - 32) / initialViewport.height;
     const targetScale = Math.max(Math.min(scaleX, scaleY, 2.5), 0.2);
     const viewport = this.currentPageProxy.getViewport({ scale: targetScale });
+    const dpr = this.getClampedDpr();
 
-    canvas.width = Math.floor(viewport.width);
-    canvas.height = Math.floor(viewport.height);
+    canvas.width = Math.floor(viewport.width * dpr);
+    canvas.height = Math.floor(viewport.height * dpr);
     canvas.style.width = `${Math.floor(viewport.width)}px`;
     canvas.style.height = `${Math.floor(viewport.height)}px`;
 
@@ -499,8 +578,9 @@ export class PdfEngine extends BaseEngine {
     const textLayerDiv = document.createElement('div');
     textLayerDiv.className =
       'pdf-text-layer absolute top-0 left-0 overflow-hidden pointer-events-auto leading-none';
-    textLayerDiv.style.width = `${Math.floor(viewport.width)}px`;
-    textLayerDiv.style.height = `${Math.floor(viewport.height)}px`;
+    textLayerDiv.style.width = `${viewport.width}px`;
+    textLayerDiv.style.height = `${viewport.height}px`;
+    textLayerDiv.style.setProperty('--scale-factor', `${viewport.scale ?? targetScale}`);
     viewportContainer.appendChild(textLayerDiv);
 
     // Mouse wheel navigation in buttons mode
@@ -524,13 +604,18 @@ export class PdfEngine extends BaseEngine {
 
     this.container.appendChild(viewportContainer);
 
-    this.activeRenderTask = this.currentPageProxy.render({
+    const transform = dpr !== 1 ? [dpr, 0, 0, dpr, 0, 0] : undefined;
+    const renderContext = {
       canvasContext,
+      transform,
       viewport,
-    });
+    };
+
+    const renderTask = this.currentPageProxy.render(renderContext);
+    this.activeRenderTask = renderTask;
 
     try {
-      await this.activeRenderTask.promise;
+      await renderTask.promise;
     } catch (err: unknown) {
       const error = err as { name?: string };
       if (error && error.name === 'RenderingCancelledException') {
@@ -539,7 +624,9 @@ export class PdfEngine extends BaseEngine {
       console.error('[PdfEngine] Error during canvas rendering:', err);
       throw err;
     } finally {
-      this.activeRenderTask = null;
+      if (this.activeRenderTask === renderTask) {
+        this.activeRenderTask = null;
+      }
     }
 
     try {

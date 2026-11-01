@@ -5,6 +5,7 @@ import { mockPdfDocument, mockPdfPage, mockRenderTask } from '../../mocks/book-e
 
 vi.mock('pdfjs-dist', () => ({
   getDocument: vi.fn(),
+  GlobalWorkerOptions: { workerSrc: '' },
 }));
 
 describe('PdfEngine', () => {
@@ -67,5 +68,104 @@ describe('PdfEngine', () => {
     expect(mockPdfPage.cleanup).toHaveBeenCalled();
     expect(mockPdfDocument.destroy).toHaveBeenCalled();
     expect(container.innerHTML).toBe('');
+  });
+
+  it('should apply clamped DPR scaling to canvas buffer while keeping logical CSS and TextLayer dimensions', async () => {
+    const originalDpr = window.devicePixelRatio;
+    Object.defineProperty(window, 'devicePixelRatio', {
+      value: 3.5,
+      configurable: true,
+      writable: true,
+    });
+
+    mockPdfPage.getViewport.mockImplementation(({ scale }: { scale: number }) => ({
+      width: 600 * scale,
+      height: 800 * scale,
+      scale,
+    }));
+
+    try {
+      await engine.init(container, new Uint8Array([1, 2, 3]));
+
+      const canvas = container.querySelector<HTMLCanvasElement>('.pdf-canvas');
+      const textLayer = container.querySelector<HTMLElement>('.pdf-text-layer');
+      expect(canvas).not.toBeNull();
+      expect(textLayer).not.toBeNull();
+
+      // Scale in default test container (320px min width -> (320 - 32) / 600 = 0.48)
+      // Logical viewport: 288 x 384; Clamped DPR: 2.5 -> 720 x 960
+      expect(canvas!.width).toBe(Math.floor(288 * 2.5));
+      expect(canvas!.height).toBe(Math.floor(384 * 2.5));
+      expect(canvas!.style.width).toBe('288px');
+      expect(canvas!.style.height).toBe('384px');
+
+      expect(textLayer!.style.width).toBe('288px');
+      expect(textLayer!.style.height).toBe('384px');
+      expect(textLayer!.style.getPropertyValue('--scale-factor')).toBe('0.48');
+
+      expect(HTMLCanvasElement.prototype.getContext).toHaveBeenCalledWith('2d', { alpha: false });
+      expect(mockPdfPage.render).toHaveBeenCalledWith(
+        expect.objectContaining({
+          transform: [2.5, 0, 0, 2.5, 0, 0],
+        }),
+      );
+    } finally {
+      Object.defineProperty(window, 'devicePixelRatio', {
+        value: originalDpr,
+        configurable: true,
+        writable: true,
+      });
+      mockPdfPage.getViewport.mockReturnValue({ width: 600, height: 800 });
+    }
+  });
+
+  it('should omit transform when DPR is 1 and handle RenderingCancelledException gracefully', async () => {
+    const originalDpr = window.devicePixelRatio;
+    Object.defineProperty(window, 'devicePixelRatio', {
+      value: 1,
+      configurable: true,
+      writable: true,
+    });
+
+    try {
+      await engine.init(container, new Uint8Array([1, 2, 3]));
+      await engine.setPaginationMode('buttons');
+
+      expect(mockPdfPage.render).toHaveBeenLastCalledWith(
+        expect.objectContaining({
+          transform: undefined,
+        }),
+      );
+
+      let rejectFirstRender: ((reason?: unknown) => void) | null = null;
+      const pendingPromise = new Promise<void>((_, reject) => {
+        rejectFirstRender = reject;
+      });
+      const firstCancelSpy = vi.fn(() => {
+        const err = new Error('Rendering cancelled');
+        err.name = 'RenderingCancelledException';
+        rejectFirstRender?.(err);
+      });
+
+      mockPdfPage.render
+        .mockReturnValueOnce({
+          promise: pendingPromise,
+          cancel: firstCancelSpy,
+        })
+        .mockReturnValueOnce(mockRenderTask);
+
+      const firstNav = engine.goTo('2');
+      await Promise.resolve();
+      const secondNav = engine.goTo('3');
+
+      await expect(Promise.all([firstNav, secondNav])).resolves.not.toThrow();
+      expect(firstCancelSpy).toHaveBeenCalled();
+    } finally {
+      Object.defineProperty(window, 'devicePixelRatio', {
+        value: originalDpr,
+        configurable: true,
+        writable: true,
+      });
+    }
   });
 });
