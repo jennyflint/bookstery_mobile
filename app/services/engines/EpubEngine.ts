@@ -22,6 +22,9 @@ export class EpubEngine extends BaseEngine {
   private rendition: Rendition | null = null;
   private currentCfi: string = '';
   private currentPercentage: number = 0;
+  private currentPage: number = 1;
+  private totalPages: number = 1;
+  private currentChapterTitle: string | null = null;
   private currentColors: { bg: string; text: string } | null = null;
   private currentFontSize: number = 18;
   private currentLineHeight: number = 1.6;
@@ -252,17 +255,7 @@ export class EpubEngine extends BaseEngine {
 
     this.rendition.on('relocated', (location: Location) => {
       this.clearSelection();
-      if (location && location.start) {
-        this.currentCfi = location.start.cfi;
-        if (location.start.percentage !== undefined) {
-          this.currentPercentage = Number((location.start.percentage * 100).toFixed(2));
-        } else if (this.book?.locations && this.book.locations.length()) {
-          const calcPercent = this.book.locations.percentageFromCfi(this.currentCfi);
-          this.currentPercentage = Number(((calcPercent || 0) * 100).toFixed(2));
-        }
-        this.location = this.getCurrentLocation();
-        this.onLocationChange?.(this.location);
-      }
+      this.updatePaginationFromLocation(location);
     });
 
     this.rendition.on('rendered', () => {
@@ -276,6 +269,57 @@ export class EpubEngine extends BaseEngine {
     });
   }
 
+  private isValidEpubLocator(locator?: string): boolean {
+    if (!locator || typeof locator !== 'string') return false;
+    const trimmed = locator.trim();
+    if (!trimmed) return false;
+    // Pure numeric strings (e.g. from PDF page numbers) or FB2 paragraph IDs are invalid for EPUB
+    if (/^\d+$/.test(trimmed) || trimmed.startsWith('fb2-p-')) {
+      return false;
+    }
+    return true;
+  }
+
+  private updatePaginationFromLocation(location?: Location): void {
+    if (location?.start?.cfi) {
+      this.currentCfi = location.start.cfi;
+    }
+
+    if (location?.start?.href && this.book?.navigation) {
+      try {
+        const navItem = this.book.navigation.get(location.start.href);
+        if (navItem && navItem.label) {
+          this.currentChapterTitle = navItem.label.trim();
+        }
+      } catch {}
+    }
+
+    const totalLocations = this.book?.locations?.length?.() || 0;
+
+    if (totalLocations > 0 && this.currentCfi) {
+      const locIndex = (this.book?.locations?.locationFromCfi(this.currentCfi) as unknown) as number;
+      this.totalPages = totalLocations;
+      this.currentPage = typeof locIndex === 'number' && locIndex >= 0 ? Math.min(totalLocations, locIndex + 1) : 1;
+      const pct = location?.start?.percentage ?? this.book?.locations?.percentageFromCfi(this.currentCfi) ?? 0;
+      this.currentPercentage = Number((Math.min(1, Math.max(0, pct)) * 100).toFixed(2));
+    } else if (location?.start?.displayed) {
+      this.currentPage = Math.max(1, location.start.displayed.page || 1);
+      this.totalPages = Math.max(1, location.start.displayed.total || 1);
+      const displayedPct =
+        location.start.percentage !== undefined && location.start.percentage !== null
+          ? location.start.percentage
+          : this.totalPages > 0
+            ? this.currentPage / this.totalPages
+            : 0;
+      this.currentPercentage = Number((Math.min(1, Math.max(0, displayedPct)) * 100).toFixed(2));
+    } else if (location?.start?.percentage !== undefined && location.start.percentage !== null) {
+      this.currentPercentage = Number((Math.min(1, Math.max(0, location.start.percentage)) * 100).toFixed(2));
+    }
+
+    this.location = this.getCurrentLocation();
+    this.onLocationChange?.(this.location);
+  }
+
   async init(
     container: HTMLElement,
     data: Uint8Array | ArrayBuffer | string,
@@ -283,6 +327,13 @@ export class EpubEngine extends BaseEngine {
   ): Promise<void> {
     this.container = container;
     this.container.innerHTML = '';
+
+    this.currentCfi = '';
+    this.currentPercentage = 0;
+    this.currentPage = 1;
+    this.totalPages = 1;
+    this.currentChapterTitle = null;
+    this.location = this.getCurrentLocation();
 
     const bookData = data instanceof Uint8Array ? data.buffer : data;
     this.book = ePub(bookData as string | ArrayBuffer);
@@ -303,14 +354,23 @@ export class EpubEngine extends BaseEngine {
 
     try {
       await this.book.locations.generate(1024);
+      if (this.rendition.location) {
+        this.updatePaginationFromLocation(this.rendition.location);
+      }
     } catch {
     }
 
-    if (initialLocator) {
-      this.currentCfi = initialLocator;
-      await this.rendition.display(initialLocator);
+    const validLocator = this.isValidEpubLocator(initialLocator) ? initialLocator : undefined;
+
+    if (validLocator) {
+      this.currentCfi = validLocator;
+      await this.rendition.display(validLocator);
     } else {
       await this.rendition.display();
+    }
+
+    if (this.rendition.location) {
+      this.updatePaginationFromLocation(this.rendition.location);
     }
   }
 
@@ -319,9 +379,34 @@ export class EpubEngine extends BaseEngine {
       return;
     }
     if (locator) {
-      await this.rendition.display(locator);
-      this.currentCfi = locator;
-      this.location = this.getCurrentLocation();
+      const trimmed = locator.trim();
+      if (/^\d+$/.test(trimmed)) {
+        const pageNum = parseInt(trimmed, 10);
+        if (this.book?.locations && this.book.locations.length()) {
+          const locIndex = Math.max(0, pageNum - 1);
+          const targetCfi = this.book.locations.cfiFromLocation(locIndex);
+          if (targetCfi && typeof targetCfi === 'string' && targetCfi !== '-1') {
+            await this.rendition.display(targetCfi);
+            this.currentCfi = targetCfi;
+            if (this.rendition.location) {
+              this.updatePaginationFromLocation(this.rendition.location);
+            } else {
+              this.location = this.getCurrentLocation();
+            }
+            return;
+          }
+        }
+      }
+
+      if (this.isValidEpubLocator(locator)) {
+        await this.rendition.display(locator);
+        this.currentCfi = locator;
+        if (this.rendition.location) {
+          this.updatePaginationFromLocation(this.rendition.location);
+        } else {
+          this.location = this.getCurrentLocation();
+        }
+      }
     }
   }
 
@@ -340,7 +425,10 @@ export class EpubEngine extends BaseEngine {
   getCurrentLocation(): ReaderLocation {
     return {
       locator: this.currentCfi || '',
+      currentPage: this.currentPage,
+      totalPages: this.totalPages,
       progressPercentage: this.currentPercentage,
+      chapterTitle: this.currentChapterTitle || undefined,
     };
   }
 
@@ -363,10 +451,13 @@ export class EpubEngine extends BaseEngine {
         this.applyTheme(this.currentColors);
       }
       this.attachRenditionListeners();
-      if (currentLoc) {
+      if (currentLoc && this.isValidEpubLocator(currentLoc)) {
         await this.rendition.display(currentLoc);
       } else {
         await this.rendition.display();
+      }
+      if (this.rendition.location) {
+        this.updatePaginationFromLocation(this.rendition.location);
       }
     }
   }
@@ -582,6 +673,13 @@ export class EpubEngine extends BaseEngine {
       }
       this.book = null;
     }
+
+    this.currentCfi = '';
+    this.currentPercentage = 0;
+    this.currentPage = 1;
+    this.totalPages = 1;
+    this.currentChapterTitle = null;
+    this.location = this.getCurrentLocation();
 
     super.destroy();
   }

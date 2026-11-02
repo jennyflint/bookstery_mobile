@@ -214,12 +214,29 @@ export const useReaderStore = defineStore('reader', {
       } catch {}
       clearAllNativeSelections();
     },
+    resetPagination(): void {
+      this.currentPage = 1;
+      this.totalPages = 1;
+      this.currentChapterTitle = null;
+    },
     setBook(book: BookRecord): void {
       this.clearTextSelection();
       this.clearReflowCache();
+      this.resetPagination();
       this.currentBook = book;
       this.locator = book.locator;
       this.progressPercentage = book.progress_percentage;
+      if (book.format === 'pdf') {
+        if (book.locator && /^\d+$/.test(book.locator.trim())) {
+          const parsed = parseInt(book.locator.trim(), 10);
+          if (parsed > 0) {
+            this.currentPage = parsed;
+          }
+        }
+        if (book.total_items > 0) {
+          this.totalPages = book.total_items;
+        }
+      }
     },
     updateLocation(location: ReaderLocation): void {
       if (
