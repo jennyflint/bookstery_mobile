@@ -21,6 +21,8 @@ const emit = defineEmits<{
 const readerStore = useReaderStore();
 const { handleReaderTap } = useTextSelection();
 const viewportWrapperRef = ref<HTMLElement | null>(null);
+const scrollContainerRef = ref<HTMLElement | null>(null);
+const zoomSizerRef = ref<HTMLElement | null>(null);
 const gestureTargetRef = ref<HTMLElement | null>(null);
 const containerRef = ref<ZoomableContainerElement | null>(null);
 
@@ -43,8 +45,25 @@ const {
   doubleTapDelayMs: 300,
   debounceMs: 200,
   getContentSize: () => {
-    if (readerStore.currentBook?.format === 'pdf' && readerStore.isReflowMode) return null;
-    return containerRef.value?.__readerGetContentSize?.() ?? null;
+    if (readerStore.currentBook?.format === 'pdf' && readerStore.isReflowMode) {
+      const reflowEl = document.querySelector(
+        '[data-testid="pdf-reflow-view"]',
+      ) as HTMLElement | null;
+      if (reflowEl) {
+        return {
+          width: Math.max(reflowEl.scrollWidth, reflowEl.clientWidth),
+          height: Math.max(reflowEl.scrollHeight, reflowEl.clientHeight),
+        };
+      }
+      return null;
+    }
+    const engineSize = containerRef.value?.__readerGetContentSize?.();
+    if (engineSize) return engineSize;
+    const child = containerRef.value?.firstElementChild as HTMLElement | null;
+    if (child && child.offsetWidth > 0 && child.offsetHeight > 0) {
+      return { width: child.offsetWidth, height: child.offsetHeight };
+    }
+    return null;
   },
   // Visual viewport zoom is decoupled from engine re-rendering across all formats.
   // Zoom gestures scale content purely via GPU-accelerated CSS transform without re-rendering.
@@ -104,6 +123,31 @@ const containerTransformStyle = computed(() => ({
   willChange: 'transform',
 }));
 
+const scrollContainerStyle = computed(() => ({
+  touchAction: scale.value > 1.0 ? 'pan-x pan-y' : 'none',
+  WebkitOverflowScrolling: 'touch' as const,
+}));
+
+const zoomSizerStyle = computed(() => {
+  const content = containerRef.value?.__readerGetContentSize?.();
+  const baseW = content?.width || (viewportWrapperRef.value?.clientWidth ?? 0);
+  const baseH = content?.height || (viewportWrapperRef.value?.clientHeight ?? 0);
+  if (scale.value > 1.0 && baseW > 0 && baseH > 0) {
+    return {
+      width: `${Math.round(baseW * scale.value)}px`,
+      height: `${Math.round(baseH * scale.value)}px`,
+      margin: '0 auto',
+      position: 'relative' as const,
+    };
+  }
+  return {
+    width: '100%',
+    height: '100%',
+    margin: '0 auto',
+    position: 'relative' as const,
+  };
+});
+
 const handleContainerClick = (event: MouseEvent) => {
   if (didInteractRecently() || scale.value > 1.0) {
     return;
@@ -129,6 +173,8 @@ const handleContainerClick = (event: MouseEvent) => {
 
 defineExpose({
   containerRef,
+  scrollContainerRef,
+  zoomSizerRef,
   resetZoom,
   setZoom,
   zoomIn,
@@ -150,33 +196,52 @@ defineExpose({
     :style="viewportStyle"
     @click="handleContainerClick"
   >
-    <!-- Everything inside the gesture target (engine content and PDF reflow layer) zooms together. -->
+    <!-- Outer Scroll Container (zoom-scroll-container) -->
     <div
-      ref="gestureTargetRef"
-      data-testid="reader-gesture-target"
-      class="relative w-full h-full"
-      :style="containerTransformStyle"
+      ref="scrollContainerRef"
+      data-testid="zoom-scroll-container"
+      class="zoom-scroll-container w-full h-full relative"
+      :class="scale > 1.0 ? 'overflow-auto' : 'overflow-hidden'"
+      :style="scrollContainerStyle"
     >
+      <!-- Middle Layout Sizer (zoom-sizer) -->
       <div
-        ref="containerRef"
-        data-testid="reader-engine-container"
-        class="w-full max-w-full min-w-0 h-full flex flex-col items-center justify-center overflow-auto"
-        :style="containerPaddingStyle"
-      />
-
-      <!-- Reflow Mode Layer for PDF -->
-      <div
-        v-if="readerStore.currentBook?.format === 'pdf' && readerStore.isReflowMode"
-        data-testid="reflow-viewport-layer"
-        class="absolute inset-0 z-20 w-full h-full"
+        ref="zoomSizerRef"
+        data-testid="zoom-sizer"
+        class="zoom-sizer min-w-full min-h-full"
+        :style="zoomSizerStyle"
       >
-        <PdfViewer
-          :active-engine="props.activeEngine"
-          :page-number="readerStore.currentPage"
-          @next="emit('next')"
-          @prev="emit('prev')"
-          @center-tap="emit('center-tap')"
-        />
+        <!-- Inner Scaled Content (zoom-content) & Gesture Target -->
+        <div
+          ref="gestureTargetRef"
+          data-testid="reader-gesture-target"
+          data-testid-alias="zoom-content"
+          class="zoom-content relative w-full h-full"
+          :style="containerTransformStyle"
+        >
+          <div
+            ref="containerRef"
+            data-testid="reader-engine-container"
+            class="w-full max-w-full min-w-0 h-full flex flex-col items-center justify-center overflow-auto"
+            :style="containerPaddingStyle"
+          />
+
+          <!-- Reflow Mode Layer for PDF -->
+          <div
+            v-if="readerStore.currentBook?.format === 'pdf' && readerStore.isReflowMode"
+            data-testid="reflow-viewport-layer"
+            class="absolute inset-0 z-20 w-full h-full"
+          >
+            <PdfViewer
+              :active-engine="props.activeEngine"
+              :page-number="readerStore.currentPage"
+              :zoom-scale="scale"
+              @next="emit('next')"
+              @prev="emit('prev')"
+              @center-tap="emit('center-tap')"
+            />
+          </div>
+        </div>
       </div>
     </div>
 

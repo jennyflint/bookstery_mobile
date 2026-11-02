@@ -12,6 +12,9 @@ const props = defineProps<{
     getPageProxy?: (page: number) => Promise<PDFPageProxy | null>;
   } | null;
   pageNumber?: number;
+  zoomScale?: number;
+  baseWidth?: number;
+  baseHeight?: number;
 }>();
 
 const emit = defineEmits<{
@@ -24,6 +27,45 @@ const readerStore = useReaderStore();
 
 const isReflow = computed<boolean>(() => {
   return readerStore.isReflowMode;
+});
+
+const scale = computed<number>(() => {
+  return props.zoomScale ?? 1.0;
+});
+
+const sizerStyle = computed(() => {
+  if (scale.value > 1.0 && props.baseWidth && props.baseHeight) {
+    return {
+      width: `${Math.round(props.baseWidth * scale.value)}px`,
+      height: `${Math.round(props.baseHeight * scale.value)}px`,
+      margin: '0 auto',
+      position: 'relative' as const,
+    };
+  }
+  return {
+    width: '100%',
+    height: '100%',
+    margin: '0 auto',
+    position: 'relative' as const,
+  };
+});
+
+const contentStyle = computed(() => {
+  if (scale.value > 1.0) {
+    return {
+      transformOrigin: '0 0',
+      transform: `scale(${scale.value})`,
+      width: props.baseWidth ? `${props.baseWidth}px` : '100%',
+      height: props.baseHeight ? `${props.baseHeight}px` : '100%',
+      willChange: 'transform',
+    };
+  }
+  return {
+    transformOrigin: '0 0',
+    transform: 'scale(1)',
+    width: '100%',
+    height: '100%',
+  };
 });
 
 /*
@@ -49,8 +91,8 @@ const forwardPrev = (): void => {
 <template>
   <div
     data-testid="pdf-viewer"
-    class="relative w-full max-w-full min-w-0 h-full overflow-auto select-text flex flex-col items-center justify-center"
-    style="contain: layout paint; backface-visibility: hidden; -webkit-backface-visibility: hidden; will-change: transform;"
+    class="zoom-scroll-container relative w-full max-w-full min-w-0 h-full overflow-auto select-text flex flex-col items-center justify-center"
+    style="contain: layout paint; backface-visibility: hidden; -webkit-backface-visibility: hidden; will-change: transform; touch-action: pan-x pan-y; -webkit-overflow-scrolling: touch;"
   >
     <!-- Reflow Mode -->
     <PdfReflowView
@@ -58,12 +100,26 @@ const forwardPrev = (): void => {
       :pdf-document="pdfDocument"
       :active-engine="activeEngine"
       :page-number="pageNumber ?? readerStore.currentPage"
+      :zoom-scale="scale"
       @next="forwardNext"
       @prev="forwardPrev"
       @center-tap="forwardCenterTap"
     />
 
     <!-- Standard Canvas / Slot Mode -->
-    <slot v-else />
+    <div
+      v-else
+      data-testid="zoom-sizer"
+      class="zoom-sizer flex items-center justify-center"
+      :style="sizerStyle"
+    >
+      <div
+        data-testid="zoom-content"
+        class="zoom-content flex items-center justify-center"
+        :style="contentStyle"
+      >
+        <slot />
+      </div>
+    </div>
   </div>
 </template>

@@ -31,33 +31,37 @@ const handleCenterTap = (): void => {
   emit('center-tap');
 };
 
-const handleNextPage = async (): Promise<void> => {
+/** Returns active scroll container (reflow view or zoomed scroll container) if vertically scrollable */
+const getActiveScrollElement = (): HTMLElement | null => {
   if (readerStore.isReflowMode && readerStore.currentBook?.format === 'pdf') {
-    const reflowEl = document.querySelector(
-      '[data-testid="pdf-reflow-view"]',
-    ) as HTMLElement | null;
-    if (reflowEl) {
-      const { scrollTop, clientHeight, scrollHeight } = reflowEl;
-      if (scrollTop + clientHeight < scrollHeight - 15) {
-        reflowEl.scrollBy({ top: Math.max(100, clientHeight * 0.9), behavior: 'smooth' });
-        return;
-      }
+    return document.querySelector('[data-testid="pdf-reflow-view"]') as HTMLElement | null;
+  }
+  const zoomScroll = document.querySelector('[data-testid="zoom-scroll-container"]') as HTMLElement | null;
+  if (zoomScroll && zoomScroll.scrollHeight > zoomScroll.clientHeight + 10) {
+    return zoomScroll;
+  }
+  return null;
+};
+
+const handleNextPage = async (): Promise<void> => {
+  const scrollEl = getActiveScrollElement();
+  if (scrollEl) {
+    const { scrollTop, clientHeight, scrollHeight } = scrollEl;
+    if (scrollTop + clientHeight < scrollHeight - 15) {
+      scrollEl.scrollBy({ top: Math.max(100, clientHeight * 0.9), behavior: 'smooth' });
+      return;
     }
   }
   emit('next');
 };
 
 const handlePrevPage = async (): Promise<void> => {
-  if (readerStore.isReflowMode && readerStore.currentBook?.format === 'pdf') {
-    const reflowEl = document.querySelector(
-      '[data-testid="pdf-reflow-view"]',
-    ) as HTMLElement | null;
-    if (reflowEl) {
-      const { scrollTop, clientHeight } = reflowEl;
-      if (scrollTop > 15) {
-        reflowEl.scrollBy({ top: -Math.max(100, clientHeight * 0.9), behavior: 'smooth' });
-        return;
-      }
+  const scrollEl = getActiveScrollElement();
+  if (scrollEl) {
+    const { scrollTop, clientHeight } = scrollEl;
+    if (scrollTop > 15) {
+      scrollEl.scrollBy({ top: -Math.max(100, clientHeight * 0.9), behavior: 'smooth' });
+      return;
     }
   }
   emit('prev');

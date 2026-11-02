@@ -50,4 +50,35 @@ describe('PinchZoomController pan limits', () => {
     expect(controller.getState().translateX).toBe(0);
     expect(controller.getState().translateY).toBe(0);
   });
+
+  it('accurately calculates vertical clamping bounds when scaled height exceeds viewport', () => {
+    const controller = new PinchZoomController({
+      wrapper: createWrapper(),
+      getContentSize: () => ({ width: 400, height: 600 }),
+    });
+    // 600 * 2 = 1200 high, viewport is 800 -> maxPanY = (1200 - 800) / 2 = 200
+    const clamped = controller.clampTranslation(0, 999, 2);
+    expect(clamped.y).toBe(200);
+
+    const clampedTop = controller.clampTranslation(0, -999, 2);
+    expect(clampedTop.y).toBe(-200);
+  });
+
+  it('pans smoothly via desktop mouse wheel events when scale > 1.0', () => {
+    const wrapper = createWrapper();
+    const controller = new PinchZoomController({
+      wrapper,
+    });
+
+    controller.setScale(2.0);
+    expect(controller.getState().scale).toBe(2.0);
+
+    // Wheel event with deltaY = 50 -> pans down
+    wrapper.dispatchEvent(new WheelEvent('wheel', { deltaX: 0, deltaY: 50, cancelable: true }));
+    expect(controller.getState().translateY).toBe(-50);
+
+    // Wheel event with deltaX = 30 -> pans right
+    wrapper.dispatchEvent(new WheelEvent('wheel', { deltaX: 30, deltaY: 0, cancelable: true }));
+    expect(controller.getState().translateX).toBe(-30);
+  });
 });

@@ -76,4 +76,33 @@ describe('PdfViewer Component', () => {
     expect(rootEl.style.backfaceVisibility).toBe('hidden');
     expect(rootEl.style.willChange).toBe('transform');
   });
+
+  it('should render zoom-sizer and zoom-content layers and expand layout when zoomScale is passed', () => {
+    const wrapper = mount(PdfViewer, {
+      global: {
+        plugins: [pinia],
+        mocks: {
+          $t: (k: string) => k,
+        },
+      },
+      props: {
+        zoomScale: 2.0,
+        baseWidth: 400,
+        baseHeight: 600,
+      },
+      slots: {
+        default: '<canvas width="400" height="600" />',
+      },
+    });
+
+    const sizer = wrapper.find('[data-testid="zoom-sizer"]');
+    expect(sizer.exists()).toBe(true);
+    expect((sizer.element as HTMLElement).style.width).toBe('800px');
+    expect((sizer.element as HTMLElement).style.height).toBe('1200px');
+
+    const content = wrapper.find('[data-testid="zoom-content"]');
+    expect(content.exists()).toBe(true);
+    expect((content.element as HTMLElement).style.transform).toBe('scale(2)');
+    expect(['0 0', '0px 0px']).toContain((content.element as HTMLElement).style.transformOrigin);
+  });
 });

@@ -214,4 +214,86 @@ describe('PdfReflowView Component', () => {
 
     expect(wrapper.emitted('prev')).toBeTruthy();
   });
+
+  it('should structure nested layers: zoom-scroll-container, zoom-sizer, and zoom-content with pan-x pan-y touch-action', async () => {
+    (parser.extractReflowBlocks as unknown as ReturnType<typeof vi.fn>).mockResolvedValue([
+      { id: '1', type: 'p', text: 'Reflow text', pageNumber: 1 },
+    ]);
+
+    const wrapper = mount(PdfReflowView, {
+      props: {
+        pdfDocument: mockPdfDoc as any,
+        pageNumber: 1,
+        zoomScale: 1.5,
+      },
+      global: {
+        plugins: [pinia],
+        mocks: {
+          $t: (k: string) => k,
+        },
+      },
+    });
+
+    await wrapper.vm.$nextTick();
+
+    const root = wrapper.find('[data-testid="pdf-reflow-view"]');
+    expect(root.classes()).toContain('zoom-scroll-container');
+    expect((root.element as HTMLElement).style.touchAction).toBe('pan-x pan-y');
+
+    const sizer = wrapper.find('[data-testid="zoom-sizer"]');
+    expect(sizer.exists()).toBe(true);
+    expect((sizer.element as HTMLElement).style.width).toBe('150%');
+
+    const content = wrapper.find('[data-testid="zoom-content"]');
+    expect(content.exists()).toBe(true);
+    expect((content.element as HTMLElement).style.transform).toBe('scale(1.5)');
+    expect(['0 0', '0px 0px']).toContain((content.element as HTMLElement).style.transformOrigin);
+  });
+
+  it('should not call preventDefault on single-finger touchstart to allow native vertical scrolling', async () => {
+    const wrapper = mount(PdfReflowView, {
+      props: {
+        pdfDocument: mockPdfDoc as any,
+        pageNumber: 1,
+      },
+      global: {
+        plugins: [pinia],
+        mocks: {
+          $t: (k: string) => k,
+        },
+      },
+    });
+
+    const el = wrapper.find('[data-testid="pdf-reflow-view"]').element as HTMLElement;
+    const touch = createTouchEvent('touchstart', [{ clientX: 200, clientY: 350 }]);
+    const preventSpy = vi.spyOn(touch, 'preventDefault');
+
+    el.dispatchEvent(touch);
+    expect(preventSpy).not.toHaveBeenCalled();
+  });
+
+  it('should prevent default and update scale during two-finger pinch gesture', async () => {
+    const wrapper = mount(PdfReflowView, {
+      props: {
+        pdfDocument: mockPdfDoc as any,
+        pageNumber: 1,
+      },
+      global: {
+        plugins: [pinia],
+        mocks: {
+          $t: (k: string) => k,
+        },
+      },
+    });
+
+    const el = wrapper.find('[data-testid="pdf-reflow-view"]').element as HTMLElement;
+    const pinchStart = createTouchEvent('touchstart', [
+      { clientX: 200, clientY: 200 },
+      { clientX: 300, clientY: 200 },
+    ]);
+    const preventSpy = vi.spyOn(pinchStart, 'preventDefault');
+
+    el.dispatchEvent(pinchStart);
+    expect(preventSpy).toHaveBeenCalled();
+  });
 });

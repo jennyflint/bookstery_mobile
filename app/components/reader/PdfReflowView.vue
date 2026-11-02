@@ -14,6 +14,7 @@ const props = defineProps<{
     getPageProxy?: (page: number) => Promise<PDFPageProxy | null>;
   } | null;
   pageNumber?: number;
+  zoomScale?: number;
 }>();
 
 const emit = defineEmits<{
@@ -172,16 +173,103 @@ async function loadPage(pageNumber: number): Promise<void> {
   }
 }
 
-// Horizontal swipe gesture detection
+// Gesture & pinch-to-zoom handling
 let touchStartX = 0;
 let touchStartY = 0;
 let touchStartTime = 0;
+let initialPinchDistance = 0;
+let pinchMidpoint = { x: 0, y: 0 };
+const localZoomScale = ref<number>(1.0);
+const effectiveZoom = computed(() => props.zoomScale ?? localZoomScale.value);
+
+const reflowSizerStyle = computed(() => {
+  if (effectiveZoom.value > 1.0) {
+    return {
+      width: `${Math.round(100 * effectiveZoom.value)}%`,
+      minHeight: '100%',
+      margin: '0 auto',
+      position: 'relative' as const,
+    };
+  }
+  return {
+    width: '100%',
+    minHeight: '100%',
+    position: 'relative' as const,
+  };
+});
+
+const reflowContentStyle = computed(() => {
+  if (effectiveZoom.value > 1.0) {
+    return {
+      transformOrigin: '0 0',
+      transform: `scale(${effectiveZoom.value})`,
+      width: `${Math.round(100 / effectiveZoom.value)}%`,
+      willChange: 'transform',
+    };
+  }
+  return {
+    transformOrigin: '0 0',
+    transform: 'scale(1)',
+    width: '100%',
+  };
+});
 
 function handleTouchStart(e: TouchEvent): void {
+  if (e.touches.length === 2 && e.touches[0] && e.touches[1]) {
+    // 2-finger pinch start: prevent browser-level page zoom
+    if (e.cancelable) {
+      e.preventDefault();
+    }
+    const t1 = e.touches[0];
+    const t2 = e.touches[1];
+    initialPinchDistance = Math.hypot(t2.clientX - t1.clientX, t2.clientY - t1.clientY);
+    pinchMidpoint = {
+      x: (t1.clientX + t2.clientX) / 2,
+      y: (t1.clientY + t2.clientY) / 2,
+    };
+    return;
+  }
+
   if (e.touches.length === 1 && e.touches[0]) {
+    // 1-finger touch: DO NOT preventDefault, allowing smooth native scrolling
     touchStartX = e.touches[0].clientX;
     touchStartY = e.touches[0].clientY;
     touchStartTime = Date.now();
+  }
+}
+
+function handleTouchMove(e: TouchEvent): void {
+  if (e.touches.length === 2 && e.touches[0] && e.touches[1]) {
+    if (e.cancelable) {
+      e.preventDefault();
+    }
+    const t1 = e.touches[0];
+    const t2 = e.touches[1];
+    const dist = Math.hypot(t2.clientX - t1.clientX, t2.clientY - t1.clientY);
+    if (initialPinchDistance > 0) {
+      const container = scrollContainerRef.value;
+      const oldScale = effectiveZoom.value;
+      const ratio = dist / initialPinchDistance;
+      const nextScale = Math.min(Math.max(oldScale * ratio, 1.0), 4.0);
+
+      if (container && oldScale !== nextScale) {
+        const rect = container.getBoundingClientRect();
+        const midX = pinchMidpoint.x - rect.left;
+        const midY = pinchMidpoint.y - rect.top;
+
+        // Anchor focal point during pinch zoom
+        const contentX = (container.scrollLeft + midX) / oldScale;
+        const contentY = (container.scrollTop + midY) / oldScale;
+
+        localZoomScale.value = Number(nextScale.toFixed(2));
+
+        container.scrollLeft = contentX * nextScale - midX;
+        container.scrollTop = contentY * nextScale - midY;
+      } else {
+        localZoomScale.value = Number(nextScale.toFixed(2));
+      }
+      initialPinchDistance = dist;
+    }
   }
 }
 
@@ -191,7 +279,8 @@ function handleTouchEnd(e: TouchEvent): void {
     return;
   }
 
-  if (e.changedTouches.length === 1 && e.changedTouches[0]) {
+  // Only consider horizontal swipe page navigation if scale is close to 1.0
+  if (effectiveZoom.value <= 1.05 && e.changedTouches.length === 1 && e.changedTouches[0]) {
     const touch = e.changedTouches[0];
     const dx = touch.clientX - touchStartX;
     const dy = touch.clientY - touchStartY;
@@ -205,6 +294,16 @@ function handleTouchEnd(e: TouchEvent): void {
         emit('prev');
       }
     }
+  }
+}
+
+function handleWheel(e: WheelEvent): void {
+  if (e.ctrlKey) {
+    if (e.cancelable) {
+      e.preventDefault();
+    }
+    const factor = 1 - e.deltaY * 0.01;
+    localZoomScale.value = Number(Math.min(Math.max(localZoomScale.value * factor, 1.0), 4.0).toFixed(2));
   }
 }
 
@@ -248,14 +347,32 @@ onMounted(() => {
   <div
     ref="scrollContainerRef"
     data-testid="pdf-reflow-view"
-    class="relative w-full h-full overflow-y-auto overflow-x-hidden select-text transition-colors duration-200"
+    class="zoom-scroll-container relative w-full h-full overflow-y-auto overflow-x-auto select-text transition-colors duration-200"
     :class="themeClass"
-    :style="typographyStyle"
+    :style="[
+      typographyStyle,
+      {
+        touchAction: 'pan-x pan-y',
+        WebkitOverflowScrolling: 'touch',
+      },
+    ]"
     @touchstart="handleTouchStart"
+    @touchmove="handleTouchMove"
     @touchend="handleTouchEnd"
+    @wheel="handleWheel"
     @click="handleContainerClick"
   >
-    <div class="px-5 py-6 max-w-prose mx-auto select-text min-h-full flex flex-col justify-between">
+    <div
+      data-testid="zoom-sizer"
+      class="zoom-sizer"
+      :style="reflowSizerStyle"
+    >
+      <div
+        data-testid="zoom-content"
+        class="zoom-content"
+        :style="reflowContentStyle"
+      >
+        <div class="px-5 py-6 max-w-prose mx-auto select-text min-h-full flex flex-col justify-between">
       <!-- Loading indicator -->
       <div
         v-if="isLoading"
@@ -361,6 +478,8 @@ onMounted(() => {
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
           </svg>
         </button>
+      </div>
+    </div>
       </div>
     </div>
   </div>

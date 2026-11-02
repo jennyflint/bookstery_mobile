@@ -78,6 +78,7 @@ export class PinchZoomController {
   private boundTouchMove: (e: TouchEvent) => void;
   private boundTouchEnd: (e: TouchEvent) => void;
   private boundTouchCancel: (e: TouchEvent) => void;
+  private boundWheel: (e: WheelEvent) => void;
   private externalSourceDisposers: Array<() => void> = [];
 
   constructor(config: PinchZoomControllerConfig) {
@@ -99,6 +100,7 @@ export class PinchZoomController {
     this.boundTouchMove = this.handleTouchMove.bind(this);
     this.boundTouchEnd = this.handleTouchEnd.bind(this);
     this.boundTouchCancel = this.handleTouchCancel.bind(this);
+    this.boundWheel = this.handleWheel.bind(this);
 
     this.attach();
   }
@@ -109,6 +111,7 @@ export class PinchZoomController {
     this.wrapper.addEventListener('touchmove', this.boundTouchMove, { passive: false });
     this.wrapper.addEventListener('touchend', this.boundTouchEnd, { passive: false });
     this.wrapper.addEventListener('touchcancel', this.boundTouchCancel, { passive: false });
+    this.wrapper.addEventListener('wheel', this.boundWheel, { passive: false });
     this.applyTransform();
   }
 
@@ -170,12 +173,15 @@ export class PinchZoomController {
     }
     const { width, height } = this.getViewportDimensions();
     const content = this.getContentSize?.();
-    const maxOffsetX = content
-      ? Math.max(0, (content.width * targetScale - width) / 2)
-      : Math.max(0, (width * (targetScale - 1)) / 2);
-    const maxOffsetY = content
-      ? Math.max(0, (content.height * targetScale - height) / 2)
-      : Math.max(0, (height * (targetScale - 1)) / 2);
+    const baseW = content ? content.width : width;
+    const baseH = content ? content.height : height;
+
+    const scaledWidth = baseW * targetScale;
+    const scaledHeight = baseH * targetScale;
+
+    const maxOffsetX = Math.max(0, (scaledWidth - width) / 2);
+    const maxOffsetY = Math.max(0, (scaledHeight - height) / 2);
+
     return {
       x: Math.min(Math.max(x, -maxOffsetX), maxOffsetX),
       y: Math.min(Math.max(y, -maxOffsetY), maxOffsetY),
@@ -512,6 +518,31 @@ export class PinchZoomController {
     this.setScale(this.scale + step);
   }
 
+  public handleWheel(e: WheelEvent): void {
+    if (this.scale <= 1.0) {
+      return;
+    }
+    if (e.cancelable) {
+      e.preventDefault();
+    }
+    // Trackpad pinch-to-zoom (ctrlKey / metaKey)
+    if (e.ctrlKey || e.metaKey) {
+      const zoomFactor = 1 - e.deltaY * 0.01;
+      const targetScale = Math.min(Math.max(this.scale * zoomFactor, this.minScale), this.maxScale);
+      this.setScale(targetScale);
+      return;
+    }
+    const deltaX = e.deltaX;
+    const deltaY = e.deltaY;
+
+    const nextX = this.translateX - deltaX;
+    const nextY = this.translateY - deltaY;
+    const clamped = this.clampTranslation(nextX, nextY, this.scale);
+    this.translateX = Math.round(clamped.x);
+    this.translateY = Math.round(clamped.y);
+    this.applyTransform();
+  }
+
   public zoomOut(step: number = 0.25): void {
     this.setScale(this.scale - step);
   }
@@ -546,18 +577,23 @@ export class PinchZoomController {
     const onMove = forward(this.handleTouchMove.bind(this));
     const onEnd = forward(this.handleTouchEnd.bind(this));
     const onCancel = (): void => this.handleTouchCancel();
+    const onWheel = (e: WheelEvent): void => {
+      this.handleWheel(e);
+    };
 
     const options: AddEventListenerOptions = { passive: false };
     doc.addEventListener('touchstart', onStart, options);
     doc.addEventListener('touchmove', onMove, options);
     doc.addEventListener('touchend', onEnd, options);
     doc.addEventListener('touchcancel', onCancel, options);
+    doc.addEventListener('wheel', onWheel, options);
 
     const dispose = (): void => {
       doc.removeEventListener('touchstart', onStart);
       doc.removeEventListener('touchmove', onMove);
       doc.removeEventListener('touchend', onEnd);
       doc.removeEventListener('touchcancel', onCancel);
+      doc.removeEventListener('wheel', onWheel);
     };
     this.externalSourceDisposers.push(dispose);
     return dispose;
@@ -571,5 +607,6 @@ export class PinchZoomController {
     this.wrapper.removeEventListener('touchmove', this.boundTouchMove);
     this.wrapper.removeEventListener('touchend', this.boundTouchEnd);
     this.wrapper.removeEventListener('touchcancel', this.boundTouchCancel);
+    this.wrapper.removeEventListener('wheel', this.boundWheel);
   }
 }
