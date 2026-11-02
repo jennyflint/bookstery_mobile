@@ -277,6 +277,9 @@ const renderMarkdown = (text: string): string => {
 
             <!-- Bubble -->
             <div
+              :data-message-id="msg.id"
+              :data-block-id="msg.id"
+              :data-part-type="msg.role === 'user' ? 'dialogue' : 'narration'"
               class="group relative max-w-[88%] rounded-2xl px-4 py-3 text-xs leading-relaxed shadow-xs"
               :class="
                 msg.role === 'user'

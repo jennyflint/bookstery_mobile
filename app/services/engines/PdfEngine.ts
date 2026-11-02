@@ -1591,7 +1591,7 @@ export class PdfEngine extends BaseEngine {
       if (hl.format !== 'pdf') return false;
       try {
         const parsed = JSON.parse(hl.locator);
-        if (parsed && parsed.page === pageNumber) return true;
+        if (parsed && (parsed.page === pageNumber || parsed.locator === String(pageNumber))) return true;
       } catch {}
       const asNum = parseInt(hl.locator, 10);
       return asNum === pageNumber;
@@ -1625,11 +1625,29 @@ export class PdfEngine extends BaseEngine {
 
         for (const span of spans) {
           const spanText = (span.textContent || '').trim();
-          if (spanText && (spanText.includes(textTarget) || textTarget.includes(spanText))) {
+          if (!spanText) continue;
+
+          // If contextSentence is provided, prefer matching span within context
+          if (hl.contextSentence && !hl.contextSentence.includes(spanText) && !spanText.includes(textTarget)) {
+            continue;
+          }
+
+          const spanLower = spanText.toLowerCase();
+          const targetLower = textTarget.toLowerCase();
+          if (spanLower.includes(targetLower)) {
             const spanRect = span.getBoundingClientRect();
-            const relX = spanRect.left - slotRect.left;
+            const matchIdx = spanLower.indexOf(targetLower);
+            const L = spanText.length || 1;
+            const startRatio = Math.max(0, Math.min(1, matchIdx / L));
+            const widthRatio = Math.max(0, Math.min(1 - startRatio, textTarget.length / L));
+
+            const relX = spanRect.left - slotRect.left + spanRect.width * startRatio;
             const relY = spanRect.top - slotRect.top;
-            this.createSvgRect(overlay, relX, relY, spanRect.width, spanRect.height, colors, hl);
+            const relWidth = Math.max(2, spanRect.width * widthRatio);
+
+            this.createSvgRect(overlay, relX, relY, relWidth, spanRect.height, colors, hl);
+            drawn = true;
+            break; // Stop after first matched occurrence to prevent page-wide proliferation
           }
         }
       }

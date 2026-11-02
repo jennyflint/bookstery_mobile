@@ -120,4 +120,30 @@ describe('HighlightRepository', () => {
     const deleted = await repository.getHighlightById('hl-1');
     expect(deleted).toBeNull();
   });
+
+  it('should preserve clean locator while saving anchor metadata (blockId and offsets)', async () => {
+    const inputWithAnchors: CreateHighlightInput = {
+      id: 'hl-anchored',
+      book_id: 'book-anchors',
+      format: 'epub',
+      locator: 'epubcfi(/6/8[chap03]!/4/2/6/1:0,/4/2/6/1:10)',
+      selected_text: 'Important passage',
+      color: 'yellow',
+      blockId: 'bubble-7',
+      partType: 'dialogue',
+      startOffset: 15,
+      endOffset: 32,
+    };
+
+    const created = await repository.createHighlight(inputWithAnchors);
+    expect(created.locator).toBe('epubcfi(/6/8[chap03]!/4/2/6/1:0,/4/2/6/1:10)');
+    expect(created.blockId).toBe('bubble-7');
+    expect(created.startOffset).toBe(15);
+    expect(created.endOffset).toBe(32);
+
+    const fetched = await repository.getHighlightById('hl-anchored');
+    expect(fetched?.locator).toBe('epubcfi(/6/8[chap03]!/4/2/6/1:0,/4/2/6/1:10)');
+    expect(fetched?.blockId).toBe('bubble-7');
+    expect(fetched?.startOffset).toBe(15);
+  });
 });

@@ -151,12 +151,20 @@ export interface TextSelectionDetail {
   text: string;
   x: number;
   y: number;
-  width: number;
-  height: number;
+  width?: number;
+  height?: number;
   /** EPUB CFI range or PDF/FB2 page locator of the selection, when known. */
   locator?: string;
   /** Sentence surrounding the selected text (used for AI context / dictionary). */
   contextSentence?: string;
+  /** DOM container identity (block/message ID or line index). */
+  blockId?: string;
+  /** Section attribute (e.g. 'dialogue' vs. 'narration'). */
+  partType?: string;
+  /** Exact character start offset within the block container. */
+  startOffset?: number;
+  /** Exact character end offset within the block container. */
+  endOffset?: number;
 }
 
 /**
@@ -170,6 +178,14 @@ export interface EngineSelectionDetail {
   contextSentence?: string;
   /** Selection bounding rect in top-level viewport coordinates. */
   rect?: { x: number; y: number; width: number; height: number };
+  /** DOM container identity (block/message ID or line index). */
+  blockId?: string;
+  /** Section attribute (e.g. 'dialogue' vs. 'narration'). */
+  partType?: string;
+  /** Exact character start offset within the block container. */
+  startOffset?: number;
+  /** Exact character end offset within the block container. */
+  endOffset?: number;
 }
 
 /** Tap event emitted by engines that render inside their own document (iframes). */

@@ -105,10 +105,16 @@ export function useAiReader() {
 
     highlightStore.setActiveSelection({
       text: textToHighlight,
-      locator: readerStore.locator || '1',
+      locator: readerStore.selection?.locator || readerStore.locator || '1',
       format: readerStore.currentBook.format,
-      x: window.innerWidth / 2,
-      y: 120,
+      x: readerStore.selection?.x ?? window.innerWidth / 2,
+      y: readerStore.selection?.y ?? 120,
+      width: readerStore.selection?.width,
+      height: readerStore.selection?.height,
+      blockId: readerStore.selection?.blockId,
+      partType: readerStore.selection?.partType,
+      startOffset: readerStore.selection?.startOffset,
+      endOffset: readerStore.selection?.endOffset,
     });
 
     await highlightStore.createHighlight(color, noteContent);

@@ -26,7 +26,14 @@ export interface HighlightRecord {
   note: string | null;
   created_at: number;
   updated_at: number;
+  blockId?: string;
+  partType?: string;
+  startOffset?: number;
+  endOffset?: number;
+  contextSentence?: string;
 }
+
+export type Highlight = HighlightRecord;
 
 export interface CreateHighlightInput {
   id?: string;
@@ -36,6 +43,11 @@ export interface CreateHighlightInput {
   selected_text: string;
   color: HighlightColor;
   note?: string | null;
+  blockId?: string;
+  partType?: string;
+  startOffset?: number;
+  endOffset?: number;
+  contextSentence?: string;
 }
 
 export interface UpdateHighlightInput {
@@ -51,4 +63,8 @@ export interface ActiveHighlightSelection {
   y: number;
   width?: number;
   height?: number;
+  blockId?: string;
+  partType?: string;
+  startOffset?: number;
+  endOffset?: number;
 }

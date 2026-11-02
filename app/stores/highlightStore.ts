@@ -28,6 +28,10 @@ export const useHighlightStore = defineStore('highlight', {
     draftColor: 'green' as HighlightColor,
     draftLocator: '',
     draftFormat: 'epub' as BookFormat,
+    draftBlockId: undefined as string | undefined,
+    draftPartType: undefined as string | undefined,
+    draftStartOffset: undefined as number | undefined,
+    draftEndOffset: undefined as number | undefined,
     searchQuery: '',
     activeColorFilter: null as HighlightColor | null,
   }),
@@ -82,6 +86,10 @@ export const useHighlightStore = defineStore('highlight', {
         selected_text: this.activeSelection.text,
         color,
         note: noteText || null,
+        blockId: this.activeSelection.blockId,
+        partType: this.activeSelection.partType,
+        startOffset: this.activeSelection.startOffset,
+        endOffset: this.activeSelection.endOffset,
       });
 
       this.highlights.unshift(newHighlight);
@@ -97,6 +105,10 @@ export const useHighlightStore = defineStore('highlight', {
       this.draftColor = color;
       this.draftLocator = this.activeSelection.locator;
       this.draftFormat = this.activeSelection.format;
+      this.draftBlockId = this.activeSelection.blockId;
+      this.draftPartType = this.activeSelection.partType;
+      this.draftStartOffset = this.activeSelection.startOffset;
+      this.draftEndOffset = this.activeSelection.endOffset;
       this.isNoteModalOpen = true;
     },
 
@@ -107,6 +119,10 @@ export const useHighlightStore = defineStore('highlight', {
       this.draftColor = highlight.color;
       this.draftLocator = highlight.locator;
       this.draftFormat = highlight.format;
+      this.draftBlockId = highlight.blockId;
+      this.draftPartType = highlight.partType;
+      this.draftStartOffset = highlight.startOffset;
+      this.draftEndOffset = highlight.endOffset;
       this.selectedHighlight = highlight;
       this.isNoteModalOpen = true;
     },
@@ -132,6 +148,10 @@ export const useHighlightStore = defineStore('highlight', {
           selected_text: this.draftQuoteText,
           color: this.draftColor,
           note: noteContent || null,
+          blockId: this.draftBlockId,
+          partType: this.draftPartType,
+          startOffset: this.draftStartOffset,
+          endOffset: this.draftEndOffset,
         });
         this.highlights.unshift(created);
         this.activeSelection = null;
@@ -197,6 +217,10 @@ export const useHighlightStore = defineStore('highlight', {
       this.draftHighlightId = null;
       this.draftQuoteText = '';
       this.draftNoteText = '';
+      this.draftBlockId = undefined;
+      this.draftPartType = undefined;
+      this.draftStartOffset = undefined;
+      this.draftEndOffset = undefined;
     },
 
     closeQuoteCardModal(): void {

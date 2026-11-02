@@ -473,5 +473,40 @@ describe('PdfEngine', () => {
     engine.resetZoom();
     expect(engine.getZoom()).toBe(1.0);
   });
+
+  it('should render highlight SVG overlay rects when setHighlights is called', async () => {
+    await engine.init(container, new Uint8Array([1, 2, 3]));
+    const slot = container.querySelector('.pdf-page-slot') as HTMLElement;
+    expect(slot).not.toBeNull();
+
+    let textLayer = slot.querySelector('.pdf-text-layer');
+    if (!textLayer) {
+      textLayer = document.createElement('div');
+      textLayer.className = 'textLayer pdf-text-layer';
+      slot.appendChild(textLayer);
+    }
+    const span = document.createElement('span');
+    span.textContent = 'Some highlighted sample sentence in PDF';
+    textLayer.appendChild(span);
+
+    engine.setHighlights([
+      {
+        id: 'hl-test-1',
+        book_id: 'b-1',
+        format: 'pdf',
+        locator: '1',
+        selected_text: 'sample',
+        color: 'yellow',
+        note: null,
+        created_at: 1000,
+        updated_at: 1000,
+      },
+    ]);
+
+    const overlay = slot.querySelector('.pdf-highlight-overlay');
+    expect(overlay).not.toBeNull();
+    const rect = overlay?.querySelector('rect[data-highlight-id="hl-test-1"]');
+    expect(rect).not.toBeNull();
+  });
 });
 

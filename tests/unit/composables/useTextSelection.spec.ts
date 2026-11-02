@@ -146,5 +146,87 @@ describe('Selection lifecycle', () => {
       expect(handleReaderTap(onTap)).toBe(false);
       expect(onTap).toHaveBeenCalledOnce();
     });
+
+    it('extracts exact blockId, partType, and character offsets in handleSelection and syncs to highlightStore', () => {
+      const readerStore = useReaderStore();
+      const highlightStore = useHighlightStore();
+      const { handleSelection } = useTextSelection();
+
+      const bubble = document.createElement('div');
+      bubble.setAttribute('data-block-id', 'bubble-42');
+      bubble.setAttribute('data-part-type', 'dialogue');
+      bubble.textContent = 'Я певен, що треба йти';
+      document.body.appendChild(bubble);
+
+      const range = document.createRange();
+      const textNode = bubble.firstChild as Text;
+      // Select the single letter "е" inside "певен" (index 3 to 4)
+      range.setStart(textNode, 3);
+      range.setEnd(textNode, 4);
+
+      vi.spyOn(window, 'getSelection').mockReturnValue({
+        toString: () => 'е',
+        isCollapsed: false,
+        rangeCount: 1,
+        getRangeAt: () => range,
+        removeAllRanges: vi.fn(),
+      } as unknown as Selection);
+
+      handleSelection();
+      vi.advanceTimersByTime(SELECTION_SETTLE_MS);
+
+      expect(readerStore.selection).not.toBeNull();
+      expect(readerStore.selection?.text).toBe('е');
+      expect(readerStore.selection?.blockId).toBe('bubble-42');
+      expect(readerStore.selection?.partType).toBe('dialogue');
+      expect(readerStore.selection?.startOffset).toBe(3);
+      expect(readerStore.selection?.endOffset).toBe(4);
+
+      expect(highlightStore.activeSelection).not.toBeNull();
+      expect(highlightStore.activeSelection?.text).toBe('е');
+      expect(highlightStore.activeSelection?.blockId).toBe('bubble-42');
+      expect(highlightStore.activeSelection?.partType).toBe('dialogue');
+      expect(highlightStore.activeSelection?.startOffset).toBe(3);
+      expect(highlightStore.activeSelection?.endOffset).toBe(4);
+
+      bubble.remove();
+    });
+
+    it('dismisses active selection on book exit or page navigation', () => {
+      const readerStore = useReaderStore();
+      const highlightStore = useHighlightStore();
+      const { dismissSelection } = useTextSelection();
+
+      readerStore.setSelection({
+        text: 'Sample selection',
+        locator: '1',
+        blockId: 'block-1',
+        startOffset: 0,
+        endOffset: 6,
+        x: 0,
+        y: 0,
+        width: 10,
+        height: 10,
+      });
+      highlightStore.setActiveSelection({
+        text: 'Sample selection',
+        locator: '1',
+        format: 'epub',
+        blockId: 'block-1',
+        startOffset: 0,
+        endOffset: 6,
+        x: 0,
+        y: 0,
+      });
+
+      expect(readerStore.selection).not.toBeNull();
+      expect(highlightStore.activeSelection).not.toBeNull();
+
+      dismissSelection();
+
+      expect(readerStore.selection).toBeNull();
+      expect(highlightStore.activeSelection).toBeNull();
+      expect(highlightStore.selectedHighlight).toBeNull();
+    });
   });
 });

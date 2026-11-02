@@ -5,6 +5,9 @@ import { useReaderStore } from '../../stores/readerStore';
 import { useTextSelection } from '../../composables/useTextSelection';
 import { shouldIgnoreReaderTap } from '../../services/selection/SelectionGuard';
 import { extractReflowBlocks } from '../../utils/pdfReflowParser';
+import { renderTextSegments, getHighlightStyle } from '../../utils/highlightRenderer';
+import { useHighlightStore } from '../../stores/highlightStore';
+import type { HighlightRecord } from '../../types/highlight';
 import type { ReflowBlock } from '../../types/reflow';
 
 const props = defineProps<{
@@ -25,7 +28,25 @@ const emit = defineEmits<{
 
 const { t } = useI18n();
 const readerStore = useReaderStore();
+const highlightStore = useHighlightStore();
 const { handleReaderTap } = useTextSelection();
+
+const getBlockSegments = (block: ReflowBlock) => {
+  const partType = block.type === 'h2' || block.type === 'h3' ? 'heading' : 'narration';
+  const pageHighlights = highlightStore.highlights.filter((hl) => {
+    if (hl.format !== 'pdf') return false;
+    const hlPage = parseInt(hl.locator, 10);
+    if (!isNaN(hlPage) && hlPage !== activePageNumber.value) {
+      return false;
+    }
+    return true;
+  });
+  return renderTextSegments(block.text, block.id, partType, pageHighlights);
+};
+
+const handleHighlightClick = (hl: HighlightRecord): void => {
+  highlightStore.selectedHighlight = hl;
+};
 
 const scrollContainerRef = ref<HTMLElement | null>(null);
 const fallbackCanvasRef = ref<HTMLCanvasElement | null>(null);
@@ -427,27 +448,60 @@ onMounted(() => {
           <h2
             v-if="block.type === 'h2'"
             data-testid="reflow-h2"
+            :data-block-id="block.id"
+            data-part-type="heading"
             class="font-bold mb-4 mt-6 tracking-tight select-text"
             :style="heading2Style"
           >
-            {{ block.text }}
+            <template v-for="(seg, idx) in getBlockSegments(block)" :key="idx">
+              <mark
+                v-if="seg.isHighlight && seg.highlight"
+                :class="`bookstery-hl hl-${seg.highlight.color} cursor-pointer rounded-xs px-0.5 select-text transition-colors`"
+                :style="getHighlightStyle(seg.highlight)"
+                :data-highlight-id="seg.highlight.id"
+                @click.stop="handleHighlightClick(seg.highlight)"
+              >{{ seg.text }}</mark>
+              <template v-else>{{ seg.text }}</template>
+            </template>
           </h2>
 
           <h3
             v-else-if="block.type === 'h3'"
             data-testid="reflow-h3"
+            :data-block-id="block.id"
+            data-part-type="heading"
             class="font-bold mb-3 mt-4 tracking-normal select-text"
             :style="heading3Style"
           >
-            {{ block.text }}
+            <template v-for="(seg, idx) in getBlockSegments(block)" :key="idx">
+              <mark
+                v-if="seg.isHighlight && seg.highlight"
+                :class="`bookstery-hl hl-${seg.highlight.color} cursor-pointer rounded-xs px-0.5 select-text transition-colors`"
+                :style="getHighlightStyle(seg.highlight)"
+                :data-highlight-id="seg.highlight.id"
+                @click.stop="handleHighlightClick(seg.highlight)"
+              >{{ seg.text }}</mark>
+              <template v-else>{{ seg.text }}</template>
+            </template>
           </h3>
 
           <p
             v-else
             data-testid="reflow-p"
+            :data-block-id="block.id"
+            data-part-type="narration"
             class="mb-4 text-justify select-text text-[length:inherit] leading-[inherit]"
           >
-            {{ block.text }}
+            <template v-for="(seg, idx) in getBlockSegments(block)" :key="idx">
+              <mark
+                v-if="seg.isHighlight && seg.highlight"
+                :class="`bookstery-hl hl-${seg.highlight.color} cursor-pointer rounded-xs px-0.5 select-text transition-colors`"
+                :style="getHighlightStyle(seg.highlight)"
+                :data-highlight-id="seg.highlight.id"
+                @click.stop="handleHighlightClick(seg.highlight)"
+              >{{ seg.text }}</mark>
+              <template v-else>{{ seg.text }}</template>
+            </template>
           </p>
         </template>
       </article>

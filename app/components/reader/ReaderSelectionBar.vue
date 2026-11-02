@@ -66,6 +66,12 @@ const handleApplyHighlight = async (color: HighlightColor) => {
       format: (readerStore.currentBook?.format || 'epub') as 'pdf' | 'epub' | 'fb2',
       x: readerStore.selection.x,
       y: readerStore.selection.y,
+      width: readerStore.selection.width,
+      height: readerStore.selection.height,
+      blockId: readerStore.selection.blockId,
+      partType: readerStore.selection.partType,
+      startOffset: readerStore.selection.startOffset,
+      endOffset: readerStore.selection.endOffset,
     });
   }
 
@@ -89,6 +95,12 @@ const handleAddNote = () => {
       format: (readerStore.currentBook?.format || 'epub') as 'pdf' | 'epub' | 'fb2',
       x: readerStore.selection.x,
       y: readerStore.selection.y,
+      width: readerStore.selection.width,
+      height: readerStore.selection.height,
+      blockId: readerStore.selection.blockId,
+      partType: readerStore.selection.partType,
+      startOffset: readerStore.selection.startOffset,
+      endOffset: readerStore.selection.endOffset,
     });
   }
 
@@ -112,6 +124,12 @@ const handleQuoteCard = () => {
       format: (readerStore.currentBook?.format || 'epub') as 'pdf' | 'epub' | 'fb2',
       x: readerStore.selection.x,
       y: readerStore.selection.y,
+      width: readerStore.selection.width,
+      height: readerStore.selection.height,
+      blockId: readerStore.selection.blockId,
+      partType: readerStore.selection.partType,
+      startOffset: readerStore.selection.startOffset,
+      endOffset: readerStore.selection.endOffset,
     });
   }
 

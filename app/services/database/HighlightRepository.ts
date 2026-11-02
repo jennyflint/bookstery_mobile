@@ -41,6 +41,30 @@ function generateUuid(): string {
   });
 }
 
+function hydrateHighlight(row: HighlightRecord): HighlightRecord {
+  if (row.locator && (row.locator.startsWith('{') || row.locator.startsWith('['))) {
+    try {
+      const parsed = JSON.parse(row.locator);
+      if (parsed && typeof parsed === 'object') {
+        const restoredLocator = parsed.locator
+          ? String(parsed.locator)
+          : parsed.page !== undefined
+            ? String(parsed.page)
+            : row.locator;
+        return {
+          ...row,
+          locator: restoredLocator,
+          blockId: row.blockId ?? parsed.blockId,
+          partType: row.partType ?? parsed.partType,
+          startOffset: row.startOffset ?? parsed.startOffset,
+          endOffset: row.endOffset ?? parsed.endOffset,
+        };
+      }
+    } catch {}
+  }
+  return row;
+}
+
 export class HighlightRepository {
   private static instance: HighlightRepository | null = null;
   private sqliteService: SqliteService;
@@ -70,6 +94,11 @@ export class HighlightRepository {
       note: input.note !== undefined ? input.note : null,
       created_at: now,
       updated_at: now,
+      blockId: input.blockId,
+      partType: input.partType,
+      startOffset: input.startOffset,
+      endOffset: input.endOffset,
+      contextSentence: input.contextSentence,
     };
 
     if (this.sqliteService.isNativePlatform()) {
@@ -106,12 +135,14 @@ export class HighlightRepository {
         WHERE book_id = ?
         ORDER BY created_at DESC;
       `;
-      return await this.sqliteService.querySql<HighlightRecord>(query, [bookId]);
+      const rows = await this.sqliteService.querySql<HighlightRecord>(query, [bookId]);
+      return rows.map(hydrateHighlight);
     }
 
     const items = readStorage<HighlightRecord[]>(STORAGE_KEYS.HIGHLIGHTS, []);
     return items
       .filter((item) => item.book_id === bookId)
+      .map(hydrateHighlight)
       .sort((a, b) => b.created_at - a.created_at);
   }
 
@@ -123,12 +154,12 @@ export class HighlightRepository {
         'SELECT * FROM highlights WHERE id = ?;',
         [id],
       );
-      return rows.length > 0 ? rows[0] : null;
+      return rows.length > 0 ? hydrateHighlight(rows[0]) : null;
     }
 
     const items = readStorage<HighlightRecord[]>(STORAGE_KEYS.HIGHLIGHTS, []);
     const found = items.find((item) => item.id === id);
-    return found ? { ...found } : null;
+    return found ? hydrateHighlight({ ...found }) : null;
   }
 
   async updateNote(id: string, note: string | null): Promise<HighlightRecord> {

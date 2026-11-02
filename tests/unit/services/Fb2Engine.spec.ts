@@ -98,4 +98,26 @@ describe('Fb2Engine', () => {
     engine.destroy();
     expect(container.innerHTML).toBe('');
   });
+
+  it('should render highlight marks in paragraphs when setHighlights is called', async () => {
+    await engine.init(container, sampleFb2Xml);
+
+    engine.setHighlights([
+      {
+        id: 'hl-fb2-1',
+        book_id: 'b-fb2',
+        format: 'fb2',
+        locator: 'fb2-p-0',
+        selected_text: 'first paragraph',
+        color: 'green',
+        note: null,
+        created_at: 1000,
+        updated_at: 1000,
+      },
+    ]);
+
+    const mark = container.querySelector('mark[data-highlight-id="hl-fb2-1"]');
+    expect(mark).not.toBeNull();
+    expect(mark?.textContent).toBe('first paragraph');
+  });
 });

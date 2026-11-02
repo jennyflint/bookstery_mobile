@@ -1,5 +1,6 @@
 import JSZip from 'jszip';
 import { BaseEngine } from './BaseEngine';
+import { createRangeFromOffsets } from '../../utils/highlightRenderer';
 import type { HighlightRecord, ReaderLocation } from '../../types';
 
 export class Fb2Engine extends BaseEngine {
@@ -43,12 +44,26 @@ export class Fb2Engine extends BaseEngine {
     for (const hl of this.highlights) {
       if (hl.format !== 'fb2') continue;
       const textToFind = hl.selected_text.trim();
-      if (!textToFind) continue;
+      if (!textToFind && hl.startOffset === undefined) continue;
 
       const palette = colorBorderMap[hl.color] || colorBorderMap.green;
 
       let targetElements: HTMLElement[] = this.paragraphElements;
-      if (hl.locator && hl.locator.startsWith('fb2-p-')) {
+      if (hl.blockId) {
+        const found =
+          this.paragraphElements.find(
+            (p) =>
+              p.getAttribute('data-block-id') === hl.blockId ||
+              p.getAttribute('data-message-id') === hl.blockId ||
+              p.id === hl.blockId,
+          ) ||
+          this.container.querySelector<HTMLElement>(
+            `[data-block-id="${hl.blockId}"], [data-message-id="${hl.blockId}"], #${hl.blockId}`,
+          );
+        if (found) {
+          targetElements = [found];
+        }
+      } else if (hl.locator && hl.locator.startsWith('fb2-p-')) {
         const found = this.paragraphElements.find((p) => p.id === hl.locator);
         if (found) {
           targetElements = [found];
@@ -56,11 +71,62 @@ export class Fb2Engine extends BaseEngine {
       }
 
       for (const p of targetElements) {
-        const pText = p.textContent || '';
-        if (pText.includes(textToFind)) {
-          this.wrapTextInElement(p, textToFind, hl, palette.bg, palette.border);
+        if (hl.partType && p.getAttribute('data-part-type') && p.getAttribute('data-part-type') !== hl.partType) {
+          continue;
+        }
+        let wrapped = false;
+        if (hl.startOffset !== undefined && hl.endOffset !== undefined) {
+          wrapped = this.wrapRangeInElement(p, hl.startOffset, hl.endOffset, hl, palette.bg, palette.border);
+        }
+        if (!wrapped) {
+          const pText = p.textContent || '';
+          if (pText.includes(textToFind)) {
+            this.wrapTextInElement(p, textToFind, hl, palette.bg, palette.border);
+            break;
+          }
+        } else {
           break;
         }
+      }
+    }
+  }
+
+  private wrapRangeInElement(
+    element: HTMLElement,
+    startOffset: number,
+    endOffset: number,
+    hl: HighlightRecord,
+    bg: string,
+    border: string,
+  ): boolean {
+    const range = createRangeFromOffsets(element, startOffset, endOffset);
+    if (!range) return false;
+    const text = range.toString().trim();
+    if (!text) return false;
+
+    const mark = document.createElement('mark');
+    mark.className = `bookstery-hl hl-${hl.color} cursor-pointer rounded-xs px-0.5 select-text transition-colors`;
+    mark.dataset.highlightId = hl.id;
+    mark.style.backgroundColor = bg;
+    mark.style.borderBottom = `2px solid ${border}`;
+    mark.style.color = 'inherit';
+
+    mark.addEventListener('click', (e) => {
+      e.stopPropagation();
+      this.onHighlightClickCallback?.(hl);
+    });
+
+    try {
+      range.surroundContents(mark);
+      return true;
+    } catch {
+      try {
+        const extracted = range.extractContents();
+        mark.appendChild(extracted);
+        range.insertNode(mark);
+        return true;
+      } catch {
+        return false;
       }
     }
   }
