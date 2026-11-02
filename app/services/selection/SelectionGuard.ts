@@ -18,6 +18,12 @@ export const SELECTION_TAP_LOCK_MS = 400;
 export const SELECTION_SETTLE_MS = 150;
 
 let lastSelectionTimestamp = 0;
+let registeredEngineClearer: (() => void) | null = null;
+
+/** Registers a global engine clearer (e.g. EPUB rendition) to execute on native selection clear. */
+export function registerEngineSelectionClearer(clearer: (() => void) | null): void {
+  registeredEngineClearer = clearer;
+}
 
 /** Records that a non-empty selection was observed right now. */
 export function markSelectionActivity(timestamp: number = Date.now()): void {
@@ -84,7 +90,7 @@ export function shouldIgnoreReaderTap(extraWindow?: Window | null): boolean {
   return hasActiveNativeSelection() || isWithinSelectionLock();
 }
 
-/** Removes native selections from the top-level document and all same-origin iframes. */
+/** Removes native selections from the top-level document, all same-origin iframes, and registered engines. */
 export function clearAllNativeSelections(): void {
   if (typeof window === 'undefined') return;
   try {
@@ -98,6 +104,11 @@ export function clearAllNativeSelections(): void {
     } catch {
       // Ignore: iframe already detached.
     }
+  }
+  try {
+    registeredEngineClearer?.();
+  } catch {
+    // Engine may already be detached.
   }
 }
 

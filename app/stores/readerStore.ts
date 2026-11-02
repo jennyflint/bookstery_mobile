@@ -1,5 +1,7 @@
 import { defineStore } from 'pinia';
 import { useSettingsStore } from './useSettingsStore';
+import { useHighlightStore } from './highlightStore';
+import { clearAllNativeSelections } from '../services/selection/SelectionGuard';
 import type {
   BookRecord,
   ReaderLocation,
@@ -119,8 +121,10 @@ export const useReaderStore = defineStore('reader', {
     selectedText: (state): string => state.selection?.text ?? '',
     /** EPUB CFI range or page locator of the current selection. */
     selectedCfiOrPage: (state): string => state.selection?.locator ?? '',
+    selectedCfi: (state): string => state.selection?.locator ?? '',
     /** Sentence surrounding the current selection. */
     selectionContextSentence: (state): string => state.selection?.contextSentence ?? '',
+    selectionContext: (state): string => state.selection?.contextSentence ?? '',
     fontScale: (state): number => Number((state.settings.fontSize / 18).toFixed(2)),
     reflowThemeColors: (state): { bg: string; text: string } => {
       switch (state.reflowTheme) {
@@ -197,13 +201,33 @@ export const useReaderStore = defineStore('reader', {
     clearReflowCache(): void {
       this.reflowCache.clear();
     },
+    /**
+     * Clears reactive selection state, resets highlight store active selections,
+     * and clears native browser text selections across the main window and all EPUB iframes.
+     */
+    clearTextSelection(): void {
+      this.selection = null;
+      try {
+        const highlightStore = useHighlightStore();
+        highlightStore.setActiveSelection(null);
+        highlightStore.selectedHighlight = null;
+      } catch {}
+      clearAllNativeSelections();
+    },
     setBook(book: BookRecord): void {
+      this.clearTextSelection();
       this.clearReflowCache();
       this.currentBook = book;
       this.locator = book.locator;
       this.progressPercentage = book.progress_percentage;
     },
     updateLocation(location: ReaderLocation): void {
+      if (
+        location.locator !== this.locator ||
+        (location.currentPage !== undefined && location.currentPage !== this.currentPage)
+      ) {
+        this.clearTextSelection();
+      }
       this.locator = location.locator;
       this.progressPercentage = location.progressPercentage;
       if (location.currentPage !== undefined) {
@@ -223,6 +247,7 @@ export const useReaderStore = defineStore('reader', {
       this.pageNavigator = navigator;
     },
     async goToPage(targetPage: number): Promise<void> {
+      this.clearTextSelection();
       const total = Math.max(1, this.totalPages);
       const clampedPage = Math.max(1, Math.min(total, Math.round(targetPage)));
       this.currentPage = clampedPage;

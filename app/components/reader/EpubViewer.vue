@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import { ref, computed } from 'vue';
+import { ref, computed, onBeforeUnmount, onDeactivated } from 'vue';
+import { useReaderStore } from '../../stores/readerStore';
 import { shouldIgnoreReaderTap } from '../../services/selection/SelectionGuard';
 
 const props = withDefaults(
@@ -25,6 +26,21 @@ const emit = defineEmits<{
 
 const scrollContainerRef = ref<HTMLElement | null>(null);
 const localScale = ref<number>(props.zoomScale);
+
+const clearTextSelection = (): void => {
+  try {
+    const readerStore = useReaderStore();
+    readerStore.clearTextSelection();
+  } catch {}
+};
+
+onBeforeUnmount(() => {
+  clearTextSelection();
+});
+
+onDeactivated(() => {
+  clearTextSelection();
+});
 
 const effectiveScale = computed<number>(() => {
   return props.zoomScale !== 1.0 ? props.zoomScale : localScale.value;
@@ -183,6 +199,7 @@ defineExpose({
   scrollContainerRef,
   effectiveScale,
   localScale,
+  clearTextSelection,
 });
 </script>
 

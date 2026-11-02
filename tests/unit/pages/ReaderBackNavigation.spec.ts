@@ -23,6 +23,7 @@ vi.mock('vue-router', () => ({
     back: mockBack,
     replace: mockReplace,
   }),
+  onBeforeRouteLeave: vi.fn(),
 }));
 
 const mockUpdateProgress = vi.fn().mockResolvedValue(undefined);

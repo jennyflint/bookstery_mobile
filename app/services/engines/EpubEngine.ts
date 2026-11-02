@@ -251,6 +251,7 @@ export class EpubEngine extends BaseEngine {
     });
 
     this.rendition.on('relocated', (location: Location) => {
+      this.clearSelection();
       if (location && location.start) {
         this.currentCfi = location.start.cfi;
         if (location.start.percentage !== undefined) {
@@ -467,6 +468,16 @@ export class EpubEngine extends BaseEngine {
 
   /** Removes native text selection from every rendered EPUB iframe. */
   clearSelection(): void {
+    try {
+      const contents = (this.rendition as unknown as { getContents?: () => Contents[] | Contents })?.getContents?.();
+      const list = Array.isArray(contents) ? contents : contents ? [contents] : [];
+      list.forEach((c) => {
+        try {
+          c.window?.getSelection()?.removeAllRanges();
+        } catch {}
+      });
+    } catch {}
+
     for (const content of this.getContentsList()) {
       try {
         content.window?.getSelection()?.removeAllRanges();

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, watch, onMounted, nextTick } from 'vue';
+import { ref, computed, watch, onMounted, onBeforeUnmount, onDeactivated, nextTick } from 'vue';
 import type { PDFDocumentProxy, PDFPageProxy } from 'pdfjs-dist';
 import { useReaderStore } from '../../stores/readerStore';
 import { useTextSelection } from '../../composables/useTextSelection';
@@ -333,10 +333,21 @@ function handleContainerClick(e: MouseEvent): void {
 
 watch(
   () => activePageNumber.value,
-  (newPage) => {
+  (newPage, oldPage) => {
+    if (newPage !== oldPage) {
+      readerStore.clearTextSelection();
+    }
     void loadPage(newPage);
   },
 );
+
+onBeforeUnmount(() => {
+  readerStore.clearTextSelection();
+});
+
+onDeactivated(() => {
+  readerStore.clearTextSelection();
+});
 
 onMounted(() => {
   void loadPage(activePageNumber.value);

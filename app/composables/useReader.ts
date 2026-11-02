@@ -204,6 +204,7 @@ export function useReader() {
   };
 
   const closeBook = (): void => {
+    readerStore.clearTextSelection();
     clearSelection();
     readerStore.registerPageNavigator(null);
     if (activeEngine.value) {

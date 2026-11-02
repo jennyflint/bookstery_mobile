@@ -386,5 +386,55 @@ describe('ReaderSelectionBar Component', () => {
       expect(readerStore.selection).toBeNull();
       expect(wrapper.find('[data-testid="reader-selection-bar"]').exists()).toBe(false);
     });
+
+    it('should automatically dismiss and hide bottom bar when a new book is opened', async () => {
+      const readerStore = useReaderStore();
+      readerStore.setBook({
+        id: 'book-old',
+        title: 'Old Book',
+        author: 'Author',
+        format: 'epub',
+        file_path: 'old.epub',
+        file_size: 100,
+        total_items: 10,
+        cover_path: null,
+        locator: '1',
+        progress_percentage: 0,
+        last_read_at: Date.now(),
+        updated_at: Date.now(),
+      });
+      readerStore.setSelection({
+        text: 'Selection from old book',
+        x: 10,
+        y: 20,
+        width: 80,
+        height: 15,
+      });
+
+      const wrapper = mountBar();
+      await wrapper.vm.$nextTick();
+      expect(wrapper.find('[data-testid="reader-selection-bar"]').exists()).toBe(true);
+
+      // Open new book
+      readerStore.setBook({
+        id: 'book-new',
+        title: 'New Book',
+        author: 'Author',
+        format: 'epub',
+        file_path: 'new.epub',
+        file_size: 100,
+        total_items: 10,
+        cover_path: null,
+        locator: '1',
+        progress_percentage: 0,
+        last_read_at: Date.now(),
+        updated_at: Date.now(),
+      });
+      await wrapper.vm.$nextTick();
+
+      expect(readerStore.selectedText).toBe('');
+      expect(readerStore.selection).toBeNull();
+      expect(wrapper.find('[data-testid="reader-selection-bar"]').exists()).toBe(false);
+    });
   });
 });

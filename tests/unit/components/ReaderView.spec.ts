@@ -109,4 +109,33 @@ describe('ReaderView.vue', () => {
 
     document.body.removeChild(reflowEl);
   });
+
+  it('calls clearTextSelection on beforeUnmount/unmount and on page turn', async () => {
+    const readerStore = (await import('~/stores/readerStore')).useReaderStore();
+    const clearSpy = vi.spyOn(readerStore, 'clearTextSelection');
+
+    const wrapper = mount(ReaderView, {
+      global: {
+        plugins: [pinia],
+        stubs: {
+          ReaderViewport: true,
+        },
+      },
+    });
+
+    // Verify clearTextSelection is exposed
+    const vm = wrapper.vm as any;
+    expect(typeof vm.clearTextSelection).toBe('function');
+
+    // Page turn trigger
+    clearSpy.mockClear();
+    readerStore.currentPage = 2;
+    await wrapper.vm.$nextTick();
+    expect(clearSpy).toHaveBeenCalled();
+
+    // Unmount trigger
+    clearSpy.mockClear();
+    wrapper.unmount();
+    expect(clearSpy).toHaveBeenCalled();
+  });
 });

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed } from 'vue';
+import { computed, watch } from 'vue';
 import { useReaderStore } from '../../stores/readerStore';
 import { useHighlightStore } from '../../stores/highlightStore';
 import { useTextSelection } from '../../composables/useTextSelection';
@@ -23,6 +23,13 @@ const { triggerExplain, triggerCharacter, triggerDictionary, triggerAskInChat } 
 const colors: HighlightColor[] = ['yellow', 'green', 'pink', 'blue', 'purple'];
 
 const isExistingSelected = computed(() => !!highlightStore.selectedHighlight);
+
+watch(
+  () => readerStore.currentBook?.id,
+  () => {
+    readerStore.clearTextSelection();
+  },
+);
 
 const isVisible = computed(() => {
   if (isExistingSelected.value) {

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed } from 'vue';
+import { computed, onBeforeUnmount, onDeactivated, watch } from 'vue';
 import type { PDFDocumentProxy, PDFPageProxy } from 'pdfjs-dist';
 import { useReaderStore } from '../../stores/readerStore';
 import PdfReflowView from './PdfReflowView.vue';
@@ -86,6 +86,31 @@ const forwardPrev = (): void => {
   if (shouldIgnoreReaderTap()) return;
   emit('prev');
 };
+
+const clearTextSelection = (): void => {
+  readerStore.clearTextSelection();
+};
+
+onBeforeUnmount(() => {
+  clearTextSelection();
+});
+
+onDeactivated(() => {
+  clearTextSelection();
+});
+
+watch(
+  () => props.pageNumber,
+  (newPage, oldPage) => {
+    if (newPage !== oldPage) {
+      clearTextSelection();
+    }
+  },
+);
+
+defineExpose({
+  clearTextSelection,
+});
 </script>
 
 <template>

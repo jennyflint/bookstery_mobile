@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import { ref, computed, watch, onMounted, onUnmounted, nextTick } from 'vue';
-import { useRoute, useRouter } from 'vue-router';
+import { ref, computed, watch, onMounted, onUnmounted, onBeforeUnmount, onDeactivated, nextTick } from 'vue';
+import { useRoute, useRouter, onBeforeRouteLeave } from 'vue-router';
 import { App } from '@capacitor/app';
 import type { PluginListenerHandle } from '@capacitor/core';
 import { useLibraryStore } from '../../stores/libraryStore';
@@ -101,6 +101,47 @@ let backButtonListener: PluginListenerHandle | null = null;
 
 const bookId = route.params.id as string;
 
+if (typeof onBeforeRouteLeave === 'function') {
+  onBeforeRouteLeave((_to, _from, next) => {
+    readerStore.clearTextSelection();
+    next();
+  });
+}
+
+onBeforeUnmount(() => {
+  readerStore.clearTextSelection();
+});
+
+onDeactivated(() => {
+  readerStore.clearTextSelection();
+});
+
+watch(
+  () => route.fullPath,
+  (newPath, oldPath) => {
+    if (newPath !== oldPath) {
+      readerStore.clearTextSelection();
+    }
+  },
+);
+
+watch(
+  () => (route.params.id as string) || readerStore.currentBook?.id,
+  () => {
+    readerStore.clearTextSelection();
+  },
+  { immediate: true },
+);
+
+watch(
+  () => readerStore.currentPage,
+  (newPage, oldPage) => {
+    if (newPage !== oldPage) {
+      readerStore.clearTextSelection();
+    }
+  },
+);
+
 onMounted(async () => {
   try {
     backButtonListener = await App.addListener('backButton', () => {
@@ -194,6 +235,7 @@ startxref
 });
 
 onUnmounted(async () => {
+  readerStore.clearTextSelection();
   if (backButtonListener) {
     try {
       await backButtonListener.remove();
@@ -216,6 +258,7 @@ onUnmounted(async () => {
 const handleCloseReader = async (): Promise<void> => {
   if (isNavigating.value) return;
   isNavigating.value = true;
+  readerStore.clearTextSelection();
 
   try {
     const isTtsPlaying = ttsStore.isPlaying;

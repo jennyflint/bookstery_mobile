@@ -9,6 +9,7 @@ import {
   hasActiveNativeSelection,
   isWithinSelectionLock,
   markSelectionActivity,
+  registerEngineSelectionClearer,
   resetSelectionActivity,
   shouldIgnoreReaderTap,
 } from '../services/selection/SelectionGuard';
@@ -183,6 +184,7 @@ export function useTextSelection() {
   /** Registers the active engine's own selection clearer (e.g. EPUB `rendition.getContents()`). */
   const registerSelectionClearer = (clearer: (() => void) | null): void => {
     engineSelectionClearer = clearer;
+    registerEngineSelectionClearer(clearer);
   };
 
   function cancelPendingDismiss(): void {
@@ -200,7 +202,7 @@ export function useTextSelection() {
     }
     cancelPendingDismiss();
     resetSelectionActivity();
-    readerStore.setSelection(null);
+    readerStore.clearTextSelection();
 
     try {
       engineSelectionClearer?.();
@@ -290,6 +292,7 @@ export function useTextSelection() {
     registerSelectionClearer,
     clearSelection,
     dismissSelection,
+    clearTextSelection: dismissSelection,
     hasStickySelection,
     handleReaderTap,
   };

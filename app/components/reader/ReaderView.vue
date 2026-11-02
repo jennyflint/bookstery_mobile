@@ -1,5 +1,15 @@
 <script setup lang="ts">
-import { ref, computed, onMounted, onUnmounted, type Ref, type ComputedRef } from 'vue';
+import {
+  ref,
+  computed,
+  watch,
+  onMounted,
+  onUnmounted,
+  onBeforeUnmount,
+  onDeactivated,
+  type Ref,
+  type ComputedRef,
+} from 'vue';
 import { useSettingsStore } from '../../stores/useSettingsStore';
 import { useReaderStore } from '../../stores/readerStore';
 import { useTtsStore } from '../../stores/ttsStore';
@@ -82,11 +92,41 @@ const { shouldIntercept, dispatchPageTurn } = useVolumePageTurn({
   isAnyModalOpen: isModalOpenComputed,
 });
 
+const clearTextSelection = (): void => {
+  readerStore.clearTextSelection();
+};
+
+onBeforeUnmount(() => {
+  clearTextSelection();
+});
+
+onDeactivated(() => {
+  clearTextSelection();
+});
+
+watch(
+  () => readerStore.currentBook?.id,
+  () => {
+    clearTextSelection();
+  },
+  { immediate: true },
+);
+
+watch(
+  () => readerStore.currentPage,
+  (newPage, oldPage) => {
+    if (newPage !== oldPage) {
+      clearTextSelection();
+    }
+  },
+);
+
 onMounted(async () => {
   await settingsStore.enterReader();
 });
 
 onUnmounted(async () => {
+  clearTextSelection();
   const isTtsPlaying = ttsStore.isPlaying;
   await settingsStore.leaveReader(isTtsPlaying);
 });
@@ -97,6 +137,7 @@ defineExpose({
   dispatchPageTurn,
   handleNextPage,
   handlePrevPage,
+  clearTextSelection,
 });
 </script>
 
