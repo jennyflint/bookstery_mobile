@@ -28,15 +28,19 @@ export function deriveDisplayNameFromUri(uri: string): string {
     if (decoded.includes(':')) {
       const colonParts = decoded.split(':');
       const lastPart = colonParts[colonParts.length - 1];
-      const segments = lastPart.split('/').filter(Boolean);
-      if (segments.length > 0) {
-        return segments[segments.length - 1];
+      if (lastPart) {
+        const segments = lastPart.split('/').filter(Boolean);
+        const lastSegment = segments[segments.length - 1];
+        if (lastSegment) {
+          return lastSegment;
+        }
       }
     }
     const clean = decoded.replace(/\/+$/, '');
     const segments = clean.split('/').filter(Boolean);
-    if (segments.length > 0) {
-      return segments[segments.length - 1];
+    const lastSegment = segments[segments.length - 1];
+    if (lastSegment) {
+      return lastSegment;
     }
   } catch {}
   return uri;
@@ -48,6 +52,8 @@ export class AutoScanService {
   private readonly sqliteService: SqliteService;
   private readonly bookRepository: BookRepository;
   private readonly coverQueue: CoverGenerationQueueService;
+  private coverTasks: Array<{ book: BookRecord; localPath: string }> = [];
+  private isProcessingCovers: boolean = false;
 
   constructor(
     directoryRepository: ScanDirectoryRepository = ScanDirectoryRepository.getInstance(),
@@ -179,19 +185,83 @@ export class AutoScanService {
     }
   }
 
+  /**
+   * Cleans up redundant sandboxed copies in Directory.Data ('books/...') when the original
+   * file exists in one of the active scanned directories, reclaiming device storage.
+   */
+  async cleanupDuplicatedSandboxBooks(scannedFiles?: CrawledBookFile[]): Promise<number> {
+    try {
+      await this.sqliteService.init();
+      const existingBooks = await this.bookRepository.getBooks();
+      const sandboxedBooks = existingBooks.filter(
+        (b) => b.file_path && SANDBOX_BOOK_PATH.test(b.file_path),
+      );
+
+      if (sandboxedBooks.length === 0) {
+        return 0;
+      }
+
+      let files = scannedFiles;
+      if (!files || files.length === 0) {
+        const activeDirs = await this.directoryRepository.getActiveDirectories();
+        const settings = await this.directoryRepository.getSettings();
+        const isRecursive = settings.scan_subdirectories === 1;
+        const allFiles: CrawledBookFile[] = [];
+        for (const dir of activeDirs) {
+          const crawled =
+            (await this.crawlDirectoryNative(dir.uri, isRecursive)) ??
+            (await this.crawlDirectory(dir.uri, isRecursive));
+          allFiles.push(...crawled);
+        }
+        files = allFiles;
+      }
+
+      const fileMapByNameAndSize = new Map<string, CrawledBookFile>();
+      for (const f of files) {
+        fileMapByNameAndSize.set(`${f.name}|${f.size}`, f);
+      }
+
+      let reclaimedCount = 0;
+      for (const book of sandboxedBooks) {
+        const match = SANDBOX_BOOK_PATH.exec(book.file_path);
+        const originalName = match?.[1];
+        if (!originalName || !book.file_size) {
+          continue;
+        }
+
+        const originalFile = fileMapByNameAndSize.get(`${originalName}|${book.file_size}`);
+        if (originalFile) {
+          const oldSandboxPath = book.file_path;
+          await this.sqliteService.updateFilePathAndSize(
+            book.id,
+            originalFile.path,
+            originalFile.size,
+          );
+          book.file_path = originalFile.path;
+
+          try {
+            await Filesystem.deleteFile({
+              path: oldSandboxPath,
+              directory: Directory.Data,
+            });
+            reclaimedCount++;
+          } catch (delErr) {
+            console.warn('[AutoScanService] Failed to delete redundant sandbox file:', delErr);
+          }
+        }
+      }
+
+      return reclaimedCount;
+    } catch (err) {
+      console.warn('[AutoScanService] cleanupDuplicatedSandboxBooks error:', err);
+      return 0;
+    }
+  }
+
   async scanAllActiveDirectories(
     onProgress?: (scannedFilesCount: number, currentFileName: string) => void,
   ): Promise<ScanResultSummary> {
-    const hasPermission = await this.ensureFilesystemPermissions(false);
-    if (!hasPermission) {
-      return this.createEmptySummary();
-    }
-
     const settings = await this.directoryRepository.getSettings();
-    if (settings.auto_scan_on_startup === 0) {
-      return this.createEmptySummary();
-    }
-
     const activeDirs = await this.directoryRepository.getActiveDirectories();
     if (activeDirs.length === 0) {
       return this.createEmptySummary();
@@ -218,6 +288,8 @@ export class AutoScanService {
       await this.yieldThread();
     }
 
+    await this.cleanupDuplicatedSandboxBooks();
+
     return combinedSummary;
   }
 
@@ -240,6 +312,8 @@ export class AutoScanService {
       await this.directoryRepository.updateLastScanned(record.id, Date.now());
     }
 
+    await this.cleanupDuplicatedSandboxBooks();
+
     return summary;
   }
 
@@ -261,20 +335,19 @@ export class AutoScanService {
     const existingBooks = await this.bookRepository.getBooks();
     const existingByPath = new Map<string, BookRecord>();
     const existingById = new Map<string, BookRecord>();
+    const existingByNameAndSize = new Map<string, BookRecord>();
 
     for (const book of existingBooks) {
       existingByPath.set(book.file_path, book);
       existingById.set(book.id, book);
-    }
+      if (book.file_hash) {
+        existingById.set(book.file_hash, book);
+      }
 
-    // Books already imported by the native pipeline are recognised by (original file name, size).
-    const importedByNameAndSize = new Set<string>();
-    if (nativeFiles) {
-      for (const book of existingBooks) {
-        const originalName = SANDBOX_BOOK_PATH.exec(book.file_path)?.[1];
-        if (originalName && book.file_size) {
-          importedByNameAndSize.add(`${originalName}|${book.file_size}`);
-        }
+      const match = SANDBOX_BOOK_PATH.exec(book.file_path);
+      const originalName = match ? match[1] : book.file_path.split('/').pop()?.split('\\').pop();
+      if (originalName && book.file_size) {
+        existingByNameAndSize.set(`${originalName}|${book.file_size}`, book);
       }
     }
 
@@ -288,8 +361,6 @@ export class AutoScanService {
         onProgress(progressCounter, file.name);
       }
 
-      await this.yieldThread();
-
       const existingRecordByPath = existingByPath.get(file.path);
       if (
         existingRecordByPath &&
@@ -298,93 +369,28 @@ export class AutoScanService {
         existingRecordByPath.file_size === file.size
       ) {
         summary.skippedBooksCount++;
-        continue;
-      }
-
-      if (nativeFiles) {
-        try {
-          if (importedByNameAndSize.has(`${file.name}|${file.size}`)) {
-            summary.skippedBooksCount++;
-          } else {
-            await this.importNativeFile(file, summary, existingById, importedByNameAndSize);
-          }
-        } catch {
-          summary.failedCount++;
+        if (progressCounter % 25 === 0) {
+          await this.yieldThread();
         }
-        await this.yieldThread();
         continue;
       }
 
       try {
-        const fileContent = await this.readFileData(file.path, dirUri);
-        await this.yieldThread();
-
-        const hash = await FileHashService.calculateSha256(fileContent);
-
-        const existingRecordByHash = existingById.get(hash);
-        if (existingRecordByHash) {
-          await this.sqliteService.updateFilePathAndSize(
-            existingRecordByHash.id,
-            file.path,
-            file.size,
-          );
-          existingRecordByHash.file_path = file.path;
-          existingRecordByHash.file_size = file.size;
-          existingByPath.set(file.path, existingRecordByHash);
-          summary.updatedBooksCount++;
-          continue;
-        }
-
-        const title = this.extractTitleFromFileName(file.name);
-        const initialLocator =
-          file.format === 'pdf' ? '1' : file.format === 'fb2' ? 'fb2-p-0' : '';
-        const now = Date.now();
-
-        // Copy file into Directory.Data sandbox so reader engine can reliably open it
-        const destinationPath = `books/${hash}_${file.name}`;
-        try {
-          await Filesystem.writeFile({
-            path: destinationPath,
-            data: fileContent as string,
-            directory: Directory.Data,
-            recursive: true,
-          });
-        } catch {}
-
-        const newBook: BookRecord = {
-          id: hash,
-          title,
-          author: null,
-          format: file.format,
-          file_path: destinationPath,
-          cover_path: null,
-          locator: initialLocator,
-          progress_percentage: 0,
-          total_items: 0,
-          last_read_at: now,
-          updated_at: now,
-          is_pinned: 0,
-          pinned_at: null,
-          file_size: file.size,
-          file_hash: hash,
-        };
-
-        await this.sqliteService.upsertBook(newBook);
-        existingById.set(newBook.id, newBook);
-        existingByPath.set(file.path, newBook);
-        existingByPath.set(destinationPath, newBook);
-
-        try {
-          await this.coverQueue.enqueue(newBook.id, newBook.format, fileContent);
-        } catch {}
-
-        summary.newBooksCount++;
-        summary.newBookIds.push(newBook.id);
-      } catch {
+        await this.importNativeFile(
+          file,
+          summary,
+          existingById,
+          existingByPath,
+          existingByNameAndSize,
+        );
+      } catch (err) {
+        console.warn('[AutoScanService] Failed to process file:', file.name, err);
         summary.failedCount++;
       }
 
-      await this.yieldThread();
+      if (progressCounter % 25 === 0) {
+        await this.yieldThread();
+      }
     }
 
     return summary;
@@ -410,7 +416,7 @@ export class AutoScanService {
         if (format) {
           files.push({
             name: entry.name,
-            path: entry.uri,
+            path: entry.path || entry.uri,
             size: entry.size,
             mtime: entry.lastModified,
             format,
@@ -424,25 +430,40 @@ export class AutoScanService {
     }
   }
 
-  /** Copies, hashes and registers one book without moving its content through the JS bridge. */
-  private async importNativeFile(
+  /** Registers one book in-place without copying or moving its content. */
+  async importNativeFile(
     file: CrawledBookFile,
     summary: ScanResultSummary,
     existingById: Map<string, BookRecord>,
-    importedByNameAndSize: Set<string>,
+    existingByPath?: Map<string, BookRecord> | Set<string>,
+    existingByNameAndSize?: Map<string, BookRecord>,
   ): Promise<void> {
-    const copy = await NativeReaderBridge.copyToAppStorage({
-      uriOrPath: file.path,
-      fileName: file.name,
-      destDir: 'books',
-    });
-    importedByNameAndSize.add(`${file.name}|${copy.size}`);
+    const pathMap = existingByPath instanceof Map ? existingByPath : new Map<string, BookRecord>();
+    const nameMap = existingByNameAndSize ?? new Map<string, BookRecord>();
+    const nameAndSizeKey = `${file.name}|${file.size}`;
 
-    const existing = existingById.get(copy.hash);
-    if (existing) {
-      if (existing.file_size !== copy.size) {
-        await this.sqliteService.updateFilePathAndSize(existing.id, existing.file_path, copy.size);
-        existing.file_size = copy.size;
+    // 1. Check if known by (name, size)
+    const existingByName = nameMap.get(nameAndSizeKey);
+    if (existingByName) {
+      if (SANDBOX_BOOK_PATH.test(existingByName.file_path)) {
+        // Reclaim duplicate sandbox copy: point to original file and delete sandbox file
+        const oldSandboxPath = existingByName.file_path;
+        await this.sqliteService.updateFilePathAndSize(existingByName.id, file.path, file.size);
+        existingByName.file_path = file.path;
+        existingByName.file_size = file.size;
+        pathMap.set(file.path, existingByName);
+        try {
+          await Filesystem.deleteFile({
+            path: oldSandboxPath,
+            directory: Directory.Data,
+          });
+        } catch {}
+        summary.skippedBooksCount++;
+      } else if (existingByName.file_path !== file.path) {
+        await this.sqliteService.updateFilePathAndSize(existingByName.id, file.path, file.size);
+        existingByName.file_path = file.path;
+        existingByName.file_size = file.size;
+        pathMap.set(file.path, existingByName);
         summary.updatedBooksCount++;
       } else {
         summary.skippedBooksCount++;
@@ -450,13 +471,43 @@ export class AutoScanService {
       return;
     }
 
+    // 2. Deterministic hash without copying or reading into RAM
+    const hash = await FileHashService.calculateSha256(nameAndSizeKey);
+    const existingByHash = existingById.get(hash);
+    if (existingByHash) {
+      if (SANDBOX_BOOK_PATH.test(existingByHash.file_path)) {
+        const oldSandboxPath = existingByHash.file_path;
+        await this.sqliteService.updateFilePathAndSize(existingByHash.id, file.path, file.size);
+        existingByHash.file_path = file.path;
+        existingByHash.file_size = file.size;
+        pathMap.set(file.path, existingByHash);
+        try {
+          await Filesystem.deleteFile({
+            path: oldSandboxPath,
+            directory: Directory.Data,
+          });
+        } catch {}
+        summary.skippedBooksCount++;
+      } else if (existingByHash.file_path !== file.path || existingByHash.file_size !== file.size) {
+        await this.sqliteService.updateFilePathAndSize(existingByHash.id, file.path, file.size);
+        existingByHash.file_path = file.path;
+        existingByHash.file_size = file.size;
+        pathMap.set(file.path, existingByHash);
+        summary.updatedBooksCount++;
+      } else {
+        summary.skippedBooksCount++;
+      }
+      return;
+    }
+
+    // 3. New book: Zero-copy direct referencing
     const now = Date.now();
     const newBook: BookRecord = {
-      id: copy.hash,
+      id: hash,
       title: this.extractTitleFromFileName(file.name),
       author: null,
       format: file.format,
-      file_path: copy.relativePath,
+      file_path: file.path,
       cover_path: null,
       locator: file.format === 'pdf' ? '1' : file.format === 'fb2' ? 'fb2-p-0' : '',
       progress_percentage: 0,
@@ -465,20 +516,55 @@ export class AutoScanService {
       updated_at: now,
       is_pinned: 0,
       pinned_at: null,
-      file_size: copy.size,
-      file_hash: copy.hash,
+      file_size: file.size,
+      file_hash: hash,
     };
 
     await this.sqliteService.upsertBook(newBook);
-    existingById.set(newBook.id, newBook);
+    await this.sqliteService.updateFilePathAndSize(newBook.id, newBook.file_path, newBook.file_size);
 
-    await this.generateNativeCover(newBook, copy.path);
+    existingById.set(newBook.id, newBook);
+    pathMap.set(file.path, newBook);
+    nameMap.set(nameAndSizeKey, newBook);
+
+    // Enqueue cover extraction asynchronously in background without blocking discovery loop
+    this.enqueueCoverGeneration(newBook, file.path);
 
     summary.newBooksCount++;
     summary.newBookIds.push(newBook.id);
   }
 
-  private async generateNativeCover(book: BookRecord, localPath: string): Promise<void> {
+  enqueueCoverGeneration(book: BookRecord, localPath: string): void {
+    this.coverTasks.push({ book, localPath });
+    if (!this.isProcessingCovers) {
+      void this.processBackgroundCovers();
+    }
+  }
+
+  private async processBackgroundCovers(): Promise<void> {
+    if (this.isProcessingCovers) {
+      return;
+    }
+    this.isProcessingCovers = true;
+    while (this.coverTasks.length > 0) {
+      const task = this.coverTasks.shift();
+      if (task) {
+        try {
+          await this.generateNativeCover(task.book, task.localPath);
+        } catch {}
+        await this.yieldThread();
+      }
+    }
+    this.isProcessingCovers = false;
+  }
+
+  async waitForPendingCovers(): Promise<void> {
+    while (this.isProcessingCovers || this.coverTasks.length > 0) {
+      await this.yieldThread();
+    }
+  }
+
+  async generateNativeCover(book: BookRecord, localPath: string): Promise<void> {
     if (book.format === 'pdf') {
       try {
         const thumbnail = await NativeReaderBridge.generatePdfThumbnail({
@@ -486,17 +572,45 @@ export class AutoScanService {
           bookId: book.id,
           maxWidth: 360,
         });
-        const coverUrl = toWebViewUrl(thumbnail.path);
-        await this.sqliteService.updateCoverPath(book.id, coverUrl);
-        book.cover_path = coverUrl;
-        return;
+        const resolvedPath =
+          (thumbnail as { coverPath?: string; path?: string; coverUri?: string }).coverPath ||
+          thumbnail?.path ||
+          (thumbnail as { coverPath?: string; path?: string; coverUri?: string }).coverUri;
+        if (resolvedPath) {
+          const coverUrl = toWebViewUrl(resolvedPath);
+          await this.sqliteService.updateCoverPath(book.id, coverUrl);
+          book.cover_path = coverUrl;
+          return;
+        }
       } catch {
         // Encrypted or malformed PDF: use the JS extractor below.
       }
     }
 
     try {
-      await this.coverQueue.enqueue(book.id, book.format, await fetchBookBytes(localPath));
+      let bytes: Uint8Array | ArrayBuffer | Blob | string | null = null;
+      if (Capacitor.isNativePlatform()) {
+        try {
+          bytes = await fetchBookBytes(localPath);
+        } catch {
+          try {
+            const res = await Filesystem.readFile({ path: localPath });
+            bytes = res.data;
+          } catch {}
+        }
+      } else {
+        try {
+          const res = await Filesystem.readFile({ path: localPath });
+          bytes = res.data;
+        } catch {
+          try {
+            bytes = await fetchBookBytes(localPath);
+          } catch {}
+        }
+      }
+      if (bytes) {
+        await this.coverQueue.enqueue(book.id, book.format, bytes);
+      }
     } catch {
       // A missing cover must never fail the import.
     }
@@ -645,7 +759,7 @@ export class AutoScanService {
     // 1. Android SAF tree URI: content://.../tree/...
     if (decoded.includes('/tree/')) {
       const treePart = decoded.split('/tree/')[1] || '';
-      const cleanTreePart = treePart.split('?')[0];
+      const cleanTreePart = treePart.split('?')[0] || '';
 
       if (cleanTreePart.includes(':')) {
         const colonIndex = cleanTreePart.indexOf(':');

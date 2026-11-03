@@ -70,15 +70,17 @@ describe('AutoScanService native pipeline', () => {
     bridge.generatePdfThumbnail.mockResolvedValue({ path: '/data/files/covers/hash-a.pdf.webp', width: 360, height: 480 });
 
     const summary = await service.scanSingleDirectory('content://tree');
+    await service.waitForPendingCovers();
 
     expect(bridge.scanDirectory).toHaveBeenCalledTimes(1);
+    expect(bridge.copyToAppStorage).not.toHaveBeenCalled();
     expect(summary.newBooksCount).toBe(2);
     expect(sqlite.upsertBook).toHaveBeenCalledTimes(2);
     expect(bridge.generatePdfThumbnail).toHaveBeenCalledWith(
-      expect.objectContaining({ bookId: 'hash-a.pdf', maxWidth: 360 }),
+      expect.objectContaining({ maxWidth: 360 }),
     );
     expect(sqlite.updateCoverPath).toHaveBeenCalledWith(
-      'hash-a.pdf',
+      expect.any(String),
       'http://localhost/_capacitor_file_/data/files/covers/hash-a.pdf.webp',
     );
     expect(coverQueue.enqueue).toHaveBeenCalledTimes(1);

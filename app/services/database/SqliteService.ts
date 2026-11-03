@@ -285,11 +285,13 @@ export class SqliteService {
   async upsertBook(book: BookRecord): Promise<void> {
     const isPinned = book.is_pinned ?? 0;
     const pinnedAt = book.pinned_at ?? null;
+    const fileSize = book.file_size ?? null;
+    const fileHash = book.file_hash ?? null;
     if (this.isNative && this.db) {
       try {
         const query = `
-          INSERT INTO books (id, title, author, format, file_path, cover_path, locator, progress_percentage, total_items, last_read_at, updated_at, is_pinned, pinned_at)
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          INSERT INTO books (id, title, author, format, file_path, cover_path, locator, progress_percentage, total_items, last_read_at, updated_at, is_pinned, pinned_at, file_size, file_hash)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
           ON CONFLICT(id) DO UPDATE SET
             title = excluded.title,
             author = excluded.author,
@@ -302,7 +304,9 @@ export class SqliteService {
             last_read_at = excluded.last_read_at,
             updated_at = excluded.updated_at,
             is_pinned = excluded.is_pinned,
-            pinned_at = excluded.pinned_at;
+            pinned_at = excluded.pinned_at,
+            file_size = COALESCE(excluded.file_size, books.file_size),
+            file_hash = COALESCE(excluded.file_hash, books.file_hash);
         `;
         await this.db.run(query, [
           book.id,
@@ -318,6 +322,8 @@ export class SqliteService {
           book.updated_at,
           isPinned,
           pinnedAt,
+          fileSize,
+          fileHash,
         ]);
         return;
       } catch {}
@@ -328,6 +334,8 @@ export class SqliteService {
       ...book,
       is_pinned: isPinned,
       pinned_at: pinnedAt,
+      file_size: fileSize ?? undefined,
+      file_hash: fileHash ?? undefined,
     };
     if (index !== -1) {
       books[index] = updatedBook;

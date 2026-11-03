@@ -40,6 +40,12 @@ export const useScannerStore = defineStore('scanner', {
       this.directories = await repo.getAllDirectories();
       this.settings = await repo.getSettings();
       this.isInitialized = true;
+
+      // Reclaim any redundant sandbox storage in the background on startup
+      const scanner = AutoScanService.getInstance();
+      scanner.cleanupDuplicatedSandboxBooks().catch((err) => {
+        console.warn('[scannerStore] Background sandbox cleanup error:', err);
+      });
     },
 
     async refreshDirectories(): Promise<void> {
@@ -132,10 +138,12 @@ export const useScannerStore = defineStore('scanner', {
         this.lastScanSummary = summary;
         await this.refreshDirectories();
 
-        if (summary.newBooksCount > 0) {
+        if (summary.newBooksCount > 0 || summary.updatedBooksCount > 0) {
           const libraryStore = useLibraryStore();
           await libraryStore.loadBooks();
-          this.showNotification = true;
+          if (summary.newBooksCount > 0) {
+            this.showNotification = true;
+          }
         }
 
         return summary;

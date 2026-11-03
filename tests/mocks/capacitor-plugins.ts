@@ -31,6 +31,7 @@ export const mockFilesystem = {
   copy: vi.fn().mockResolvedValue({ uri: 'file:///mock/dest' }),
   stat: vi.fn().mockResolvedValue({ size: 1024, mtime: Date.now() }),
   readdir: vi.fn().mockResolvedValue({ files: [] }),
+  deleteFile: vi.fn().mockResolvedValue(undefined),
 };
 
 export const mockClipboard = {

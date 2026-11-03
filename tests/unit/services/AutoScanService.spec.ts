@@ -190,6 +190,7 @@ describe('AutoScanService', () => {
       });
 
       const summary = await service.scanAllActiveDirectories();
+      await service.waitForPendingCovers();
 
       expect(summary.scannedFilesCount).toBe(1);
       expect(summary.newBooksCount).toBe(1);
@@ -262,7 +263,7 @@ describe('AutoScanService', () => {
       expect(mockCoverQueue.enqueue).not.toHaveBeenCalled();
     });
 
-    it('should skip scanning when auto_scan_on_startup is disabled', async () => {
+    it('should scan active directories even when auto_scan_on_startup is disabled (manual scan support)', async () => {
       mockDirectoryRepo.getSettings.mockResolvedValue({
         id: 1,
         auto_scan_on_startup: 0,
@@ -270,12 +271,15 @@ describe('AutoScanService', () => {
         updated_at: 1000,
       });
 
+      vi.spyOn(Filesystem, 'readdir').mockResolvedValue({
+        files: [],
+      } as any);
+
       const readdirSpy = vi.spyOn(Filesystem, 'readdir');
       const summary = await service.scanAllActiveDirectories();
 
       expect(summary.scannedFilesCount).toBe(0);
-      expect(summary.newBooksCount).toBe(0);
-      expect(readdirSpy).not.toHaveBeenCalled();
+      expect(readdirSpy).toHaveBeenCalled();
     });
   });
 
@@ -359,6 +363,75 @@ describe('AutoScanService', () => {
 
       expect(isValid).toBe(false);
       expect(readdirSpy).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('cleanupDuplicatedSandboxBooks', () => {
+    it('should reclaim sandbox storage by updating SQLite file_path and deleting Directory.Data copy', async () => {
+      const sandboxedBook: BookRecord = {
+        id: 'sandboxed-123',
+        title: 'My Book',
+        author: 'Author',
+        format: 'pdf',
+        file_path: 'books/abc12345678_MyBook.pdf',
+        cover_path: null,
+        locator: '1',
+        progress_percentage: 0,
+        total_items: 100,
+        last_read_at: 1000,
+        updated_at: 1000,
+        file_size: 5000,
+      };
+
+      mockBookRepo.getBooks.mockResolvedValue([sandboxedBook]);
+      const deleteFileSpy = vi.spyOn(Filesystem, 'deleteFile').mockResolvedValue(undefined as any);
+
+      const scannedFiles = [
+        {
+          name: 'MyBook.pdf',
+          path: '/storage/emulated/0/Books/MyBook.pdf',
+          size: 5000,
+          format: 'pdf' as const,
+        },
+      ];
+
+      const reclaimedCount = await service.cleanupDuplicatedSandboxBooks(scannedFiles);
+
+      expect(reclaimedCount).toBe(1);
+      expect(mockSqliteService.updateFilePathAndSize).toHaveBeenCalledWith(
+        'sandboxed-123',
+        '/storage/emulated/0/Books/MyBook.pdf',
+        5000,
+      );
+      expect(deleteFileSpy).toHaveBeenCalledWith({
+        path: 'books/abc12345678_MyBook.pdf',
+        directory: Directory.Data,
+      });
+    });
+
+    it('should ignore non-sandboxed books or books with no matching scanned file', async () => {
+      const normalBook: BookRecord = {
+        id: 'normal-123',
+        title: 'Normal Book',
+        author: 'Author',
+        format: 'pdf',
+        file_path: '/storage/emulated/0/Books/Normal.pdf',
+        cover_path: null,
+        locator: '1',
+        progress_percentage: 0,
+        total_items: 100,
+        last_read_at: 1000,
+        updated_at: 1000,
+        file_size: 5000,
+      };
+
+      mockBookRepo.getBooks.mockResolvedValue([normalBook]);
+      const deleteFileSpy = vi.spyOn(Filesystem, 'deleteFile');
+
+      const reclaimedCount = await service.cleanupDuplicatedSandboxBooks([]);
+
+      expect(reclaimedCount).toBe(0);
+      expect(deleteFileSpy).not.toHaveBeenCalled();
     });
   });
 });

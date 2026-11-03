@@ -46,5 +46,9 @@ describe('scannerStore', () => {
 
     const startupScanResult = await store.runStartupScan();
     expect(startupScanResult).toBeNull();
+
+    // Manual scan must run even when auto_scan_on_startup is disabled
+    const manualScanResult = await store.runManualScan();
+    expect(manualScanResult).not.toBeNull();
   });
 });
