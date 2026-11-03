@@ -18,6 +18,7 @@ import type {
 } from '../../types';
 
 export class EpubEngine extends BaseEngine {
+  protected override paginationMode: ReaderPaginationMode = 'paginated';
   private book: Book | null = null;
   private rendition: Rendition | null = null;
   private currentCfi: string = '';
@@ -171,9 +172,78 @@ export class EpubEngine extends BaseEngine {
 
       // Pinch/pan/double-tap zoom: iframe touches must reach the viewport's gesture controller.
       if (iframe) {
-        doc.documentElement.style.touchAction = 'pan-x pan-y';
+        doc.documentElement.style.touchAction = this.paginationMode === 'scroll' ? 'pan-y' : 'pan-x pan-y';
         (this.container as ZoomableContainerElement | null)?.__readerBindTouchSource?.(doc, iframe);
       }
+
+      // Horizontal swipe gesture detection for paginated mode inside EPUB iframe
+      let touchStartX = 0;
+      let touchStartY = 0;
+      let touchStartTime = 0;
+      let isMultiTouch = false;
+
+      doc.addEventListener(
+        'touchstart',
+        (e: TouchEvent) => {
+          if (e.touches.length > 1) {
+            isMultiTouch = true;
+            return;
+          }
+          if (e.touches.length === 1 && e.touches[0]) {
+            isMultiTouch = false;
+            touchStartX = e.touches[0].clientX;
+            touchStartY = e.touches[0].clientY;
+            touchStartTime = Date.now();
+          }
+        },
+        { passive: true },
+      );
+
+      doc.addEventListener(
+        'touchend',
+        (e: TouchEvent) => {
+          if (isMultiTouch || e.touches.length > 0) {
+            return;
+          }
+
+          if (this.paginationMode === 'scroll') {
+            return;
+          }
+
+          if (shouldIgnoreReaderTap(win) || getWindowSelectionText(win).length > 0) {
+            return;
+          }
+
+          // Ignore swipe if viewport is zoomed in
+          const viewport = this.container?.closest?.('[data-testid="reader-viewport"]');
+          if (viewport) {
+            const scaleAttr = viewport.getAttribute('data-scale');
+            if (scaleAttr && parseFloat(scaleAttr) > 1.05) {
+              return;
+            }
+          }
+
+          if (e.changedTouches.length === 1 && e.changedTouches[0]) {
+            const touch = e.changedTouches[0];
+            const deltaX = touch.clientX - touchStartX;
+            const deltaY = touch.clientY - touchStartY;
+            const elapsed = Date.now() - touchStartTime;
+
+            if (
+              elapsed <= 500 &&
+              Math.abs(deltaX) > 45 &&
+              Math.abs(deltaX) > Math.abs(deltaY) * 1.5
+            ) {
+              if (deltaX < 0) {
+                void this.next();
+              } else {
+                void this.prev();
+              }
+            }
+          }
+        },
+        { passive: true },
+      );
 
       // Primary selection trigger: the iframe's own `selectionchange` (never bubbles to the parent).
       let debounceTimer: ReturnType<typeof setTimeout> | null = null;
@@ -259,6 +329,7 @@ export class EpubEngine extends BaseEngine {
     });
 
     this.rendition.on('rendered', () => {
+      this.applyScrollContainerStyles();
       this.restoreHighlights();
       if (this.rendition?.themes?.fontSize) {
         try {
@@ -339,12 +410,21 @@ export class EpubEngine extends BaseEngine {
     this.book = ePub(bookData as string | ArrayBuffer);
     await this.book.ready;
 
-    this.rendition = this.book.renderTo(container, {
-      width: '100%',
-      height: '100%',
-      flow: this.paginationMode === 'scroll' ? 'scrolled-doc' : 'paginated',
-      spread: 'none',
-    });
+    this.rendition =
+      this.paginationMode === 'scroll'
+        ? this.book.renderTo(container, {
+            width: '100%',
+            height: '100%',
+            flow: 'scrolled',
+            manager: 'continuous',
+          })
+        : this.book.renderTo(container, {
+            width: '100%',
+            height: '100%',
+            flow: 'paginated',
+            manager: 'default',
+            spread: 'none',
+          });
 
     if (this.currentColors) {
       this.applyTheme(this.currentColors);
@@ -372,6 +452,8 @@ export class EpubEngine extends BaseEngine {
     if (this.rendition.location) {
       this.updatePaginationFromLocation(this.rendition.location);
     }
+
+    this.applyScrollContainerStyles();
   }
 
   async goTo(locator: string): Promise<void> {
@@ -410,13 +492,56 @@ export class EpubEngine extends BaseEngine {
     }
   }
 
+  private applyScrollContainerStyles(): void {
+    if (!this.container) return;
+    const epubContainer = this.container.querySelector('.epub-container') as HTMLElement | null;
+    if (epubContainer) {
+      if (this.paginationMode === 'scroll') {
+        epubContainer.style.setProperty('overflow-y', 'auto', 'important');
+        epubContainer.style.setProperty('-webkit-overflow-scrolling', 'touch');
+        epubContainer.style.height = '100%';
+      } else {
+        epubContainer.style.removeProperty('overflow-y');
+        epubContainer.style.removeProperty('-webkit-overflow-scrolling');
+      }
+    }
+  }
+
   async next(): Promise<void> {
+    if (this.paginationMode === 'scroll') {
+      const scrollEl = (this.container?.querySelector('.epub-container') || this.container) as HTMLElement | null;
+      if (scrollEl && scrollEl.clientHeight > 0 && scrollEl.scrollHeight > scrollEl.clientHeight) {
+        const canScrollDown = scrollEl.scrollTop + scrollEl.clientHeight < scrollEl.scrollHeight - 10;
+        if (canScrollDown) {
+          scrollEl.scrollBy({
+            top: Math.round(scrollEl.clientHeight * 0.85),
+            behavior: 'smooth',
+          });
+          return;
+        }
+      }
+    }
+
     if (this.rendition) {
       await this.rendition.next();
     }
   }
 
   async prev(): Promise<void> {
+    if (this.paginationMode === 'scroll') {
+      const scrollEl = (this.container?.querySelector('.epub-container') || this.container) as HTMLElement | null;
+      if (scrollEl && scrollEl.clientHeight > 0 && scrollEl.scrollHeight > scrollEl.clientHeight) {
+        const canScrollUp = scrollEl.scrollTop > 10;
+        if (canScrollUp) {
+          scrollEl.scrollBy({
+            top: -Math.round(scrollEl.clientHeight * 0.85),
+            behavior: 'smooth',
+          });
+          return;
+        }
+      }
+    }
+
     if (this.rendition) {
       await this.rendition.prev();
     }
@@ -433,20 +558,30 @@ export class EpubEngine extends BaseEngine {
   }
 
   async setPaginationMode(mode: ReaderPaginationMode): Promise<void> {
-    if (this.paginationMode === mode) return;
-    this.paginationMode = mode;
+    const normalized = mode === 'buttons' ? 'paginated' : mode;
+    if (this.paginationMode === normalized) return;
+    this.paginationMode = normalized;
     if (this.rendition && this.container && this.book) {
-      const currentLoc = this.currentCfi;
+      const currentLoc = this.rendition.location?.start?.cfi || this.currentCfi;
       try {
         this.rendition.destroy();
       } catch {
       }
-      this.rendition = this.book.renderTo(this.container, {
-        width: '100%',
-        height: '100%',
-        flow: mode === 'scroll' ? 'scrolled-doc' : 'paginated',
-        spread: 'none',
-      });
+      this.rendition =
+        this.paginationMode === 'scroll'
+          ? this.book.renderTo(this.container, {
+              width: '100%',
+              height: '100%',
+              flow: 'scrolled',
+              manager: 'continuous',
+            })
+          : this.book.renderTo(this.container, {
+              width: '100%',
+              height: '100%',
+              flow: 'paginated',
+              manager: 'default',
+              spread: 'none',
+            });
       if (this.currentColors) {
         this.applyTheme(this.currentColors);
       }
@@ -459,6 +594,7 @@ export class EpubEngine extends BaseEngine {
       if (this.rendition.location) {
         this.updatePaginationFromLocation(this.rendition.location);
       }
+      this.applyScrollContainerStyles();
     }
   }
 

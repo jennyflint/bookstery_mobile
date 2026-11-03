@@ -35,7 +35,7 @@ export abstract class BaseEngine implements ReaderEngineInterface {
   abstract prev(): Promise<void>;
 
   setPaginationMode(mode: ReaderPaginationMode): void | Promise<void> {
-    this.paginationMode = mode;
+    this.paginationMode = mode === 'buttons' ? 'paginated' : mode;
   }
 
   setFontSize(_size: number): void | Promise<void> {

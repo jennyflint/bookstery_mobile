@@ -68,7 +68,7 @@ export interface ReaderProgressBarProps {
   locator?: string;
 }
 
-export type ReaderPaginationMode = 'buttons' | 'scroll';
+export type ReaderPaginationMode = 'paginated' | 'scroll' | 'buttons';
 
 export interface ReaderEngineInterface {
   init(

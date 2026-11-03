@@ -7,4 +7,5 @@ export interface ScreenControlSettings {
   fontSize?: number;
   volumeKeyPageTurn?: boolean;
   invertVolumeKeys?: boolean;
+  paginationMode?: import('./index').ReaderPaginationMode;
 }

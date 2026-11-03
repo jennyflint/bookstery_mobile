@@ -269,6 +269,33 @@ const decreaseFont = () => {
         <div class="grid grid-cols-2 gap-2 rounded-2xl bg-zinc-100 p-1.5">
           <button
             type="button"
+            data-testid="pagination-mode-paginated"
+            class="flex items-center justify-center gap-2 rounded-xl px-3 py-2.5 text-xs font-bold transition-all"
+            :class="
+              readerStore.settings.paginationMode === 'paginated' || readerStore.settings.paginationMode === 'buttons'
+                ? 'bg-white text-indigo-600 shadow-sm'
+                : 'text-zinc-600 hover:text-zinc-900'
+            "
+            @click="selectPaginationMode('paginated')"
+          >
+            <svg
+              class="h-4 w-4"
+              fill="none"
+              viewBox="0 0 24 24"
+              stroke="currentColor"
+            >
+              <path
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                stroke-width="2"
+                d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"
+              />
+            </svg>
+            <span>{{ t('reader.modePaginated') }}</span>
+          </button>
+          <button
+            type="button"
+            data-testid="pagination-mode-scroll"
             class="flex items-center justify-center gap-2 rounded-xl px-3 py-2.5 text-xs font-bold transition-all"
             :class="
               readerStore.settings.paginationMode === 'scroll'
@@ -290,32 +317,7 @@ const decreaseFont = () => {
                 d="M7 16V4m0 0L3 8m4-4l4 4m6 0v12m0 0l4-4m-4 4l-4-4"
               />
             </svg>
-            <span>{{ t('reader.paginationScroll') }}</span>
-          </button>
-          <button
-            type="button"
-            class="flex items-center justify-center gap-2 rounded-xl px-3 py-2.5 text-xs font-bold transition-all"
-            :class="
-              readerStore.settings.paginationMode === 'buttons'
-                ? 'bg-white text-indigo-600 shadow-sm'
-                : 'text-zinc-600 hover:text-zinc-900'
-            "
-            @click="selectPaginationMode('buttons')"
-          >
-            <svg
-              class="h-4 w-4"
-              fill="none"
-              viewBox="0 0 24 24"
-              stroke="currentColor"
-            >
-              <path
-                stroke-linecap="round"
-                stroke-linejoin="round"
-                stroke-width="2"
-                d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"
-              />
-            </svg>
-            <span>{{ t('reader.paginationButtons') }}</span>
+            <span>{{ t('reader.modeScroll') }}</span>
           </button>
         </div>
       </div>

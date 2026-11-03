@@ -17,12 +17,14 @@ describe('EpubEngine Pagination & Location Management', () => {
   let mockBook: any;
   let mockRendition: any;
   let eventListeners: Record<string, ((...args: any[]) => void)[]>;
+  let contentHooks: ((contents: any) => void)[];
 
   beforeEach(() => {
     setActivePinia(createPinia());
     container = document.createElement('div');
     document.body.appendChild(container);
     eventListeners = {};
+    contentHooks = [];
 
     mockRendition = {
       display: vi.fn().mockResolvedValue(undefined),
@@ -35,7 +37,9 @@ describe('EpubEngine Pagination & Location Management', () => {
       },
       hooks: {
         content: {
-          register: vi.fn(),
+          register: vi.fn((cb: (contents: any) => void) => {
+            contentHooks.push(cb);
+          }),
         },
       },
       on: vi.fn((event: string, cb: (...args: any[]) => void) => {
@@ -250,5 +254,222 @@ describe('EpubEngine Pagination & Location Management', () => {
     expect(readerStore.currentPage).toBe(1);
     expect(readerStore.totalPages).toBe(120);
     expect(readerStore.progressPercentage).toBe(0.83);
+  });
+
+  describe('Pagination Modes (Swipe/Paginated vs. Vertical Scroll)', () => {
+    it('configures renderTo with paginated options in paginated mode', async () => {
+      await engine.setPaginationMode('paginated');
+      await engine.init(container, 'fake-epub-data');
+
+      expect(mockBook.renderTo).toHaveBeenCalledWith(container, {
+        width: '100%',
+        height: '100%',
+        flow: 'paginated',
+        manager: 'default',
+        spread: 'none',
+      });
+    });
+
+    it('configures renderTo with continuous scrolled options in scroll mode', async () => {
+      await engine.setPaginationMode('scroll');
+      await engine.init(container, 'fake-epub-data');
+
+      expect(mockBook.renderTo).toHaveBeenCalledWith(container, {
+        width: '100%',
+        height: '100%',
+        flow: 'scrolled',
+        manager: 'continuous',
+      });
+    });
+
+    it('dynamically switches paginationMode and preserves reading position', async () => {
+      await engine.init(container, 'fake-epub-data', 'epubcfi(/6/2[ch1]!/4/10)');
+      expect(engine.getCurrentLocation().locator).toBe('epubcfi(/6/2[ch1]!/4/10)');
+
+      // Switch to scroll mode
+      mockBook.renderTo.mockClear();
+      mockRendition.destroy.mockClear();
+      mockRendition.display.mockClear();
+
+      await engine.setPaginationMode('scroll');
+
+      expect(mockRendition.destroy).toHaveBeenCalled();
+      expect(mockBook.renderTo).toHaveBeenCalledWith(container, {
+        width: '100%',
+        height: '100%',
+        flow: 'scrolled',
+        manager: 'continuous',
+      });
+      expect(mockRendition.display).toHaveBeenCalledWith('epubcfi(/6/2[ch1]!/4/10)');
+    });
+
+    it('scrolls container screen-by-screen in scroll mode instead of jumping chapters', async () => {
+      await engine.setPaginationMode('scroll');
+      await engine.init(container, 'fake-epub-data');
+
+      const epubContainer = document.createElement('div');
+      epubContainer.className = 'epub-container';
+      Object.defineProperty(epubContainer, 'clientHeight', { value: 800, writable: true });
+      Object.defineProperty(epubContainer, 'scrollHeight', { value: 3000, writable: true });
+      Object.defineProperty(epubContainer, 'scrollTop', { value: 100, writable: true });
+      const scrollBySpy = vi.fn();
+      epubContainer.scrollBy = scrollBySpy;
+      container.appendChild(epubContainer);
+
+      // next() when not at bottom
+      await engine.next();
+      expect(scrollBySpy).toHaveBeenCalledWith({
+        top: Math.round(800 * 0.85),
+        behavior: 'smooth',
+      });
+      expect(mockRendition.next).not.toHaveBeenCalled();
+
+      // prev() when not at top
+      scrollBySpy.mockClear();
+      await engine.prev();
+      expect(scrollBySpy).toHaveBeenCalledWith({
+        top: -Math.round(800 * 0.85),
+        behavior: 'smooth',
+      });
+      expect(mockRendition.prev).not.toHaveBeenCalled();
+
+      // next() when at bottom boundary
+      scrollBySpy.mockClear();
+      epubContainer.scrollTop = 2200; // 2200 + 800 = 3000 >= 3000 - 10
+      await engine.next();
+      expect(mockRendition.next).toHaveBeenCalled();
+
+      // prev() when at top boundary
+      epubContainer.scrollTop = 5; // <= 10
+      await engine.prev();
+      expect(mockRendition.prev).toHaveBeenCalled();
+    });
+
+    it('directly calls rendition next and prev in paginated mode', async () => {
+      await engine.setPaginationMode('paginated');
+      await engine.init(container, 'fake-epub-data');
+
+      await engine.next();
+      expect(mockRendition.next).toHaveBeenCalledTimes(1);
+
+      await engine.prev();
+      expect(mockRendition.prev).toHaveBeenCalledTimes(1);
+    });
+
+    it('detects horizontal swipe gestures inside iframe in paginated mode', async () => {
+      await engine.setPaginationMode('paginated');
+      await engine.init(container, 'fake-epub-data');
+
+      const nextSpy = vi.spyOn(engine, 'next').mockResolvedValue(undefined);
+      const prevSpy = vi.spyOn(engine, 'prev').mockResolvedValue(undefined);
+
+      const fakeDoc = document.implementation.createHTMLDocument();
+      const fakeIframe = document.createElement('iframe');
+      container.appendChild(fakeIframe);
+      const fakeWin = {
+        frameElement: fakeIframe,
+        getSelection: () => null,
+      };
+
+      const mockContents = {
+        document: fakeDoc,
+        window: fakeWin,
+        addStylesheetRules: vi.fn(),
+      };
+
+      // Trigger content hook
+      contentHooks.forEach((cb) => cb(mockContents));
+
+      // 1. Swipe Left (Next)
+      const touchStartEvent = new TouchEvent('touchstart', {
+        touches: [{ clientX: 200, clientY: 100 } as any],
+      });
+      fakeDoc.dispatchEvent(touchStartEvent);
+
+      const touchEndEvent = new TouchEvent('touchend', {
+        changedTouches: [{ clientX: 120, clientY: 102 } as any],
+      });
+      fakeDoc.dispatchEvent(touchEndEvent);
+
+      expect(nextSpy).toHaveBeenCalled();
+      expect(prevSpy).not.toHaveBeenCalled();
+
+      // 2. Swipe Right (Prev)
+      nextSpy.mockClear();
+      prevSpy.mockClear();
+
+      const touchStartRight = new TouchEvent('touchstart', {
+        touches: [{ clientX: 100, clientY: 100 } as any],
+      });
+      fakeDoc.dispatchEvent(touchStartRight);
+
+      const touchEndRight = new TouchEvent('touchend', {
+        changedTouches: [{ clientX: 180, clientY: 98 } as any],
+      });
+      fakeDoc.dispatchEvent(touchEndRight);
+
+      expect(prevSpy).toHaveBeenCalled();
+      expect(nextSpy).not.toHaveBeenCalled();
+    });
+
+    it('does not trigger swipe page turn in scroll mode', async () => {
+      await engine.setPaginationMode('scroll');
+      await engine.init(container, 'fake-epub-data');
+
+      const nextSpy = vi.spyOn(engine, 'next').mockResolvedValue(undefined);
+      const prevSpy = vi.spyOn(engine, 'prev').mockResolvedValue(undefined);
+
+      const fakeDoc = document.implementation.createHTMLDocument();
+      const fakeIframe = document.createElement('iframe');
+      container.appendChild(fakeIframe);
+      const fakeWin = {
+        frameElement: fakeIframe,
+        getSelection: () => null,
+      };
+
+      const mockContents = {
+        document: fakeDoc,
+        window: fakeWin,
+        addStylesheetRules: vi.fn(),
+      };
+
+      contentHooks.forEach((cb) => cb(mockContents));
+
+      const touchStartEvent = new TouchEvent('touchstart', {
+        touches: [{ clientX: 200, clientY: 100 } as any],
+      });
+      fakeDoc.dispatchEvent(touchStartEvent);
+
+      const touchEndEvent = new TouchEvent('touchend', {
+        changedTouches: [{ clientX: 100, clientY: 100 } as any],
+      });
+      fakeDoc.dispatchEvent(touchEndEvent);
+
+      expect(nextSpy).not.toHaveBeenCalled();
+      expect(prevSpy).not.toHaveBeenCalled();
+    });
+
+    it('sets pan-y touchAction on doc and touch scroll styling on epub-container in scroll mode', async () => {
+      await engine.setPaginationMode('scroll');
+      await engine.init(container, 'fake-epub-data');
+
+      const fakeDoc = document.implementation.createHTMLDocument();
+      const fakeIframe = document.createElement('iframe');
+      container.appendChild(fakeIframe);
+      const fakeWin = {
+        frameElement: fakeIframe,
+        getSelection: () => null,
+      };
+
+      const mockContents = {
+        document: fakeDoc,
+        window: fakeWin,
+        addStylesheetRules: vi.fn(),
+      };
+
+      contentHooks.forEach((cb) => cb(mockContents));
+
+      expect(fakeDoc.documentElement.style.touchAction).toBe('pan-y');
+    });
   });
 });

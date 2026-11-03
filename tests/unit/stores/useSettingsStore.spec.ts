@@ -240,4 +240,18 @@ describe('useSettingsStore', () => {
       expect(stored.invertVolumeKeys).toBe(true);
     });
   });
+
+  describe('setPaginationMode', () => {
+    it('should update paginationMode, persist to localStorage, and sync with readerStore', async () => {
+      const readerStore = (await import('~/stores/readerStore')).useReaderStore();
+      expect(store.paginationMode).toBe('paginated');
+
+      store.setPaginationMode('scroll');
+
+      expect(store.paginationMode).toBe('scroll');
+      expect(readerStore.settings.paginationMode).toBe('scroll');
+      const stored = JSON.parse(localStorage.getItem(SETTINGS_STORAGE_KEY) || '{}');
+      expect(stored.paginationMode).toBe('scroll');
+    });
+  });
 });

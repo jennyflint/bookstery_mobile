@@ -138,4 +138,64 @@ describe('ReaderView.vue', () => {
     wrapper.unmount();
     expect(clearSpy).toHaveBeenCalled();
   });
+
+  it('passes saved paginationMode to activeEngine and updates on change', async () => {
+    const readerStore = (await import('~/stores/readerStore')).useReaderStore();
+    readerStore.settings.paginationMode = 'scroll';
+
+    const mockEngine = {
+      setPaginationMode: vi.fn(),
+    };
+
+    const wrapper = mount(ReaderView, {
+      props: {
+        activeEngine: mockEngine,
+      },
+      global: {
+        plugins: [pinia],
+        stubs: {
+          ReaderViewport: true,
+        },
+      },
+    });
+
+    await wrapper.vm.$nextTick();
+    expect(mockEngine.setPaginationMode).toHaveBeenCalledWith('scroll');
+
+    // Change setting
+    readerStore.settings.paginationMode = 'paginated';
+    await wrapper.vm.$nextTick();
+    expect(mockEngine.setPaginationMode).toHaveBeenCalledWith('paginated');
+  });
+
+  it('scrolls epub container when in scroll mode and not at bottom', async () => {
+    const readerStore = (await import('~/stores/readerStore')).useReaderStore();
+    readerStore.settings.paginationMode = 'scroll';
+
+    const epubContainer = document.createElement('div');
+    epubContainer.className = 'epub-container';
+    Object.defineProperty(epubContainer, 'scrollTop', { value: 0, writable: true });
+    Object.defineProperty(epubContainer, 'clientHeight', { value: 800, writable: true });
+    Object.defineProperty(epubContainer, 'scrollHeight', { value: 2000, writable: true });
+    const scrollBySpy = vi.fn();
+    epubContainer.scrollBy = scrollBySpy;
+    document.body.appendChild(epubContainer);
+
+    const wrapper = mount(ReaderView, {
+      global: {
+        plugins: [pinia],
+        stubs: {
+          ReaderViewport: true,
+        },
+      },
+    });
+
+    const vm = wrapper.vm as any;
+    await vm.handleNextPage();
+
+    expect(scrollBySpy).toHaveBeenCalled();
+    expect(wrapper.emitted('next')).toBeUndefined();
+
+    document.body.removeChild(epubContainer);
+  });
 });

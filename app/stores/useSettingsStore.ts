@@ -1,7 +1,7 @@
 import { defineStore } from 'pinia';
 import { ScreenControlService } from '../services/ScreenControlService';
 import { useReaderStore } from './readerStore';
-import type { ScreenControlSettings, ScreenOrientationMode } from '../types';
+import type { ReaderPaginationMode, ScreenControlSettings, ScreenOrientationMode } from '../types';
 
 export const SETTINGS_STORAGE_KEY = 'bookstery_screen_control_settings';
 
@@ -12,6 +12,7 @@ export const DEFAULT_SCREEN_CONTROL_SETTINGS: Required<ScreenControlSettings> = 
   fontSize: 18,
   volumeKeyPageTurn: true,
   invertVolumeKeys: false,
+  paginationMode: 'paginated',
 };
 
 function getStoredSettings(): Required<ScreenControlSettings> {
@@ -49,6 +50,12 @@ function getStoredSettings(): Required<ScreenControlSettings> {
           typeof parsed.invertVolumeKeys === 'boolean'
             ? parsed.invertVolumeKeys
             : DEFAULT_SCREEN_CONTROL_SETTINGS.invertVolumeKeys,
+        paginationMode:
+          parsed.paginationMode === 'scroll' || parsed.paginationMode === 'paginated'
+            ? parsed.paginationMode
+            : parsed.paginationMode === 'buttons'
+              ? 'paginated'
+              : DEFAULT_SCREEN_CONTROL_SETTINGS.paginationMode,
       };
     }
   } catch {
@@ -78,6 +85,7 @@ export const useSettingsStore = defineStore('settings', {
       fontSize: initial.fontSize,
       volumeKeyPageTurn: initial.volumeKeyPageTurn,
       invertVolumeKeys: initial.invertVolumeKeys,
+      paginationMode: initial.paginationMode as ReaderPaginationMode,
       isReaderActive: false,
     };
   },
@@ -203,6 +211,19 @@ export const useSettingsStore = defineStore('settings', {
       } catch {}
     },
 
+    setPaginationMode(mode: ReaderPaginationMode): void {
+      const normalized = mode === 'buttons' ? 'paginated' : mode;
+      this.paginationMode = normalized;
+      this.persist();
+
+      try {
+        const readerStore = useReaderStore();
+        if (readerStore.settings.paginationMode !== normalized) {
+          readerStore.setPaginationMode(normalized);
+        }
+      } catch {}
+    },
+
     resetToDefault(): void {
       this.keepScreenAwake = DEFAULT_SCREEN_CONTROL_SETTINGS.keepScreenAwake;
       this.orientationLock = DEFAULT_SCREEN_CONTROL_SETTINGS.orientationLock;
@@ -211,6 +232,7 @@ export const useSettingsStore = defineStore('settings', {
       this.fontSize = DEFAULT_SCREEN_CONTROL_SETTINGS.fontSize;
       this.volumeKeyPageTurn = DEFAULT_SCREEN_CONTROL_SETTINGS.volumeKeyPageTurn;
       this.invertVolumeKeys = DEFAULT_SCREEN_CONTROL_SETTINGS.invertVolumeKeys;
+      this.paginationMode = DEFAULT_SCREEN_CONTROL_SETTINGS.paginationMode ?? 'paginated';
       this.persist();
 
       try {
@@ -220,6 +242,7 @@ export const useSettingsStore = defineStore('settings', {
         }
         readerStore.setVolumeKeyPageTurn(this.volumeKeyPageTurn);
         readerStore.setInvertVolumeKeys(this.invertVolumeKeys);
+        readerStore.setPaginationMode(this.paginationMode);
       } catch {}
 
       if (this.isReaderActive) {
@@ -240,6 +263,7 @@ export const useSettingsStore = defineStore('settings', {
         fontSize: this.fontSize,
         volumeKeyPageTurn: this.volumeKeyPageTurn,
         invertVolumeKeys: this.invertVolumeKeys,
+        paginationMode: this.paginationMode,
       });
     },
   },

@@ -46,12 +46,38 @@ const getActiveScrollElement = (): HTMLElement | null => {
   if (readerStore.isReflowMode && readerStore.currentBook?.format === 'pdf') {
     return document.querySelector('[data-testid="pdf-reflow-view"]') as HTMLElement | null;
   }
+  if (readerStore.settings.paginationMode === 'scroll') {
+    const epubScroll = document.querySelector('.epub-container') as HTMLElement | null;
+    if (epubScroll && epubScroll.scrollHeight > epubScroll.clientHeight + 10) {
+      return epubScroll;
+    }
+  }
   const zoomScroll = document.querySelector('[data-testid="zoom-scroll-container"]') as HTMLElement | null;
   if (zoomScroll && zoomScroll.scrollHeight > zoomScroll.clientHeight + 10) {
     return zoomScroll;
   }
   return null;
 };
+
+watch(
+  () => props.activeEngine,
+  (engine: any) => {
+    if (engine && typeof engine.setPaginationMode === 'function') {
+      void engine.setPaginationMode(readerStore.settings.paginationMode);
+    }
+  },
+  { immediate: true },
+);
+
+watch(
+  () => readerStore.settings.paginationMode,
+  async (newMode) => {
+    const engine = props.activeEngine as any;
+    if (engine && typeof engine.setPaginationMode === 'function') {
+      await engine.setPaginationMode(newMode);
+    }
+  },
+);
 
 const handleNextPage = async (): Promise<void> => {
   const scrollEl = getActiveScrollElement();

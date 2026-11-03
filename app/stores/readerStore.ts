@@ -61,7 +61,7 @@ const DEFAULT_SETTINGS: ReaderSettings = {
   fontSize: 18,
   fontFamily: 'serif',
   lineHeight: 1.6,
-  paginationMode: 'scroll',
+  paginationMode: 'paginated',
   customBackgroundColor: '#ffffff',
   customTextColor: '#18181b',
   keepScreenAwake: true,
@@ -78,7 +78,11 @@ function getStoredSettings(): ReaderSettings {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (raw) {
-      return { ...DEFAULT_SETTINGS, ...JSON.parse(raw) };
+      const parsed = JSON.parse(raw);
+      if (parsed.paginationMode === 'buttons') {
+        parsed.paginationMode = 'paginated';
+      }
+      return { ...DEFAULT_SETTINGS, ...parsed };
     }
   } catch {}
   return { ...DEFAULT_SETTINGS };
@@ -281,8 +285,16 @@ export const useReaderStore = defineStore('reader', {
       this.isImmersiveMode = val;
     },
     setPaginationMode(mode: ReaderPaginationMode): void {
-      this.settings.paginationMode = mode;
+      const normalized = mode === 'buttons' ? 'paginated' : mode;
+      this.settings.paginationMode = normalized;
       persistSettings(this.settings);
+      try {
+        const settingsStore = useSettingsStore();
+        if (settingsStore.paginationMode !== normalized) {
+          settingsStore.paginationMode = normalized;
+          settingsStore.persist();
+        }
+      } catch {}
     },
     setCustomBackgroundColor(color: string): void {
       this.settings.customBackgroundColor = color;

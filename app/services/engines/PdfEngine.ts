@@ -234,7 +234,7 @@ export class PdfEngine extends BaseEngine {
     const scaleY = availableHeight / unscaledViewport.height;
 
     const isWiderThanTall = unscaledViewport.width > unscaledViewport.height;
-    const fitScale = isWiderThanTall || this.fitWholePage || this.paginationMode === 'buttons'
+    const fitScale = isWiderThanTall || this.fitWholePage || this.paginationMode === 'buttons' || this.paginationMode === 'paginated'
       ? Math.min(scaleX, scaleY)
       : scaleX;
 
