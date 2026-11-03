@@ -1,5 +1,14 @@
 <script setup lang="ts">
-import { ref, computed, watch, onMounted, onUnmounted, onBeforeUnmount, onDeactivated, nextTick } from 'vue';
+import {
+  ref,
+  computed,
+  watch,
+  onMounted,
+  onUnmounted,
+  onBeforeUnmount,
+  onDeactivated,
+  nextTick,
+} from 'vue';
 import { useRoute, useRouter, onBeforeRouteLeave } from 'vue-router';
 import { App } from '@capacitor/app';
 import type { PluginListenerHandle } from '@capacitor/core';
@@ -33,6 +42,7 @@ import { useTtsStore } from '../../stores/ttsStore';
 import { useSettingsStore } from '../../stores/useSettingsStore';
 import { useAiReader } from '../../composables/useAiReader';
 import { useVolumePageTurn } from '../../composables/useVolumePageTurn';
+import { useAndroidBackButton, BACK_PRIORITY } from '../../composables/useAndroidBackButton';
 
 const { t } = useI18n();
 const route = useRoute();
@@ -97,7 +107,38 @@ const isSettingsOpen = ref(false);
 const isTranslationOpen = ref(false);
 const activeTranslationResult = ref<TranslationResult | null>(null);
 const isNavigating = ref(false);
-let backButtonListener: PluginListenerHandle | null = null;
+const { registerBackHandler } = useAndroidBackButton();
+
+// Priority 1: Dismiss reader overlays, sheets, zoom
+registerBackHandler(() => {
+  if (viewportRef.value) {
+    const isZoomed = viewportRef.value.scale > 1.01 || viewportRef.value.scale < 0.99;
+    const isPanned =
+      Math.abs(viewportRef.value.translateX) > 1 || Math.abs(viewportRef.value.translateY) > 1;
+    if (isZoomed || isPanned) {
+      viewportRef.value.resetZoom();
+      return true;
+    }
+  }
+
+  if (isSettingsOpen.value) {
+    isSettingsOpen.value = false;
+    return true;
+  }
+
+  if (isTranslationOpen.value) {
+    handleCloseTranslation();
+    return true;
+  }
+
+  return false;
+}, BACK_PRIORITY.OVERLAY);
+
+// Priority 2: Clean reader exit before navigating to root '/'
+registerBackHandler(async () => {
+  await handleCloseReader();
+  return true;
+}, BACK_PRIORITY.ROUTE);
 
 const bookId = route.params.id as string;
 
@@ -143,14 +184,6 @@ watch(
 );
 
 onMounted(async () => {
-  try {
-    backButtonListener = await App.addListener('backButton', () => {
-      handleBackButtonPress();
-    });
-  } catch (err) {
-    console.warn('[Reader] Capacitor App backButton listener registration failed:', err);
-  }
-
   await settingsStore.enterReader();
   await libraryStore.loadBooks();
   const book = libraryStore.books.find((b) => b.id === bookId);
@@ -170,7 +203,8 @@ onMounted(async () => {
     let rawData: Uint8Array | ArrayBuffer | string = '';
     try {
       rawData =
-        (await loadBookBytesNative(book.file_path)) ?? (await readBookViaFilesystem(book.file_path));
+        (await loadBookBytesNative(book.file_path)) ??
+        (await readBookViaFilesystem(book.file_path));
     } catch (readErr) {
       console.warn('[Reader] Failed to read book from filesystem, using fallback sample:', readErr);
       if (book.format === 'fb2') {
@@ -236,12 +270,6 @@ startxref
 
 onUnmounted(async () => {
   readerStore.clearTextSelection();
-  if (backButtonListener) {
-    try {
-      await backButtonListener.remove();
-    } catch {}
-    backButtonListener = null;
-  }
   const isTtsPlaying = ttsStore.isPlaying;
   if (!isTtsPlaying) {
     try {
@@ -296,16 +324,12 @@ const handleCloseReader = async (): Promise<void> => {
     readerStore.clearReflowCache();
     closeBook();
 
-    // 3. Route navigation fallback
-    if (typeof window !== 'undefined' && window.history.state?.back) {
-      router.back();
-    } else {
-      await router.push('/');
-    }
+    // 3. Route navigation: replace route with root '/' to prevent history stack loops
+    await router.replace('/');
   } catch (err) {
     console.error('[Reader] Navigation failed during reader close:', err);
     try {
-      await router.push('/');
+      await router.replace('/');
     } catch {}
   }
 };
@@ -555,8 +579,8 @@ const activePageText = computed((): string => {
 });
 
 const handleOpenAiChat = async (): Promise<void> => {
-  if (bookId.value) {
-    await aiStore.openChat(bookId.value);
+  if (bookId) {
+    await aiStore.openChat(bookId);
   }
 };
 

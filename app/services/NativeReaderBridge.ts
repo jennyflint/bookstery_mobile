@@ -1,4 +1,5 @@
 import { Capacitor, registerPlugin } from '@capacitor/core';
+import { App } from '@capacitor/app';
 import type { NativeReaderBridgePlugin } from '../types/nativeBridge';
 
 /**
@@ -32,6 +33,9 @@ export const NativeReaderBridge = registerPlugin<NativeReaderBridgePlugin>('Nati
     async isInterceptionEnabled() {
       return { enabled: false };
     },
+    async exitApp() {
+      // In browser/dev mode, exitApp is a no-op
+    },
     async addListener() {
       return { remove: async (): Promise<void> => {} };
     },
@@ -60,4 +64,25 @@ export async function fetchBookBytes(uriOrPath: string): Promise<Uint8Array> {
     throw new Error(`Failed to stream book (${response.status})`);
   }
   return new Uint8Array(await response.arrayBuffer());
+}
+
+/**
+ * Cleanly exits the Android application by calling the native plugin `exitApp`,
+ * with a fallback to Capacitor's `@capacitor/app` `App.exitApp()`.
+ */
+export async function exitApp(): Promise<void> {
+  if (isNativeReaderBridgeAvailable()) {
+    try {
+      await NativeReaderBridge.exitApp();
+      return;
+    } catch (err) {
+      console.warn('[NativeReaderBridge] Native exitApp failed, falling back to App.exitApp:', err);
+    }
+  }
+
+  try {
+    await App.exitApp();
+  } catch (err) {
+    console.warn('[NativeReaderBridge] App.exitApp fallback failed:', err);
+  }
 }

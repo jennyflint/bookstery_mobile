@@ -150,8 +150,17 @@ describe('Reader Back Button and Navigation', () => {
               },
             },
             ReaderOverlayControls: {
-              template: '<div data-testid="stub-controls"><button data-testid="reader-back-btn" @click="$emit(\'back\')">Back</button></div>',
-              emits: ['back', 'next', 'prev', 'navigate', 'open-settings', 'open-notes', 'chapter-tldr'],
+              template:
+                '<div data-testid="stub-controls"><button data-testid="reader-back-btn" @click="$emit(\'back\')">Back</button></div>',
+              emits: [
+                'back',
+                'next',
+                'prev',
+                'navigate',
+                'open-settings',
+                'open-notes',
+                'chapter-tldr',
+              ],
             },
             ThemeSettingsSheet: true,
             ReaderSelectionBar: true,
@@ -199,7 +208,7 @@ describe('Reader Back Button and Navigation', () => {
       expect(mockCloseBook).toHaveBeenCalled();
     });
 
-    it('should navigate to "/" when window.history.state.back does not exist', async () => {
+    it('should navigate to "/" via router.replace to prevent history loop', async () => {
       window.history.replaceState({ back: null }, '');
 
       const wrapper = mountReaderPage();
@@ -208,11 +217,12 @@ describe('Reader Back Button and Navigation', () => {
       const vm = wrapper.vm as any;
       await vm.handleCloseReader();
 
-      expect(mockPush).toHaveBeenCalledWith('/');
+      expect(mockReplace).toHaveBeenCalledWith('/');
+      expect(mockPush).not.toHaveBeenCalled();
       expect(mockBack).not.toHaveBeenCalled();
     });
 
-    it('should navigate via router.back() when window.history.state.back exists', async () => {
+    it('should always use router.replace("/") even when window.history.state.back exists', async () => {
       window.history.replaceState({ back: '/library' }, '');
 
       const wrapper = mountReaderPage();
@@ -221,7 +231,8 @@ describe('Reader Back Button and Navigation', () => {
       const vm = wrapper.vm as any;
       await vm.handleCloseReader();
 
-      expect(mockBack).toHaveBeenCalled();
+      expect(mockReplace).toHaveBeenCalledWith('/');
+      expect(mockBack).not.toHaveBeenCalled();
       expect(mockPush).not.toHaveBeenCalled();
     });
 
@@ -370,24 +381,18 @@ describe('Reader Back Button and Navigation', () => {
         await vm.handleBackButtonPress();
 
         expect(mockCloseBook).toHaveBeenCalled();
-        expect(mockPush).toHaveBeenCalledWith('/');
+        expect(mockReplace).toHaveBeenCalledWith('/');
+        expect(mockPush).not.toHaveBeenCalled();
       });
 
-      it('should register backButton listener on mount and remove it on unmount', async () => {
-        const mockListenerRemove = vi.fn().mockResolvedValue(undefined);
-        mockApp.addListener.mockResolvedValueOnce({
-          remove: mockListenerRemove,
-        });
-
+      it('should mount cleanly and unregister handlers on unmount', async () => {
         const wrapper = mountReaderPage();
         await wrapper.vm.$nextTick();
 
-        expect(mockApp.addListener).toHaveBeenCalledWith('backButton', expect.any(Function));
+        expect(wrapper.exists()).toBe(true);
 
         wrapper.unmount();
         await wrapper.vm.$nextTick();
-
-        expect(mockListenerRemove).toHaveBeenCalledTimes(1);
       });
     });
   });

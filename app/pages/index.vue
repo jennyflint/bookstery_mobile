@@ -5,6 +5,7 @@ import { useLibraryStore } from '../stores/libraryStore';
 import { useCollectionStore } from '../stores/collectionStore';
 import { useAuth } from '../composables/useAuth';
 import { useBookSync } from '../composables/useBookSync';
+import { useAndroidBackButton, BACK_PRIORITY } from '../composables/useAndroidBackButton';
 import type { BookRecord } from '../types';
 import AppHeader from '../components/layout/AppHeader.vue';
 import BookGrid from '../components/library/BookGrid.vue';
@@ -21,7 +22,16 @@ const libraryStore = useLibraryStore();
 const collectionStore = useCollectionStore();
 const { initAuth } = useAuth();
 const { initSync } = useBookSync();
+const { registerBackHandler } = useAndroidBackButton();
 const isScannerOpen = ref(false);
+
+registerBackHandler(() => {
+  if (isScannerOpen.value) {
+    closeScanner();
+    return true;
+  }
+  return false;
+}, BACK_PRIORITY.ROOT_MODAL);
 
 onMounted(async () => {
   await initAuth();

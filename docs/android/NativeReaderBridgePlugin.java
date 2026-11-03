@@ -760,4 +760,29 @@ public class NativeReaderBridgePlugin extends Plugin {
         // Consumed (including key-up and repeats) so the system volume UI never appears.
         return true;
     }
+
+    // ---------------------------------------------------------------------------------------
+    // 6. Application lifecycle & navigation
+    // ---------------------------------------------------------------------------------------
+
+    @PluginMethod
+    public void exitApp(final PluginCall call) {
+        if (getActivity() == null) {
+            call.reject("Activity is not available");
+            return;
+        }
+        getActivity().runOnUiThread(() -> {
+            try {
+                getActivity().moveTaskToBack(true);
+                getActivity().finish();
+                call.resolve();
+            } catch (Exception e) {
+                call.reject("Failed to exit app: " + e.getMessage(), e);
+            }
+        });
+    }
+
+    public void notifyBackButtonPressed() {
+        notifyListeners("backButtonPressed", new JSObject());
+    }
 }

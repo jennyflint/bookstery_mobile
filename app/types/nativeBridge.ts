@@ -76,16 +76,23 @@ export interface NativeVolumeKeyEvent {
 
 export interface NativeReaderBridgePlugin {
   scanDirectory(options: NativeScanDirectoryOptions): Promise<NativeScanDirectoryResult>;
-  resolveStreamableUrl(options: NativeResolveStreamableOptions): Promise<NativeResolveStreamableResult>;
+  resolveStreamableUrl(
+    options: NativeResolveStreamableOptions,
+  ): Promise<NativeResolveStreamableResult>;
   copyToAppStorage(options: NativeCopyToAppStorageOptions): Promise<NativeCopyToAppStorageResult>;
   generatePdfThumbnail(options: NativePdfThumbnailOptions): Promise<NativePdfThumbnailResult>;
   checkStoragePermission(): Promise<NativeStoragePermissionStatus>;
   requestStoragePermission(options?: { uri?: string }): Promise<NativeStoragePermissionStatus>;
   setVolumeInterception(options: { enabled: boolean }): Promise<{ enabled: boolean }>;
   isInterceptionEnabled(): Promise<{ enabled: boolean }>;
+  exitApp(): Promise<void>;
   addListener(
     eventName: 'volumeKeyPressed',
     listenerFunc: (event: NativeVolumeKeyEvent) => void,
+  ): Promise<PluginListenerHandle>;
+  addListener(
+    eventName: 'backButtonPressed',
+    listenerFunc: () => void,
   ): Promise<PluginListenerHandle>;
   removeAllListeners(): Promise<void>;
 }

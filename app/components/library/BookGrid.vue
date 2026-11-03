@@ -5,6 +5,7 @@ import { useCollectionStore } from '../../stores/collectionStore';
 import { useCollectionNavigation } from '../../composables/useCollectionNavigation';
 import type { BookFormat, BookRecord } from '../../types';
 import { useBookSort } from '../../composables/useBookSort';
+import { useAndroidBackButton, BACK_PRIORITY } from '../../composables/useAndroidBackButton';
 import BookCard from './BookCard.vue';
 import BookActionMenu from './BookActionMenu.vue';
 import CollectionAssignModal from './CollectionAssignModal.vue';
@@ -25,6 +26,19 @@ const selectedMenuBook = ref<BookRecord | null>(null);
 const isActionMenuOpen = ref(false);
 const selectedAssignBook = ref<BookRecord | null>(null);
 const isAssignModalOpen = ref(false);
+const { registerBackHandler } = useAndroidBackButton();
+
+registerBackHandler(() => {
+  if (isActionMenuOpen.value) {
+    handleCloseMenu();
+    return true;
+  }
+  if (isAssignModalOpen.value) {
+    handleCloseAssignModal();
+    return true;
+  }
+  return false;
+}, BACK_PRIORITY.ROOT_MODAL);
 
 const setFormat = (format: 'all' | BookFormat): void => {
   libraryStore.setFormatFilter(format);

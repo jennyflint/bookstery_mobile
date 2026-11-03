@@ -34,7 +34,7 @@ onBeforeUnmount(() => {
 
 const handleViewBooks = () => {
   scannerStore.dismissNotification();
-  router.push('/');
+  router.replace('/');
 };
 
 const handleDismiss = () => {
@@ -57,7 +57,7 @@ const handleDismiss = () => {
         scannerStore.lastScanSummary &&
         scannerStore.lastScanSummary.newBooksCount > 0
       "
-      class="fixed bottom-20 left-4 right-4 z-50 mx-auto max-w-md sm:bottom-6 sm:right-6 sm:left-auto"
+      class="fixed bottom-20 left-4 right-4 z-50 mx-auto max-w-md sm:bottom-6 sm:left-auto sm:right-6"
     >
       <div
         class="flex items-center justify-between gap-3 rounded-2xl border border-gray-200 bg-white p-4 shadow-xl dark:border-[#C8E695]/30 dark:bg-zinc-900"
@@ -66,7 +66,12 @@ const handleDismiss = () => {
           <div
             class="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-xl bg-[#C8E695] text-[#3E5725]"
           >
-            <svg class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <svg
+              class="h-5 w-5"
+              fill="none"
+              viewBox="0 0 24 24"
+              stroke="currentColor"
+            >
               <path
                 stroke-linecap="round"
                 stroke-linejoin="round"
@@ -99,7 +104,12 @@ const handleDismiss = () => {
             class="rounded-lg p-1 text-zinc-500 hover:bg-black/5 dark:text-zinc-400 dark:hover:bg-white/5"
             @click="handleDismiss"
           >
-            <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <svg
+              class="h-4 w-4"
+              fill="none"
+              viewBox="0 0 24 24"
+              stroke="currentColor"
+            >
               <path
                 stroke-linecap="round"
                 stroke-linejoin="round"

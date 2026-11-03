@@ -5,6 +5,7 @@ import { useLibraryStore } from '../../stores/libraryStore';
 import { useCollectionStore } from '../../stores/collectionStore';
 import { useAuth } from '../../composables/useAuth';
 import { useBookSync } from '../../composables/useBookSync';
+import { useAndroidBackButton, BACK_PRIORITY } from '../../composables/useAndroidBackButton';
 import type { BookRecord, CollectionFilter } from '../../types';
 import AppHeader from '../../components/layout/AppHeader.vue';
 import BookGrid from '../../components/library/BookGrid.vue';
@@ -17,7 +18,16 @@ const libraryStore = useLibraryStore();
 const collectionStore = useCollectionStore();
 const { initAuth } = useAuth();
 const { initSync } = useBookSync();
+const { registerBackHandler } = useAndroidBackButton();
 const isScannerOpen = ref(false);
+
+registerBackHandler(() => {
+  if (isScannerOpen.value) {
+    isScannerOpen.value = false;
+    return true;
+  }
+  return false;
+}, BACK_PRIORITY.OVERLAY);
 
 const parseParamId = (param: string | string[]): CollectionFilter => {
   const raw = Array.isArray(param) ? param[0] : param;
@@ -109,7 +119,8 @@ const handleImported = async (): Promise<void> => {
         <div class="flex items-center gap-2">
           <NuxtLink
             to="/"
-            class="flex items-center gap-1.5 rounded-xl border border-zinc-200 bg-white px-3 py-1.5 text-xs font-semibold text-zinc-600 shadow-xs transition-colors hover:bg-zinc-50 hover:text-zinc-900"
+            replace
+            class="shadow-xs flex items-center gap-1.5 rounded-xl border border-zinc-200 bg-white px-3 py-1.5 text-xs font-semibold text-zinc-600 transition-colors hover:bg-zinc-50 hover:text-zinc-900"
           >
             <svg
               class="h-4 w-4"
