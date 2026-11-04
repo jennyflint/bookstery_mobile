@@ -154,14 +154,41 @@ export const useLibraryStore = defineStore('library', {
     }): BookRecord | null {
       const candidateTitle = candidate.title?.trim().toLowerCase();
       const candidateAuthor = candidate.author?.trim().toLowerCase() || null;
+      const candidateNormPath = candidate.file_path
+        ? candidate.file_path.replace(/^file:\/\//, '')
+        : undefined;
+      const candidateFileName = candidateNormPath
+        ? candidateNormPath.split('/').pop()?.toLowerCase()
+        : undefined;
 
       for (const existing of this.books) {
         if (candidate.id && existing.id === candidate.id) {
           return existing;
         }
+
+        const existingNormPath = existing.file_path
+          ? existing.file_path.replace(/^file:\/\//, '')
+          : '';
+
+        if (candidateNormPath && existingNormPath === candidateNormPath) {
+          return existing;
+        }
+
         if (candidate.file_path && existing.file_path === candidate.file_path) {
           return existing;
         }
+
+        if (candidateFileName) {
+          const existingFileName = existingNormPath.split('/').pop()?.toLowerCase();
+          if (existingFileName && existingFileName === candidateFileName) {
+            return existing;
+          }
+          const sandboxMatch = /^books\/[0-9a-f]{8,}_(.+)$/i.exec(existing.file_path);
+          if (sandboxMatch && sandboxMatch[1].toLowerCase() === candidateFileName) {
+            return existing;
+          }
+        }
+
         if (candidateTitle && existing.title.trim().toLowerCase() === candidateTitle) {
           const existingAuthor = existing.author?.trim().toLowerCase() || null;
           if (!candidateAuthor && !existingAuthor) {
@@ -226,6 +253,17 @@ export const useLibraryStore = defineStore('library', {
       }
     },
     async removeBook(id: string): Promise<void> {
+      const target = this.books.find((b) => b.id === id);
+      if (target?.file_path && target.file_path.startsWith('books/')) {
+        try {
+          await Filesystem.deleteFile({
+            path: target.file_path,
+            directory: Directory.Data,
+          });
+        } catch {
+          // File may already have been removed or moved
+        }
+      }
       const sqlite = SqliteService.getInstance();
       await sqlite.deleteBook(id);
       this.books = this.books.filter((b) => b.id !== id);

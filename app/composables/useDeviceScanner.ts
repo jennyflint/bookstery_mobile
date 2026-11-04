@@ -11,6 +11,7 @@ import {
   toWebViewUrl,
 } from '../services/NativeReaderBridge';
 import { CoverGenerationQueueService } from '../services/covers/CoverGenerationQueueService';
+import { SqliteService } from '../services/database/SqliteService';
 import { useLibraryStore } from '../stores/libraryStore';
 import type { AddBookResult, BookRecord, ImportFilesResult, ScannedFile } from '../types';
 
@@ -59,8 +60,7 @@ export function useDeviceScanner() {
     try {
       await libraryStore.loadBooks();
       const documentsFiles = await scannerService.scanDirectory('', Directory.Documents);
-      const dataFiles = await scannerService.scanDirectory('', Directory.Data);
-      const combined = [...documentsFiles, ...dataFiles];
+      const combined = [...documentsFiles];
 
       try {
         const repo = ScanDirectoryRepository.getInstance();
@@ -117,6 +117,13 @@ export function useDeviceScanner() {
         f.isDuplicate = isDuplicate;
         uniqueMap.set(normKey, f);
       }
+      if (!hasStoragePermissionError.value) {
+        try {
+          await AutoScanService.getInstance().cleanupDuplicatedSandboxBooks();
+        } catch (err) {
+          console.warn('[DeviceScanner] Sandbox cleanup error in scanDevice:', err);
+        }
+      }
       scannedFiles.value = Array.from(uniqueMap.values());
       return scannedFiles.value;
     } finally {
@@ -142,13 +149,118 @@ export function useDeviceScanner() {
         }
 
         try {
-          const isNativeTarget =
-            isNativeReaderBridgeAvailable() &&
-            (file.path.startsWith('/') ||
-              file.path.startsWith('file://') ||
-              file.path.startsWith('content://'));
+          const normalizedPath = file.path.replace(/^file:\/\//, '');
+          const isDeviceStorage =
+            normalizedPath.startsWith('/storage/') ||
+            normalizedPath.startsWith('/sdcard/') ||
+            (normalizedPath.startsWith('/') && !normalizedPath.startsWith('/data/'));
 
-          if (isNativeTarget) {
+          if (isDeviceStorage) {
+            const format = file.format || scannerService.determineFormat(file.name);
+            if (!format) {
+              scanProgress.value = Math.round(((i + 1) / files.length) * 100);
+              continue;
+            }
+            const candidateTitle = file.name.replace(/\.[^/.]+$/, '').replace(/_/g, ' ');
+            const hash = await FileHashService.calculateSha256(`${file.name}|${file.size}`);
+
+            let existing = libraryStore.findDuplicate({
+              id: hash,
+              file_path: normalizedPath,
+              title: candidateTitle,
+            });
+
+            if (!existing) {
+              existing =
+                libraryStore.books.find((b) => {
+                  if (!b.file_path) return false;
+                  const match = /^books\/[0-9a-f]{8,}_(.+)$/i.exec(b.file_path);
+                  if (!match) return false;
+                  const originalName = match[1];
+                  return (
+                    originalName === file.name &&
+                    (!b.file_size ||
+                      b.file_size === file.size ||
+                      Math.abs((b.file_size || 0) - file.size) < 100)
+                  );
+                }) || null;
+            }
+
+            if (existing) {
+              const match = /^books\/[0-9a-f]{8,}_(.+)$/i.exec(existing.file_path);
+              if (match) {
+                const oldSandboxPath = existing.file_path;
+                await SqliteService.getInstance().updateFilePathAndSize(
+                  existing.id,
+                  normalizedPath,
+                  file.size,
+                );
+                existing.file_path = normalizedPath;
+                existing.file_size = file.size;
+                try {
+                  await Filesystem.deleteFile({
+                    path: oldSandboxPath,
+                    directory: Directory.Data,
+                  });
+                } catch {}
+              }
+              duplicateCount++;
+            } else {
+              const now = Date.now();
+              const bookRecord: BookRecord = {
+                id: hash,
+                title: candidateTitle,
+                author: null,
+                format,
+                file_path: normalizedPath,
+                cover_path: null,
+                locator: format === 'pdf' ? '1' : format === 'fb2' ? 'fb2-p-0' : '',
+                progress_percentage: 0,
+                total_items: 0,
+                last_read_at: now,
+                updated_at: now,
+                file_size: file.size,
+                file_hash: hash,
+              };
+
+              const addResult = await libraryStore.addBook(bookRecord);
+              if (addResult.success) {
+                importedCount++;
+                void (async () => {
+                  try {
+                    if (format === 'pdf' && isNativeReaderBridgeAvailable()) {
+                      try {
+                        const thumbnail = await NativeReaderBridge.generatePdfThumbnail({
+                          uriOrPath: normalizedPath,
+                          bookId: bookRecord.id,
+                          maxWidth: 360,
+                        });
+                        await libraryStore.updateCover(bookRecord.id, toWebViewUrl(thumbnail.path));
+                        return;
+                      } catch {
+                        // Fall through to coverQueue
+                      }
+                    }
+                    const bytes = await fetchBookBytes(normalizedPath);
+                    if (bytes && bytes.byteLength > 0) {
+                      const coverPath = await coverQueue.enqueue(
+                        bookRecord.id,
+                        bookRecord.format,
+                        bytes,
+                      );
+                      if (coverPath) {
+                        await libraryStore.updateCover(bookRecord.id, coverPath);
+                      }
+                    }
+                  } catch {
+                    // Missing cover must never fail import
+                  }
+                })();
+              } else if (addResult.isDuplicate) {
+                duplicateCount++;
+              }
+            }
+          } else if (file.path.startsWith('content://') && isNativeReaderBridgeAvailable()) {
             const candidateTitle = file.name.replace(/\.[^/.]+$/, '').replace(/_/g, ' ');
             const outcome = await importViaBridge(file.path, file.name, candidateTitle);
             if (outcome.status === 'imported') {
@@ -202,6 +314,11 @@ export function useDeviceScanner() {
           console.warn(`[DeviceScanner] Failed to import ${file.name}:`, err);
         }
         scanProgress.value = Math.round(((i + 1) / files.length) * 100);
+      }
+      try {
+        await AutoScanService.getInstance().cleanupDuplicatedSandboxBooks();
+      } catch (err) {
+        console.warn('[DeviceScanner] Sandbox cleanup error in importFiles:', err);
       }
       return { importedCount, duplicateCount };
     } finally {

@@ -16,7 +16,7 @@ vi.mock('../../../app/services/NativeReaderBridge', () => ({
   fetchBookBytes: vi.fn().mockResolvedValue(new Uint8Array([1])),
 }));
 
-import { Filesystem } from '@capacitor/filesystem';
+import { Filesystem, Directory } from '@capacitor/filesystem';
 import { useDeviceScanner } from '../../../app/composables/useDeviceScanner';
 import { useLibraryStore } from '../../../app/stores/libraryStore';
 
@@ -137,13 +137,7 @@ describe('useDeviceScanner native import of picked files', () => {
     expect(bridge.scanDirectory).not.toHaveBeenCalled();
   });
 
-  it('imports files from Download via importViaBridge when file.path is absolute', async () => {
-    bridge.copyToAppStorage.mockResolvedValue({
-      hash: 'download-pdf-hash',
-      size: 5000,
-      path: '/data/files/books/download-pdf-hash_Book.pdf',
-      relativePath: 'books/download-pdf-hash_Book.pdf',
-    });
+  it('imports files from Download in-place without calling copyToAppStorage when file.path is absolute', async () => {
     bridge.generatePdfThumbnail.mockResolvedValue({
       path: '/data/files/covers/thumb.webp',
       width: 360,
@@ -165,25 +159,16 @@ describe('useDeviceScanner native import of picked files', () => {
 
     expect(result.importedCount).toBe(1);
     expect(result.duplicateCount).toBe(0);
-    expect(bridge.copyToAppStorage).toHaveBeenCalledWith({
-      uriOrPath: '/storage/emulated/0/Download/Book.pdf',
-      fileName: 'Book.pdf',
-      destDir: 'books',
-    });
+    expect(bridge.copyToAppStorage).not.toHaveBeenCalled();
 
     const store = useLibraryStore();
     expect(store.books.length).toBe(1);
     expect(store.books[0].title).toBe('Book');
+    expect(store.books[0].file_path).toBe('/storage/emulated/0/Download/Book.pdf');
+    expect(store.books[0].file_size).toBe(5000);
   });
 
-  it('imports files from Download via importViaBridge when file.path is file:// URI', async () => {
-    bridge.copyToAppStorage.mockResolvedValue({
-      hash: 'download-epub-hash',
-      size: 3000,
-      path: '/data/files/books/download-epub-hash_Tale.epub',
-      relativePath: 'books/download-epub-hash_Tale.epub',
-    });
-
+  it('imports files from Download in-place without calling copyToAppStorage when file.path is file:// URI', async () => {
     const scanner = useDeviceScanner();
     const filesToImport = [
       {
@@ -199,15 +184,53 @@ describe('useDeviceScanner native import of picked files', () => {
 
     expect(result.importedCount).toBe(1);
     expect(result.duplicateCount).toBe(0);
-    expect(bridge.copyToAppStorage).toHaveBeenCalledWith({
-      uriOrPath: 'file:///storage/emulated/0/Download/Tale.epub',
-      fileName: 'Tale.epub',
-      destDir: 'books',
-    });
+    expect(bridge.copyToAppStorage).not.toHaveBeenCalled();
 
     const store = useLibraryStore();
     expect(store.books.length).toBe(1);
     expect(store.books[0].title).toBe('Tale');
+    expect(store.books[0].file_path).toBe('/storage/emulated/0/Download/Tale.epub');
+    expect(store.books[0].file_size).toBe(3000);
+  });
+
+  it('migrates existing sandbox copy to in-place storage and deletes redundant sandbox file when importing from Download', async () => {
+    const deleteSpy = vi.spyOn(Filesystem, 'deleteFile').mockResolvedValue(undefined as any);
+    const store = useLibraryStore();
+    await store.addBook({
+      id: 'existing-sandbox-id',
+      title: 'OldBook',
+      author: null,
+      format: 'pdf',
+      file_path: 'books/12345678_OldBook.pdf',
+      cover_path: null,
+      locator: '1',
+      progress_percentage: 0,
+      total_items: 10,
+      last_read_at: 1000,
+      updated_at: 1000,
+      file_size: 4000,
+    });
+
+    const scanner = useDeviceScanner();
+    const filesToImport = [
+      {
+        name: 'OldBook.pdf',
+        path: '/storage/emulated/0/Download/OldBook.pdf',
+        size: 4000,
+        format: 'pdf' as const,
+        isDuplicate: false,
+      },
+    ];
+
+    const result = await scanner.importFiles(filesToImport);
+
+    expect(result.duplicateCount).toBe(1);
+    expect(bridge.copyToAppStorage).not.toHaveBeenCalled();
+    expect(deleteSpy).toHaveBeenCalledWith({
+      path: 'books/12345678_OldBook.pdf',
+      directory: Directory.Data,
+    });
+    expect(store.books[0].file_path).toBe('/storage/emulated/0/Download/OldBook.pdf');
   });
 
   it('reports files that fail to import instead of failing silently', async () => {

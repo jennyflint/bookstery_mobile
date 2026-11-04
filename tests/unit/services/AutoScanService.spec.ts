@@ -3,6 +3,7 @@ import {
   AutoScanService,
   deriveDisplayNameFromUri,
 } from '../../../app/services/scanner/AutoScanService';
+import * as NativeBridgeModule from '../../../app/services/NativeReaderBridge';
 import { FileHashService } from '../../../app/services/scanner/FileHashService';
 import { Filesystem, Directory } from '@capacitor/filesystem';
 import { Capacitor } from '@capacitor/core';
@@ -432,6 +433,140 @@ describe('AutoScanService', () => {
 
       expect(reclaimedCount).toBe(0);
       expect(deleteFileSpy).not.toHaveBeenCalled();
+    });
+
+    it('should crawl /storage/emulated/0/Download and reclaim matching sandbox books when bridge is available', async () => {
+      vi.spyOn(NativeBridgeModule, 'isNativeReaderBridgeAvailable').mockReturnValue(true);
+
+      const sandboxedBook: BookRecord = {
+        id: 'download-sandboxed-1',
+        title: 'Downloaded Book',
+        author: 'Author',
+        format: 'epub',
+        file_path: 'books/def56789012_DownloadedBook.epub',
+        cover_path: null,
+        locator: '1',
+        progress_percentage: 0,
+        total_items: 100,
+        last_read_at: 1000,
+        updated_at: 1000,
+        file_size: 9000,
+      };
+
+      mockBookRepo.getBooks.mockResolvedValue([sandboxedBook]);
+      const deleteFileSpy = vi.spyOn(Filesystem, 'deleteFile').mockResolvedValue(undefined as any);
+
+      vi.spyOn(service as any, 'crawlDirectoryNative').mockImplementation(async (uri: string) => {
+        if (uri === '/storage/emulated/0/Download') {
+          return [
+            {
+              name: 'DownloadedBook.epub',
+              path: '/storage/emulated/0/Download/DownloadedBook.epub',
+              size: 9000,
+              format: 'epub',
+            },
+          ];
+        }
+        return [];
+      });
+
+      const reclaimedCount = await service.cleanupDuplicatedSandboxBooks();
+
+      expect(reclaimedCount).toBe(1);
+      expect(mockSqliteService.updateFilePathAndSize).toHaveBeenCalledWith(
+        'download-sandboxed-1',
+        '/storage/emulated/0/Download/DownloadedBook.epub',
+        9000,
+      );
+      expect(deleteFileSpy).toHaveBeenCalledWith({
+        path: 'books/def56789012_DownloadedBook.epub',
+        directory: Directory.Data,
+      });
+    });
+
+    it('should match sandbox book by filename fallback when file_size differs or is missing', async () => {
+      const sandboxedBook: BookRecord = {
+        id: 'fallback-sandboxed-1',
+        title: 'Fallback Book',
+        author: 'Author',
+        format: 'pdf',
+        file_path: 'books/112233445566_FallbackBook.pdf',
+        cover_path: null,
+        locator: '1',
+        progress_percentage: 0,
+        total_items: 100,
+        last_read_at: 1000,
+        updated_at: 1000,
+        file_size: undefined,
+      };
+
+      mockBookRepo.getBooks.mockResolvedValue([sandboxedBook]);
+      const deleteFileSpy = vi.spyOn(Filesystem, 'deleteFile').mockResolvedValue(undefined as any);
+
+      const scannedFiles = [
+        {
+          name: 'FallbackBook.pdf',
+          path: '/storage/emulated/0/Download/FallbackBook.pdf',
+          size: 12345,
+          format: 'pdf' as const,
+        },
+      ];
+
+      const reclaimedCount = await service.cleanupDuplicatedSandboxBooks(scannedFiles);
+
+      expect(reclaimedCount).toBe(1);
+      expect(mockSqliteService.updateFilePathAndSize).toHaveBeenCalledWith(
+        'fallback-sandboxed-1',
+        '/storage/emulated/0/Download/FallbackBook.pdf',
+        12345,
+      );
+      expect(deleteFileSpy).toHaveBeenCalledWith({
+        path: 'books/112233445566_FallbackBook.pdf',
+        directory: Directory.Data,
+      });
+    });
+
+    it('should delete orphaned files in Directory.Data/books not referenced by any book', async () => {
+      const validSandboxBook: BookRecord = {
+        id: 'valid-book-1',
+        title: 'Valid Book',
+        author: 'Author',
+        format: 'epub',
+        file_path: 'books/active_valid.epub',
+        cover_path: null,
+        locator: '1',
+        progress_percentage: 0,
+        total_items: 100,
+        last_read_at: 1000,
+        updated_at: 1000,
+      };
+
+      mockBookRepo.getBooks.mockResolvedValue([validSandboxBook]);
+
+      vi.spyOn(Filesystem, 'readdir').mockImplementation(async (options: any) => {
+        if (options?.path === 'books' && options?.directory === Directory.Data) {
+          return {
+            files: [
+              { name: 'active_valid.epub', type: 'file' },
+              { name: 'orphaned_12345_old.epub', type: 'file' },
+            ],
+          } as any;
+        }
+        return { files: [] } as any;
+      });
+
+      const deleteFileSpy = vi.spyOn(Filesystem, 'deleteFile').mockResolvedValue(undefined as any);
+
+      const reclaimedCount = await service.cleanupDuplicatedSandboxBooks([]);
+
+      expect(reclaimedCount).toBe(1);
+      expect(deleteFileSpy).toHaveBeenCalledWith({
+        path: 'books/orphaned_12345_old.epub',
+        directory: Directory.Data,
+      });
+      expect(deleteFileSpy).not.toHaveBeenCalledWith(
+        expect.objectContaining({ path: 'books/active_valid.epub' }),
+      );
     });
   });
 });

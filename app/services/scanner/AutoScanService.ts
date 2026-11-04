@@ -197,39 +197,59 @@ export class AutoScanService {
         (b) => b.file_path && SANDBOX_BOOK_PATH.test(b.file_path),
       );
 
-      if (sandboxedBooks.length === 0) {
-        return 0;
-      }
-
-      let files = scannedFiles;
-      if (!files || files.length === 0) {
-        const activeDirs = await this.directoryRepository.getActiveDirectories();
-        const settings = await this.directoryRepository.getSettings();
-        const isRecursive = settings.scan_subdirectories === 1;
-        const allFiles: CrawledBookFile[] = [];
-        for (const dir of activeDirs) {
-          const crawled =
-            (await this.crawlDirectoryNative(dir.uri, isRecursive)) ??
-            (await this.crawlDirectory(dir.uri, isRecursive));
-          allFiles.push(...crawled);
+      let files = scannedFiles ? [...scannedFiles] : [];
+      if (sandboxedBooks.length > 0) {
+        if (!scannedFiles || scannedFiles.length === 0) {
+          const activeDirs = await this.directoryRepository.getActiveDirectories();
+          const settings = await this.directoryRepository.getSettings();
+          const isRecursive = settings.scan_subdirectories === 1;
+          for (const dir of activeDirs) {
+            const crawled =
+              (await this.crawlDirectoryNative(dir.uri, isRecursive)) ??
+              (await this.crawlDirectory(dir.uri, isRecursive));
+            files.push(...crawled);
+          }
         }
-        files = allFiles;
+
+        if (isNativeReaderBridgeAvailable()) {
+          const permission = await NativeReaderBridge.checkStoragePermission().catch(() => ({ granted: false }));
+          if (permission.granted) {
+            const hasDownloadDir = files.some((f) => f.path.startsWith('/storage/emulated/0/Download'));
+            if (!hasDownloadDir) {
+              try {
+                const downloadFiles = await this.crawlDirectoryNative('/storage/emulated/0/Download', true);
+                if (downloadFiles && downloadFiles.length > 0) {
+                  files.push(...downloadFiles);
+                }
+              } catch (err) {
+                console.warn('[AutoScanService] Crawling Download directory failed:', err);
+              }
+            }
+          }
+        }
       }
 
       const fileMapByNameAndSize = new Map<string, CrawledBookFile>();
+      const fileMapByName = new Map<string, CrawledBookFile>();
       for (const f of files) {
         fileMapByNameAndSize.set(`${f.name}|${f.size}`, f);
+        if (!fileMapByName.has(f.name)) {
+          fileMapByName.set(f.name, f);
+        }
       }
 
       let reclaimedCount = 0;
       for (const book of sandboxedBooks) {
         const match = SANDBOX_BOOK_PATH.exec(book.file_path);
         const originalName = match?.[1];
-        if (!originalName || !book.file_size) {
+        if (!originalName) {
           continue;
         }
 
-        const originalFile = fileMapByNameAndSize.get(`${originalName}|${book.file_size}`);
+        const originalFile =
+          (book.file_size ? fileMapByNameAndSize.get(`${originalName}|${book.file_size}`) : undefined) ??
+          fileMapByName.get(originalName);
+
         if (originalFile) {
           const oldSandboxPath = book.file_path;
           await this.sqliteService.updateFilePathAndSize(
@@ -238,6 +258,7 @@ export class AutoScanService {
             originalFile.size,
           );
           book.file_path = originalFile.path;
+          book.file_size = originalFile.size;
 
           try {
             await Filesystem.deleteFile({
@@ -249,6 +270,41 @@ export class AutoScanService {
             console.warn('[AutoScanService] Failed to delete redundant sandbox file:', delErr);
           }
         }
+      }
+
+      // Reclaim orphaned files in Directory.Data/books not referenced by any book in SQLite
+      try {
+        const readdirResult = await Filesystem.readdir({
+          path: 'books',
+          directory: Directory.Data,
+        });
+        if (readdirResult?.files && readdirResult.files.length > 0) {
+          const allUpdatedBooks = await this.bookRepository.getBooks();
+          const referencedSandboxPaths = new Set<string>();
+          for (const b of allUpdatedBooks) {
+            if (b.file_path && b.file_path.startsWith('books/')) {
+              referencedSandboxPaths.add(b.file_path);
+            }
+          }
+
+          for (const fileItem of readdirResult.files) {
+            const fileName = typeof fileItem === 'string' ? fileItem : fileItem.name;
+            const relativePath = `books/${fileName}`;
+            if (!referencedSandboxPaths.has(relativePath)) {
+              try {
+                await Filesystem.deleteFile({
+                  path: relativePath,
+                  directory: Directory.Data,
+                });
+                reclaimedCount++;
+              } catch (delErr) {
+                console.warn('[AutoScanService] Failed to delete orphaned sandbox file:', delErr);
+              }
+            }
+          }
+        }
+      } catch {
+        // 'books' directory might not exist yet or readdir not supported in current environment
       }
 
       return reclaimedCount;
