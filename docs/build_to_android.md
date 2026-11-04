@@ -1,9 +1,7 @@
 # Building Bookstery Mobile for Android (APK Guide)
 
-
-```Don't Forget move Java Plugins to anroid directory```
-``` see docs/android ```
-
+`Don't Forget move Java Plugins to anroid directory`
+`see docs/android`
 
 This guide provides step-by-step instructions for building the **Bookstery Mobile** application into an Android Package Kit (**APK**).
 
@@ -16,6 +14,7 @@ The project uses **Nuxt 4** (SPA mode, `ssr: false`) coupled with **Capacitor 7*
 Before building the APK, ensure your workstation has the following tools installed and configured:
 
 ### 1.1. Node.js & npm
+
 - **Node.js**: `v20.x` or `v22.x` (LTS recommended)
 - **npm**: `v10.x` or newer
 - Verify installation:
@@ -25,6 +24,7 @@ Before building the APK, ensure your workstation has the following tools install
   ```
 
 ### 1.2. Java Development Kit (JDK)
+
 - **JDK 17** or **JDK 21** is required for Capacitor 7 and modern Android Gradle Plugin versions.
 - Verify installation:
   ```bash
@@ -42,13 +42,14 @@ Before building the APK, ensure your workstation has the following tools install
     ```
 
 ### 1.3. Android Studio & Android SDK
+
 1. Download and install [Android Studio](https://developer.android.com/studio).
 2. Open Android Studio and launch **SDK Manager** (**Tools > SDK Manager**):
    - **SDK Platforms**: Install **Android 14 (API level 34)** or **Android 15 (API level 35)**.
    - **SDK Tools**: Check and install:
-     - *Android SDK Build-Tools* (version 34.0.0 or newer)
-     - *Android SDK Command-line Tools (latest)*
-     - *Android SDK Platform-Tools*
+     - _Android SDK Build-Tools_ (version 34.0.0 or newer)
+     - _Android SDK Command-line Tools (latest)_
+     - _Android SDK Platform-Tools_
 3. Set the `ANDROID_HOME` (or `ANDROID_SDK_ROOT`) environment variable:
    - **Windows (PowerShell)**:
      ```powershell
@@ -70,16 +71,21 @@ Before building the APK, ensure your workstation has the following tools install
 ## 2. Project Setup & Web Build
 
 ### Step 1: Install Dependencies
+
 Ensure all npm packages are installed:
+
 ```bash
 npm install
 ```
 
 ### Step 2: Build the Static Web Application
+
 Nuxt must compile the Vue frontend into static web assets. Capacitor reads files from `.output/public`:
+
 ```bash
 npm run generate
 ```
+
 Verify that the `.output/public/` directory contains `index.html` and the generated bundles.
 
 ---
@@ -87,18 +93,24 @@ Verify that the `.output/public/` directory contains `index.html` and the genera
 ## 3. Initializing & Syncing Android Project
 
 ### Step 1: Add the Android Platform (First-Time Only)
+
 If the `android/` directory does not exist in the project root, initialize it:
+
 ```bash
 npx cap add android
 ```
+
 This generates the native Android Gradle project rooted in the `./android` folder with package ID `com.bookstery.app`.
 
 ### Step 2: Synchronize Assets and Plugins
+
 Whenever you update web code or add/remove Capacitor plugins, sync the changes to the native Android directory:
+
 ```bash
 npm run cap:sync
 ```
-*(This script runs `nuxt generate && cap sync`)*.
+
+_(This script runs `nuxt generate && cap sync`)_.
 
 ---
 
@@ -169,13 +181,17 @@ You can build the debug APK using either **Android Studio (GUI)** or the **Gradl
 For distributing the app outside Google Play (direct APK install) or uploading to app stores, build a release APK signed with a cryptographic key.
 
 ### Step 1: Generate a Keystore (If you do not have one)
+
 Run the following command to generate a release signing key:
+
 ```bash
 keytool -genkey -v -keystore bookstery-release-key.jks -alias bookstery -keyalg RSA -keysize 2048 -validity 10000
 ```
+
 Store `bookstery-release-key.jks` in a secure location outside public version control.
 
 ### Step 2: Build via Android Studio
+
 1. Open the project in Android Studio (`npm run cap:android`).
 2. Go to **Build** > **Generate Signed Bundle / APK...**.
 3. Select **APK** and click **Next**.
@@ -191,11 +207,12 @@ Store `bookstery-release-key.jks` in a secure location outside public version co
    ```
 
 ### Step 3: Build via Command Line (Alternative)
+
 1. In `android/`, run:
    ```bash
    ./gradlew assembleRelease
    ```
-   *(On Windows: `.\gradlew assembleRelease`)*
+   _(On Windows: `.\gradlew assembleRelease`)_
 2. The unsigned APK will be created at:
    `android/app/build/outputs/apk/release/app-release-unsigned.apk`
 3. Align and sign it using `zipalign` and `apksigner`:
@@ -209,6 +226,7 @@ Store `bookstery-release-key.jks` in a secure location outside public version co
 ## 6. Installing the APK on a Device or Emulator
 
 ### Method 1: Using ADB (Android Debug Bridge)
+
 1. Enable **Developer Options** and **USB Debugging** on your Android device.
 2. Connect your device via USB or start an Android Virtual Device (AVD).
 3. Verify your device is connected:
@@ -221,11 +239,14 @@ Store `bookstery-release-key.jks` in a secure location outside public version co
    ```
 
 ### Method 2: Direct Transfer
+
 - Copy `app-debug.apk` (or `bookstery-release.apk`) to your phone via USB cable, Google Drive, or messaging apps.
 - On your phone, tap the file and allow installation from unknown sources when prompted.
 
 ### Method 3: Run directly with Capacitor
+
 To build, deploy, and launch automatically on a connected device/emulator:
+
 ```bash
 npx cap run android
 ```
@@ -235,6 +256,7 @@ npx cap run android
 ## 7. Troubleshooting & FAQ
 
 ### Issue: `webDir does not exist` during `cap sync`
+
 - **Cause**: Capacitor cannot find the compiled web files because `nuxt generate` was not executed.
 - **Solution**: Always run `npm run generate` before syncing:
   ```bash
@@ -243,15 +265,19 @@ npx cap run android
   ```
 
 ### Issue: Gradle error `Unsupported class file major version`
+
 - **Cause**: Incompatible Java version. Capacitor 7 requires JDK 17 or JDK 21. Java 22+ may cause issues with older Gradle plugins.
 - **Solution**: Install JDK 17/21 and ensure `JAVA_HOME` points to it.
 
 ### Issue: `Android SDK not found`
+
 - **Cause**: `ANDROID_HOME` or `ANDROID_SDK_ROOT` is not configured.
 - **Solution**: Set `ANDROID_HOME` pointing to your Android SDK folder (e.g. `C:\Users\<user>\AppData\Local\Android\Sdk` on Windows or `~/Library/Android/sdk` on macOS).
 
 ### Issue: Live Reload during Mobile Development
+
 To test code changes on your Android device in real-time without rebuilding the APK each time:
+
 1. Start Nuxt dev server with host `0.0.0.0`:
    ```bash
    npm run dev
@@ -270,14 +296,21 @@ Remove old build
 sudo rm -rf android/.gradle android/app/build
 ```
 
-Run docker 
+Run docker
 
 ```bash
 docker run --rm   --user root   -e ANDROID_HOME=/home/circleci/android-sdk   -e ANDROID_SDK_ROOT=/home/circleci/android-sdk   -v $(pwd):/project   -w /project/android   cimg/android:2026.01   ./gradlew assembleDebug --no-daemon
 ```
 
 # Fix Storage permission
+
 ```bash
 sudo cp docs/android/StorageAccessPlugin.java docs/android/MainActivity.java android/app/src/main/java/com/bookstery/app/
 npm run cap:sync
+```
+
+## Open Android studio in wsl
+
+```path
+\\wsl$\Ubuntu\var\www\bookstery_mobile\android
 ```
