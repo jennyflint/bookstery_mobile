@@ -165,6 +165,7 @@ const handleImported = async (): Promise<void> => {
       <div class="mx-auto flex max-w-md items-center justify-around">
         <NuxtLink
           to="/"
+          replace
           class="flex flex-col items-center gap-1 text-xs font-bold text-indigo-600"
         >
           <svg

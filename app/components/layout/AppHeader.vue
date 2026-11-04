@@ -6,9 +6,11 @@ import SyncButton from '../common/SyncButton.vue';
 import SyncStatusBadge from '../common/SyncStatusBadge.vue';
 import LanguageSwitcher from '../common/LanguageSwitcher.vue';
 import { useCollectionNavigation } from '../../composables/useCollectionNavigation';
+import { useAndroidBackButton, BACK_PRIORITY } from '../../composables/useAndroidBackButton';
 
 const { t } = useI18n();
 const { activeCollectionName } = useCollectionNavigation();
+const { registerBackHandler } = useAndroidBackButton();
 
 const isDrawerOpen = ref(false);
 
@@ -19,6 +21,14 @@ const openDrawer = (): void => {
 const closeDrawer = (): void => {
   isDrawerOpen.value = false;
 };
+
+registerBackHandler(() => {
+  if (isDrawerOpen.value) {
+    closeDrawer();
+    return true;
+  }
+  return false;
+}, BACK_PRIORITY.OVERLAY);
 </script>
 
 <template>

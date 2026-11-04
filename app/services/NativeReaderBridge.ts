@@ -70,7 +70,7 @@ export async function fetchBookBytes(uriOrPath: string): Promise<Uint8Array> {
  * Cleanly exits the Android application by calling the native plugin `exitApp`,
  * with a fallback to Capacitor's `@capacitor/app` `App.exitApp()`.
  */
-export async function exitApp(): Promise<void> {
+export async function exitNativeApp(): Promise<void> {
   if (isNativeReaderBridgeAvailable()) {
     try {
       await NativeReaderBridge.exitApp();
@@ -86,3 +86,5 @@ export async function exitApp(): Promise<void> {
     console.warn('[NativeReaderBridge] App.exitApp fallback failed:', err);
   }
 }
+
+export const exitApp = exitNativeApp;

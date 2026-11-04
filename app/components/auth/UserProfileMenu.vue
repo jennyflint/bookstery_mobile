@@ -1,13 +1,23 @@
 <script setup lang="ts">
 import { ref } from 'vue';
 import { useAuth } from '../../composables/useAuth';
+import { useAndroidBackButton, BACK_PRIORITY } from '../../composables/useAndroidBackButton';
 import SignOutConfirmModal from './SignOutConfirmModal.vue';
 
 const { t } = useI18n();
 const { user, isAuthenticated, isLoading, signIn, signOut, forceSignOut } = useAuth();
+const { registerBackHandler } = useAndroidBackButton();
 
 const isConfirmModalOpen = ref(false);
 const pendingCount = ref(0);
+
+registerBackHandler(() => {
+  if (isConfirmModalOpen.value) {
+    isConfirmModalOpen.value = false;
+    return true;
+  }
+  return false;
+}, BACK_PRIORITY.OVERLAY);
 
 const handleSignIn = async () => {
   await signIn();

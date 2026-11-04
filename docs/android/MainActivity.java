@@ -2,6 +2,7 @@ package com.bookstery.app;
 
 import android.os.Bundle;
 import android.view.KeyEvent;
+import androidx.activity.OnBackPressedCallback;
 
 import com.getcapacitor.BridgeActivity;
 import com.getcapacitor.Plugin;
@@ -12,6 +13,21 @@ public class MainActivity extends BridgeActivity {
     public void onCreate(Bundle savedInstanceState) {
         registerPlugin(NativeReaderBridgePlugin.class);
         super.onCreate(savedInstanceState);
+
+        getOnBackPressedDispatcher().addCallback(this, new OnBackPressedCallback(true) {
+            @Override
+            public void handleOnBackPressed() {
+                if (getBridge() != null) {
+                    PluginHandle handle = getBridge().getPlugin("NativeReaderBridge");
+                    if (handle != null) {
+                        Plugin plugin = handle.getInstance();
+                        if (plugin instanceof NativeReaderBridgePlugin) {
+                            ((NativeReaderBridgePlugin) plugin).notifyBackButtonPressed();
+                        }
+                    }
+                }
+            }
+        });
     }
 
     @Override
@@ -30,3 +46,4 @@ public class MainActivity extends BridgeActivity {
         return super.dispatchKeyEvent(event);
     }
 }
+

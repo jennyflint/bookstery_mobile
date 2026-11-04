@@ -783,6 +783,6 @@ public class NativeReaderBridgePlugin extends Plugin {
     }
 
     public void notifyBackButtonPressed() {
-        notifyListeners("backButtonPressed", new JSObject());
+        notifyListeners("backButtonPressed", new JSObject(), true);
     }
 }

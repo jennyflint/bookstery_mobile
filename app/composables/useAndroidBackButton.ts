@@ -6,6 +6,7 @@ import { useTextSelection } from './useTextSelection';
 import { useHighlightStore } from '../stores/highlightStore';
 import { useAiStore } from '../stores/aiStore';
 import {
+  exitNativeApp,
   exitApp,
   isNativeReaderBridgeAvailable,
   NativeReaderBridge,
@@ -14,11 +15,11 @@ import {
 export type BackButtonHandler = () => boolean | Promise<boolean>;
 
 export const BACK_PRIORITY = {
-  /** Priority 1: Active reader overlays, zoom reset, local modals, text selection dismissal */
+  /** Priority 1 / 2: Active reader overlays, zoom reset, local modals, text selection dismissal */
   OVERLAY: 100,
-  /** Priority 2: Non-root route exit cleanup before navigating to root (e.g. reader save) */
+  /** Priority 3: Non-root route exit cleanup before navigating to root (e.g. reader save) */
   ROUTE: 50,
-  /** Priority 3: Root main menu modals (e.g. scanner modal, book assign modal) */
+  /** Priority 2: Root main menu modals (e.g. scanner modal, book assign modal) */
   ROOT_MODAL: 10,
 } as const;
 
@@ -67,9 +68,11 @@ export function registerBackHandler(
 /**
  * Central evaluation of Android hardware back button / swipe-back navigation.
  * Evaluates actions in strict priority order:
- * 1. Active reader overlays, text selection, and modals.
- * 2. Non-root routes (cleanly replace route to '/' without history loops).
- * 3. Root main menu (close home modals, or exit the Android app).
+ * 1. Priority 1 (Active Text Selection): Dismiss sticky selection.
+ * 2. Priority 2 (Active Modals / Drawers / Popovers): Close active overlay, settings sheet,
+ *    TOC drawer, dictionary popover, or AI chat drawer.
+ * 3. Priority 3 (Non-Root Routes): Navigate cleanly to root '/' via router.replace (never push).
+ * 4. Priority 4 (Root Main Menu route.path === '/'): Immediate native app exit (Option B).
  */
 export async function handleBackButtonPress(): Promise<void> {
   if (isHandling) {
@@ -79,17 +82,19 @@ export async function handleBackButtonPress(): Promise<void> {
 
   try {
     // -----------------------------------------------------------------------------------
-    // Priority 1 — Active Reader Overlays / Selection / Modals
+    // Priority 1 — Active Text Selection
     // -----------------------------------------------------------------------------------
-
-    // 1a. Text selection dismissal
     const textSelection = useTextSelection();
     if (textSelection.hasStickySelection()) {
       textSelection.dismissSelection();
       return;
     }
 
-    // 1b. Registered Priority 1 Handlers (priority >= 100)
+    // -----------------------------------------------------------------------------------
+    // Priority 2 — Active Modals / Drawers / Popovers
+    // -----------------------------------------------------------------------------------
+
+    // 2a. Active overlays & high-priority registered modals (priority >= BACK_PRIORITY.OVERLAY)
     const overlayHandlers = registeredHandlers
       .filter((h) => h.priority >= BACK_PRIORITY.OVERLAY)
       .sort((a, b) => b.priority - a.priority);
@@ -101,7 +106,7 @@ export async function handleBackButtonPress(): Promise<void> {
       }
     }
 
-    // 1c. Store-backed reader highlight modals & drawer
+    // 2b. Store-backed reader highlight modals & drawer
     const highlightStore = useHighlightStore();
     if (highlightStore.isNoteModalOpen) {
       highlightStore.closeNoteModal();
@@ -124,7 +129,7 @@ export async function handleBackButtonPress(): Promise<void> {
       return;
     }
 
-    // 1d. Store-backed AI overlays & drawers
+    // 2c. Store-backed AI overlays, sheets, dictionary & chat drawers
     const aiStore = useAiStore();
     if (aiStore.isChatDrawerOpen) {
       aiStore.closeChat();
@@ -151,12 +156,24 @@ export async function handleBackButtonPress(): Promise<void> {
       return;
     }
 
+    // 2d. Root-level modal handlers (priority 10..49, e.g. scanner modal, book assign modal)
+    const rootModalHandlers = registeredHandlers
+      .filter((h) => h.priority >= BACK_PRIORITY.ROOT_MODAL && h.priority < BACK_PRIORITY.ROUTE)
+      .sort((a, b) => b.priority - a.priority);
+
+    for (const item of rootModalHandlers) {
+      const handled = await item.handler();
+      if (handled) {
+        return;
+      }
+    }
+
     // -----------------------------------------------------------------------------------
-    // Priority 2 — Non-Root Routes (Reader, Settings, Dictionary, Collections, etc.)
+    // Priority 3 — Non-Root Routes (Reader `/reader/...`, Settings, Dictionary, Collections)
     // -----------------------------------------------------------------------------------
     const router = activeRouter ?? useRouter();
     const currentPath = router.currentRoute.value.path;
-    const isRoot = currentPath === '/' || currentPath === '/library';
+    const isRoot = currentPath === '/';
 
     if (!isRoot) {
       // Call any registered route exit handlers (priority 50..99, e.g. reader save & cleanup)
@@ -177,23 +194,9 @@ export async function handleBackButtonPress(): Promise<void> {
     }
 
     // -----------------------------------------------------------------------------------
-    // Priority 3 — Root Main Menu (route.path === '/')
+    // Priority 4 — Root Main Menu (route.path === '/') — Immediate Exit Option B
     // -----------------------------------------------------------------------------------
-
-    // 3a. Home-screen modals (priority 10..49, e.g. folder scanner modal, book assign modal)
-    const rootModalHandlers = registeredHandlers
-      .filter((h) => h.priority >= BACK_PRIORITY.ROOT_MODAL && h.priority < BACK_PRIORITY.ROUTE)
-      .sort((a, b) => b.priority - a.priority);
-
-    for (const item of rootModalHandlers) {
-      const handled = await item.handler();
-      if (handled) {
-        return;
-      }
-    }
-
-    // 3b. No modals open on root screen -> Cleanly exit the Android application
-    await exitApp();
+    await exitNativeApp();
   } catch (error) {
     console.error('[useAndroidBackButton] Error handling back button:', error);
   } finally {
@@ -219,7 +222,25 @@ export function initBackButtonListener(customRouter?: ReturnType<typeof useRoute
   }
   isListenerInitialized = true;
 
-  // 1. Primary: Capacitor @capacitor/app listener
+  // 1. Primary: NativeReaderBridge listener (direct hardware back from MainActivity)
+  if (isNativeReaderBridgeAvailable()) {
+    Promise.resolve(
+      NativeReaderBridge.addListener('backButtonPressed', () => {
+        void handleBackButtonPress();
+      }),
+    )
+      .then((handle) => {
+        nativeBridgeListener = handle;
+      })
+      .catch((err) => {
+        console.warn(
+          '[useAndroidBackButton] NativeReaderBridge.addListener(backButtonPressed) failed:',
+          err,
+        );
+      });
+  }
+
+  // 2. Secondary: Capacitor @capacitor/app listener
   Promise.resolve(
     App.addListener('backButton', () => {
       void handleBackButtonPress();
@@ -231,19 +252,6 @@ export function initBackButtonListener(customRouter?: ReturnType<typeof useRoute
     .catch((err) => {
       console.warn('[useAndroidBackButton] App.addListener(backButton) unavailable:', err);
     });
-
-  // 2. NativeReaderBridge fallback listener if available
-  if (isNativeReaderBridgeAvailable()) {
-    Promise.resolve(
-      NativeReaderBridge.addListener('backButtonPressed', () => {
-        void handleBackButtonPress();
-      }),
-    )
-      .then((handle) => {
-        nativeBridgeListener = handle;
-      })
-      .catch(() => {});
-  }
 
   // 3. Web browser popstate fallback (dev mode / browser testing)
   if (typeof window !== 'undefined') {
@@ -281,3 +289,4 @@ export function useAndroidBackButton() {
     handleBackButtonPress,
   };
 }
+

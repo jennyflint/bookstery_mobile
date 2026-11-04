@@ -49,6 +49,7 @@ describe('useAndroidBackButton Composable', () => {
 
     mockExitApp = vi.fn().mockResolvedValue(undefined);
     vi.spyOn(NativeBridgeModule, 'exitApp').mockImplementation(mockExitApp);
+    vi.spyOn(NativeBridgeModule, 'exitNativeApp').mockImplementation(mockExitApp);
 
     mockDismissSelection = vi.fn();
     mockHasStickySelection = vi.fn().mockReturnValue(false);

@@ -69,7 +69,11 @@ export function useCollectionNavigation() {
     }
 
     const targetPath = route.path.startsWith('/reader') ? '/' : route.path;
-    await router.push({ path: targetPath, query });
+    if (targetPath === '/' || route.path.startsWith('/reader')) {
+      await router.replace({ path: targetPath, query });
+    } else {
+      await router.push({ path: targetPath, query });
+    }
   };
 
   return {

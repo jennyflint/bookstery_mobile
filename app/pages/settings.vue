@@ -665,6 +665,7 @@ const handleResetAllToDefault = () => {
       <div class="mx-auto flex max-w-md items-center justify-around">
         <NuxtLink
           to="/"
+          replace
           class="flex flex-col items-center gap-1 text-xs font-semibold text-zinc-400 transition-colors hover:text-zinc-600"
         >
           <svg
