@@ -12,7 +12,7 @@ export const DEFAULT_SCREEN_CONTROL_SETTINGS: Required<ScreenControlSettings> = 
   fontSize: 18,
   volumeKeyPageTurn: true,
   invertVolumeKeys: false,
-  paginationMode: 'paginated',
+  paginationMode: 'scroll',
 };
 
 function getStoredSettings(): Required<ScreenControlSettings> {
@@ -20,9 +20,33 @@ function getStoredSettings(): Required<ScreenControlSettings> {
     return { ...DEFAULT_SCREEN_CONTROL_SETTINGS };
   }
   try {
+    // If bookstery_reader_settings has a saved paginationMode, use it as the source of truth
+    let readerPaginationMode: ReaderPaginationMode | undefined;
+    try {
+      const readerRaw = localStorage.getItem('bookstery_reader_settings');
+      if (readerRaw) {
+        const readerParsed = JSON.parse(readerRaw) as { paginationMode?: string };
+        if (readerParsed.paginationMode === 'scroll' || readerParsed.paginationMode === 'paginated') {
+          readerPaginationMode = readerParsed.paginationMode;
+        } else if (readerParsed.paginationMode === 'buttons') {
+          readerPaginationMode = 'paginated';
+        }
+      }
+    } catch {}
+
     const raw = localStorage.getItem(SETTINGS_STORAGE_KEY);
     if (raw) {
       const parsed = JSON.parse(raw) as Partial<ScreenControlSettings>;
+      const screenPaginationMode =
+        parsed.paginationMode === 'scroll' || parsed.paginationMode === 'paginated'
+          ? parsed.paginationMode
+          : parsed.paginationMode === 'buttons'
+            ? 'paginated'
+            : undefined;
+
+      const effectivePaginationMode =
+        readerPaginationMode ?? screenPaginationMode ?? DEFAULT_SCREEN_CONTROL_SETTINGS.paginationMode;
+
       return {
         keepScreenAwake:
           typeof parsed.keepScreenAwake === 'boolean'
@@ -50,12 +74,12 @@ function getStoredSettings(): Required<ScreenControlSettings> {
           typeof parsed.invertVolumeKeys === 'boolean'
             ? parsed.invertVolumeKeys
             : DEFAULT_SCREEN_CONTROL_SETTINGS.invertVolumeKeys,
-        paginationMode:
-          parsed.paginationMode === 'scroll' || parsed.paginationMode === 'paginated'
-            ? parsed.paginationMode
-            : parsed.paginationMode === 'buttons'
-              ? 'paginated'
-              : DEFAULT_SCREEN_CONTROL_SETTINGS.paginationMode,
+        paginationMode: effectivePaginationMode,
+      };
+    } else {
+      return {
+        ...DEFAULT_SCREEN_CONTROL_SETTINGS,
+        paginationMode: readerPaginationMode ?? DEFAULT_SCREEN_CONTROL_SETTINGS.paginationMode,
       };
     }
   } catch {
@@ -232,7 +256,7 @@ export const useSettingsStore = defineStore('settings', {
       this.fontSize = DEFAULT_SCREEN_CONTROL_SETTINGS.fontSize;
       this.volumeKeyPageTurn = DEFAULT_SCREEN_CONTROL_SETTINGS.volumeKeyPageTurn;
       this.invertVolumeKeys = DEFAULT_SCREEN_CONTROL_SETTINGS.invertVolumeKeys;
-      this.paginationMode = DEFAULT_SCREEN_CONTROL_SETTINGS.paginationMode ?? 'paginated';
+      this.paginationMode = DEFAULT_SCREEN_CONTROL_SETTINGS.paginationMode ?? 'scroll';
       this.persist();
 
       try {
@@ -242,7 +266,9 @@ export const useSettingsStore = defineStore('settings', {
         }
         readerStore.setVolumeKeyPageTurn(this.volumeKeyPageTurn);
         readerStore.setInvertVolumeKeys(this.invertVolumeKeys);
-        readerStore.setPaginationMode(this.paginationMode);
+        if (readerStore.settings.paginationMode !== this.paginationMode) {
+          readerStore.setPaginationMode(this.paginationMode);
+        }
       } catch {}
 
       if (this.isReaderActive) {

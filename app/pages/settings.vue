@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref } from 'vue';
 import { useReaderStore } from '../stores/readerStore';
+import { useSettingsStore } from '../stores/useSettingsStore';
 import {
   useAppThemeStore,
   APP_BUTTON_SWATCHES,
@@ -20,6 +21,7 @@ import type { ReaderTheme } from '../types';
 
 const { t } = useI18n();
 const readerStore = useReaderStore();
+const settingsStore = useSettingsStore();
 const appThemeStore = useAppThemeStore();
 const aiStore = useAiStore();
 
@@ -77,6 +79,7 @@ const handleAppBgColorChange = (color: string) => {
 const handleResetAllToDefault = () => {
   appThemeStore.resetAllToDefault();
   readerStore.resetToDefault();
+  settingsStore.resetToDefault();
 };
 </script>
 
@@ -335,6 +338,7 @@ const handleResetAllToDefault = () => {
         <div class="flex justify-end pt-1">
           <button
             type="button"
+            data-testid="settings-reset-defaults"
             class="flex items-center gap-2 rounded-xl bg-zinc-100 px-4 py-2.5 text-xs font-bold text-zinc-600 transition-all hover:bg-zinc-200 active:scale-95"
             @click="handleResetAllToDefault"
           >

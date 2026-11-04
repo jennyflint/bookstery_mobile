@@ -18,7 +18,7 @@ import type {
 } from '../../types';
 
 export class EpubEngine extends BaseEngine {
-  protected override paginationMode: ReaderPaginationMode = 'paginated';
+  protected override paginationMode: ReaderPaginationMode = 'scroll';
   private book: Book | null = null;
   private rendition: Rendition | null = null;
   private currentCfi: string = '';

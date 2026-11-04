@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { setActivePinia, createPinia } from 'pinia';
 import { useReader } from '~/composables/useReader';
 import { useReaderStore } from '~/stores/readerStore';
+import { PdfEngine } from '~/services/engines/PdfEngine';
 import type { BookRecord } from '~/types';
 
 vi.mock('pdfjs-dist', () => ({
@@ -97,5 +98,38 @@ describe('useReader Composable', () => {
     await expect(openBook(container, invalidBook, new Uint8Array([]))).rejects.toThrow(
       'Unsupported book format: mobi',
     );
+  });
+
+  it('should pass readerStore.settings.paginationMode to engine.setPaginationMode before engine.init', async () => {
+    const { openBook } = useReader();
+    const readerStore = useReaderStore();
+    readerStore.settings.paginationMode = 'scroll';
+
+    const callOrder: string[] = [];
+    const origSetPaginationMode = PdfEngine.prototype.setPaginationMode;
+    const origInit = PdfEngine.prototype.init;
+
+    const setModeSpy = vi.spyOn(PdfEngine.prototype, 'setPaginationMode').mockImplementation(async function (
+      this: PdfEngine,
+      mode,
+    ) {
+      callOrder.push(`setPaginationMode:${mode}`);
+      return origSetPaginationMode.call(this, mode);
+    });
+    vi.spyOn(PdfEngine.prototype, 'init').mockImplementation(async function (
+      this: PdfEngine,
+      el,
+      data,
+      locator,
+    ) {
+      callOrder.push('init');
+      return origInit.call(this, el, data, locator);
+    });
+
+    await openBook(container, mockPdfBook, new Uint8Array([1, 2, 3]));
+
+    expect(setModeSpy).toHaveBeenCalledWith('scroll');
+    expect(callOrder[0]).toBe('setPaginationMode:scroll');
+    expect(callOrder[1]).toBe('init');
   });
 });

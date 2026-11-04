@@ -61,7 +61,7 @@ const DEFAULT_SETTINGS: ReaderSettings = {
   fontSize: 18,
   fontFamily: 'serif',
   lineHeight: 1.6,
-  paginationMode: 'paginated',
+  paginationMode: 'scroll',
   customBackgroundColor: '#ffffff',
   customTextColor: '#18181b',
   keepScreenAwake: true,
@@ -77,13 +77,44 @@ function getStoredSettings(): ReaderSettings {
   }
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
+    let parsed: Partial<ReaderSettings> | null = null;
     if (raw) {
-      const parsed = JSON.parse(raw);
-      if (parsed.paginationMode === 'buttons') {
-        parsed.paginationMode = 'paginated';
-      }
-      return { ...DEFAULT_SETTINGS, ...parsed };
+      try {
+        parsed = JSON.parse(raw);
+      } catch {}
     }
+
+    let resolvedPaginationMode: ReaderPaginationMode | undefined;
+    if (parsed) {
+      if (parsed.paginationMode === 'scroll' || parsed.paginationMode === 'paginated') {
+        resolvedPaginationMode = parsed.paginationMode;
+      } else if (parsed.paginationMode === 'buttons') {
+        resolvedPaginationMode = 'paginated';
+      }
+    }
+
+    // If no valid paginationMode in reader settings, fall back to screen control settings or 'scroll'
+    if (!resolvedPaginationMode) {
+      try {
+        const screenRaw = localStorage.getItem('bookstery_screen_control_settings');
+        if (screenRaw) {
+          const screenParsed = JSON.parse(screenRaw) as { paginationMode?: string };
+          if (screenParsed.paginationMode === 'scroll' || screenParsed.paginationMode === 'paginated') {
+            resolvedPaginationMode = screenParsed.paginationMode;
+          } else if (screenParsed.paginationMode === 'buttons') {
+            resolvedPaginationMode = 'paginated';
+          }
+        }
+      } catch {}
+    }
+
+    const finalPaginationMode: ReaderPaginationMode =
+      resolvedPaginationMode ?? DEFAULT_SETTINGS.paginationMode;
+
+    if (parsed) {
+      return { ...DEFAULT_SETTINGS, ...parsed, paginationMode: finalPaginationMode };
+    }
+    return { ...DEFAULT_SETTINGS, paginationMode: finalPaginationMode };
   } catch {}
   return { ...DEFAULT_SETTINGS };
 }
@@ -379,6 +410,13 @@ export const useReaderStore = defineStore('reader', {
     resetToDefault(): void {
       this.settings = { ...DEFAULT_SETTINGS };
       persistSettings(this.settings);
+      try {
+        const settingsStore = useSettingsStore();
+        if (settingsStore.paginationMode !== this.settings.paginationMode) {
+          settingsStore.paginationMode = this.settings.paginationMode;
+          settingsStore.persist();
+        }
+      } catch {}
     },
   },
 });

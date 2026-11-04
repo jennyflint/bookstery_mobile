@@ -23,6 +23,7 @@ describe('useSettingsStore', () => {
     expect(store.applyOrientationOnlyInReader).toBe(true);
     expect(store.volumeKeyPageTurn).toBe(true);
     expect(store.invertVolumeKeys).toBe(false);
+    expect(store.paginationMode).toBe('scroll');
     expect(store.isReaderActive).toBe(false);
   });
 
@@ -35,6 +36,7 @@ describe('useSettingsStore', () => {
         applyOrientationOnlyInReader: false,
         volumeKeyPageTurn: false,
         invertVolumeKeys: true,
+        paginationMode: 'paginated',
       }),
     );
 
@@ -46,6 +48,39 @@ describe('useSettingsStore', () => {
     expect(newStore.applyOrientationOnlyInReader).toBe(false);
     expect(newStore.volumeKeyPageTurn).toBe(false);
     expect(newStore.invertVolumeKeys).toBe(true);
+    expect(newStore.paginationMode).toBe('paginated');
+  });
+
+  it('should prioritize bookstery_reader_settings as the source of truth for paginationMode on startup', () => {
+    localStorage.setItem(
+      'bookstery_reader_settings',
+      JSON.stringify({
+        paginationMode: 'paginated',
+      }),
+    );
+    localStorage.setItem(
+      SETTINGS_STORAGE_KEY,
+      JSON.stringify({
+        paginationMode: 'scroll',
+      }),
+    );
+
+    setActivePinia(createPinia());
+    const newStore = useSettingsStore();
+    expect(newStore.paginationMode).toBe('paginated');
+  });
+
+  it('should fall back to scroll when paginationMode in localStorage is invalid', () => {
+    localStorage.setItem(
+      SETTINGS_STORAGE_KEY,
+      JSON.stringify({
+        paginationMode: 'unknown-mode',
+      }),
+    );
+
+    setActivePinia(createPinia());
+    const newStore = useSettingsStore();
+    expect(newStore.paginationMode).toBe('scroll');
   });
 
   describe('setKeepScreenAwake', () => {
@@ -210,6 +245,7 @@ describe('useSettingsStore', () => {
       store.applyOrientationOnlyInReader = false;
       store.volumeKeyPageTurn = false;
       store.invertVolumeKeys = true;
+      store.paginationMode = 'paginated';
 
       store.resetToDefault();
 
@@ -218,6 +254,7 @@ describe('useSettingsStore', () => {
       expect(store.applyOrientationOnlyInReader).toBe(true);
       expect(store.volumeKeyPageTurn).toBe(true);
       expect(store.invertVolumeKeys).toBe(false);
+      expect(store.paginationMode).toBe('scroll');
     });
   });
 
@@ -244,14 +281,22 @@ describe('useSettingsStore', () => {
   describe('setPaginationMode', () => {
     it('should update paginationMode, persist to localStorage, and sync with readerStore', async () => {
       const readerStore = (await import('~/stores/readerStore')).useReaderStore();
+      expect(store.paginationMode).toBe('scroll');
+      expect(readerStore.settings.paginationMode).toBe('scroll');
+
+      store.setPaginationMode('paginated');
+
       expect(store.paginationMode).toBe('paginated');
+      expect(readerStore.settings.paginationMode).toBe('paginated');
+      const stored = JSON.parse(localStorage.getItem(SETTINGS_STORAGE_KEY) || '{}');
+      expect(stored.paginationMode).toBe('paginated');
 
       store.setPaginationMode('scroll');
 
       expect(store.paginationMode).toBe('scroll');
       expect(readerStore.settings.paginationMode).toBe('scroll');
-      const stored = JSON.parse(localStorage.getItem(SETTINGS_STORAGE_KEY) || '{}');
-      expect(stored.paginationMode).toBe('scroll');
+      const storedScroll = JSON.parse(localStorage.getItem(SETTINGS_STORAGE_KEY) || '{}');
+      expect(storedScroll.paginationMode).toBe('scroll');
     });
   });
 });

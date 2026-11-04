@@ -257,6 +257,17 @@ describe('EpubEngine Pagination & Location Management', () => {
   });
 
   describe('Pagination Modes (Swipe/Paginated vs. Vertical Scroll)', () => {
+    it('defaults to scroll paginationMode upon initialization', async () => {
+      await engine.init(container, 'fake-epub-data');
+
+      expect(mockBook.renderTo).toHaveBeenCalledWith(container, {
+        width: '100%',
+        height: '100%',
+        flow: 'scrolled',
+        manager: 'continuous',
+      });
+    });
+
     it('configures renderTo with paginated options in paginated mode', async () => {
       await engine.setPaginationMode('paginated');
       await engine.init(container, 'fake-epub-data');
@@ -283,6 +294,7 @@ describe('EpubEngine Pagination & Location Management', () => {
     });
 
     it('dynamically switches paginationMode and preserves reading position', async () => {
+      await engine.setPaginationMode('paginated');
       await engine.init(container, 'fake-epub-data', 'epubcfi(/6/2[ch1]!/4/10)');
       expect(engine.getCurrentLocation().locator).toBe('epubcfi(/6/2[ch1]!/4/10)');
 
