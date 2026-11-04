@@ -328,4 +328,108 @@ describe('ReaderViewport Component', () => {
 
     expect(vm.scale).toBe(2.5);
   });
+
+  it('should keep layout dimensions of zoomSizer, gestureTarget, and containerRef locked to 100% during zoom', async () => {
+    const wrapper = mount(ReaderViewport);
+    const viewportEl = wrapper.find('[data-testid="reader-viewport"]').element as HTMLElement;
+    const scrollContainer = wrapper.find('[data-testid="zoom-scroll-container"]');
+    const zoomSizer = wrapper.find('[data-testid="zoom-sizer"]');
+    const gestureTarget = wrapper.find('[data-testid="reader-gesture-target"]');
+    const engineContainer = wrapper.find('[data-testid="reader-engine-container"]');
+
+    vi.spyOn(viewportEl, 'getBoundingClientRect').mockReturnValue({
+      width: 400,
+      height: 800,
+      left: 0,
+      top: 0,
+      right: 400,
+      bottom: 800,
+      x: 0,
+      y: 0,
+      toJSON: () => ({}),
+    });
+
+    // Before zoom (scale = 1.0)
+    expect((zoomSizer.element as HTMLElement).style.width).toBe('100%');
+    expect((zoomSizer.element as HTMLElement).style.height).toBe('100%');
+    expect(scrollContainer.classes()).toContain('overflow-hidden');
+    expect(scrollContainer.classes()).not.toContain('overflow-auto');
+
+    // Pinch to 2.5x
+    viewportEl.dispatchEvent(
+      createTouchEvent('touchstart', [
+        { clientX: 200, clientY: 350 },
+        { clientX: 200, clientY: 450 },
+      ]),
+    );
+    viewportEl.dispatchEvent(
+      createTouchEvent('touchmove', [
+        { clientX: 200, clientY: 275 },
+        { clientX: 200, clientY: 525 },
+      ]),
+    );
+    viewportEl.dispatchEvent(createTouchEvent('touchend', []));
+    await wrapper.vm.$nextTick();
+
+    const vm = wrapper.vm as unknown as { scale: number };
+    expect(vm.scale).toBe(2.5);
+
+    // Layout box dimensions must remain locked to 100%
+    expect((zoomSizer.element as HTMLElement).style.width).toBe('100%');
+    expect((zoomSizer.element as HTMLElement).style.height).toBe('100%');
+    expect(scrollContainer.classes()).toContain('overflow-hidden');
+    expect(scrollContainer.classes()).not.toContain('overflow-auto');
+
+    // transformOrigin must remain 'center center'
+    expect((gestureTarget.element as HTMLElement).style.transformOrigin).toBe('center center');
+
+    // Engine container must remain attached and sized to full
+    expect(engineContainer.classes()).toContain('w-full');
+    expect(engineContainer.classes()).toContain('h-full');
+  });
+
+  it('should maintain inner scroll position during zoom gestures without jumping', async () => {
+    const wrapper = mount(ReaderViewport);
+    const viewportEl = wrapper.find('[data-testid="reader-viewport"]').element as HTMLElement;
+    const engineContainer = wrapper.find('[data-testid="reader-engine-container"]').element as HTMLElement;
+
+    vi.spyOn(viewportEl, 'getBoundingClientRect').mockReturnValue({
+      width: 400,
+      height: 800,
+      left: 0,
+      top: 0,
+      right: 400,
+      bottom: 800,
+      x: 0,
+      y: 0,
+      toJSON: () => ({}),
+    });
+
+    // Create an inner scroll container simulating PDF scroll mode
+    const innerScrollEl = document.createElement('div');
+    innerScrollEl.style.overflowY = 'auto';
+    innerScrollEl.style.height = '100%';
+    innerScrollEl.scrollTop = 420;
+    engineContainer.appendChild(innerScrollEl);
+
+    // Verify initial scrollTop
+    expect(innerScrollEl.scrollTop).toBe(420);
+
+    // Double-tap zoom into (200, 300)
+    viewportEl.dispatchEvent(createTouchEvent('touchstart', [{ clientX: 200, clientY: 300 }]));
+    viewportEl.dispatchEvent(
+      createTouchEvent('touchend', [], [{ clientX: 200, clientY: 300 }]),
+    );
+    await vi.advanceTimersByTimeAsync(100);
+    viewportEl.dispatchEvent(createTouchEvent('touchstart', [{ clientX: 200, clientY: 300 }]));
+    viewportEl.dispatchEvent(
+      createTouchEvent('touchend', [], [{ clientX: 200, clientY: 300 }]),
+    );
+
+    const vm = wrapper.vm as unknown as { scale: number };
+    expect(vm.scale).toBe(2.5);
+
+    // Inner scroll position must not have been reset or altered by layout reflow
+    expect(innerScrollEl.scrollTop).toBe(420);
+  });
 });

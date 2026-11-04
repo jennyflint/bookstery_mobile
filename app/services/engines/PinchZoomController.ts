@@ -191,7 +191,7 @@ export class PinchZoomController {
   private applyTransform(): void {
     const transformValue = `translate3d(${this.translateX}px, ${this.translateY}px, 0) scale(${this.cssScale})`;
     this.target.style.transform = transformValue;
-    this.target.style.transformOrigin = this.cssScale < 1.0 ? 'center top' : 'center center';
+    this.target.style.transformOrigin = 'center center';
     this.target.style.willChange = 'transform';
     this.target.style.transition = this.isAnimating
       ? `transform ${ZOOM_ANIMATION_MS}ms cubic-bezier(0.22, 1, 0.36, 1)`
@@ -298,7 +298,10 @@ export class PinchZoomController {
 
       if (this.initialPinchDistance > 0) {
         const pinchRatio = currentDistance / this.initialPinchDistance;
-        const nextScale = Number((this.pinchStartScale * pinchRatio).toFixed(4));
+        const rawNextScale = this.pinchStartScale * pinchRatio;
+        const nextScale = Number(
+          Math.min(Math.max(rawNextScale, this.minScale), this.maxScale).toFixed(4),
+        );
         const { width, height, left, top } = this.getViewportDimensions();
         const centerX = left + width / 2;
         const centerY = top + height / 2;
@@ -306,20 +309,23 @@ export class PinchZoomController {
         const focalY = this.initialMidpoint.y - centerY;
         const scaleChange = nextScale / this.pinchStartScale;
 
+        const rawTranslateX =
+          currentMidpoint.x -
+          this.initialMidpoint.x +
+          focalX * (1 - scaleChange) +
+          this.pinchStartTranslateX * scaleChange;
+        const rawTranslateY =
+          currentMidpoint.y -
+          this.initialMidpoint.y +
+          focalY * (1 - scaleChange) +
+          this.pinchStartTranslateY * scaleChange;
+
+        const clamped = this.clampTranslation(rawTranslateX, rawTranslateY, nextScale);
+
         this.scale = nextScale;
         this.cssScale = Number((this.scale / this.renderedScale).toFixed(4));
-        this.translateX = Math.round(
-          currentMidpoint.x -
-            this.initialMidpoint.x +
-            focalX * (1 - scaleChange) +
-            this.pinchStartTranslateX * scaleChange,
-        );
-        this.translateY = Math.round(
-          currentMidpoint.y -
-            this.initialMidpoint.y +
-            focalY * (1 - scaleChange) +
-            this.pinchStartTranslateY * scaleChange,
-        );
+        this.translateX = Math.round(clamped.x);
+        this.translateY = Math.round(clamped.y);
         this.applyTransform();
       }
       return;
@@ -555,10 +561,12 @@ export class PinchZoomController {
   public bindExternalTouchSource(doc: Document, frame: HTMLElement): () => void {
     const mapPoints = (list: ArrayLike<GestureTouchPoint> | undefined): GestureTouchPoint[] => {
       const rect = frame.getBoundingClientRect();
-      const ratio = frame.offsetWidth > 0 && rect.width > 0 ? rect.width / frame.offsetWidth : 1;
+      const ratioX = frame.offsetWidth > 0 && rect.width > 0 ? rect.width / frame.offsetWidth : 1;
+      const ratioY =
+        frame.offsetHeight > 0 && rect.height > 0 ? rect.height / frame.offsetHeight : ratioX;
       return Array.from(list ?? [], (t) => ({
-        clientX: rect.left + t.clientX * ratio,
-        clientY: rect.top + t.clientY * ratio,
+        clientX: rect.left + t.clientX * ratioX,
+        clientY: rect.top + t.clientY * ratioY,
       }));
     };
 

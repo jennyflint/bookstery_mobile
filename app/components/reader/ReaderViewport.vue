@@ -5,11 +5,11 @@ import { usePinchZoom } from '../../composables/usePinchZoom';
 import { useTextSelection } from '../../composables/useTextSelection';
 import { shouldIgnoreReaderTap } from '../../services/selection/SelectionGuard';
 import PdfViewer from './PdfViewer.vue';
-import type { ZoomableContainerElement } from '../../types';
+import type { ZoomableContainerElement, ReaderEngineInterface } from '../../types';
 
 const props = defineProps<{
   onZoomRender?: (scale: number) => Promise<void> | void;
-  activeEngine?: any;
+  activeEngine?: ReaderEngineInterface | null;
 }>();
 
 const emit = defineEmits<{
@@ -118,35 +118,22 @@ const containerPaddingStyle = {
 
 const containerTransformStyle = computed(() => ({
   transform: `translate3d(${translateX.value}px, ${translateY.value}px, 0) scale(${cssScale.value})`,
-  transformOrigin: cssScale.value < 1.0 ? 'center top' : 'center center',
+  transformOrigin: 'center center',
   transition: isAnimating.value ? 'transform 250ms cubic-bezier(0.22, 1, 0.36, 1)' : 'none',
   willChange: 'transform',
 }));
 
 const scrollContainerStyle = computed(() => ({
-  touchAction: scale.value > 1.0 ? 'pan-x pan-y' : 'none',
+  touchAction: 'none',
   WebkitOverflowScrolling: 'touch' as const,
 }));
 
-const zoomSizerStyle = computed(() => {
-  const content = containerRef.value?.__readerGetContentSize?.();
-  const baseW = content?.width || (viewportWrapperRef.value?.clientWidth ?? 0);
-  const baseH = content?.height || (viewportWrapperRef.value?.clientHeight ?? 0);
-  if (scale.value > 1.0 && baseW > 0 && baseH > 0) {
-    return {
-      width: `${Math.round(baseW * scale.value)}px`,
-      height: `${Math.round(baseH * scale.value)}px`,
-      margin: '0 auto',
-      position: 'relative' as const,
-    };
-  }
-  return {
-    width: '100%',
-    height: '100%',
-    margin: '0 auto',
-    position: 'relative' as const,
-  };
-});
+const zoomSizerStyle = computed(() => ({
+  width: '100%',
+  height: '100%',
+  margin: '0 auto',
+  position: 'relative' as const,
+}));
 
 const handleContainerClick = (event: MouseEvent) => {
   if (didInteractRecently() || scale.value > 1.0) {
@@ -200,15 +187,14 @@ defineExpose({
     <div
       ref="scrollContainerRef"
       data-testid="zoom-scroll-container"
-      class="zoom-scroll-container w-full h-full relative"
-      :class="scale > 1.0 ? 'overflow-auto' : 'overflow-hidden'"
+      class="zoom-scroll-container w-full h-full relative overflow-hidden"
       :style="scrollContainerStyle"
     >
       <!-- Middle Layout Sizer (zoom-sizer) -->
       <div
         ref="zoomSizerRef"
         data-testid="zoom-sizer"
-        class="zoom-sizer min-w-full min-h-full"
+        class="zoom-sizer w-full h-full relative"
         :style="zoomSizerStyle"
       >
         <!-- Inner Scaled Content (zoom-content) & Gesture Target -->

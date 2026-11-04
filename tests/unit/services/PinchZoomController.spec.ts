@@ -81,4 +81,230 @@ describe('PinchZoomController pan limits', () => {
     wrapper.dispatchEvent(new WheelEvent('wheel', { deltaX: 30, deltaY: 0, cancelable: true }));
     expect(controller.getState().translateX).toBe(-30);
   });
+
+  it('keeps focal point stationary on both X and Y axes during pinch-to-zoom without shifting upward', () => {
+    const wrapper = createWrapper();
+    const target = document.createElement('div');
+    wrapper.appendChild(target);
+
+    const controller = new PinchZoomController({
+      wrapper,
+      target,
+      minScale: 0.5,
+      maxScale: 4.0,
+    });
+
+    // Start pinch with midpoint at (200, 200) - top half of 400x800 viewport (center is 200, 400)
+    wrapper.dispatchEvent(
+      new TouchEvent('touchstart', {
+        touches: [
+          { clientX: 150, clientY: 200 } as Touch,
+          { clientX: 250, clientY: 200 } as Touch,
+        ],
+        cancelable: true,
+      }),
+    );
+
+    // Expand fingers to 2x distance while keeping midpoint stationary at (200, 200)
+    wrapper.dispatchEvent(
+      new TouchEvent('touchmove', {
+        touches: [
+          { clientX: 100, clientY: 200 } as Touch,
+          { clientX: 300, clientY: 200 } as Touch,
+        ],
+        cancelable: true,
+      }),
+    );
+
+    const state = controller.getState();
+    expect(state.scale).toBe(2.0);
+    expect(state.translateX).toBe(0);
+    expect(state.translateY).toBe(200);
+
+    // Verify focal point invariant:
+    // Screen position = centerY + (tapY - centerY) * scale + translateY
+    // = 400 + (200 - 400) * 2 + 200 = 400 - 400 + 200 = 200
+    const screenY = 400 + (200 - 400) * state.scale + state.translateY;
+    const screenX = 200 + (200 - 200) * state.scale + state.translateX;
+    expect(screenX).toBe(200);
+    expect(screenY).toBe(200);
+  });
+
+  it('clamps nextScale before computing scaleChange so translation does not drift past maxScale', () => {
+    const wrapper = createWrapper();
+    const target = document.createElement('div');
+    wrapper.appendChild(target);
+
+    const controller = new PinchZoomController({
+      wrapper,
+      target,
+      minScale: 0.5,
+      maxScale: 4.0,
+    });
+
+    // Initial pinch distance = 100px, midpoint = (200, 200)
+    wrapper.dispatchEvent(
+      new TouchEvent('touchstart', {
+        touches: [
+          { clientX: 150, clientY: 200 } as Touch,
+          { clientX: 250, clientY: 200 } as Touch,
+        ],
+        cancelable: true,
+      }),
+    );
+
+    // Move fingers to 600px distance -> ratio = 6.0, but maxScale is 4.0
+    wrapper.dispatchEvent(
+      new TouchEvent('touchmove', {
+        touches: [
+          { clientX: -100, clientY: 200 } as Touch,
+          { clientX: 500, clientY: 200 } as Touch,
+        ],
+        cancelable: true,
+      }),
+    );
+
+    const stateAtMax = controller.getState();
+    expect(stateAtMax.scale).toBe(4.0);
+    const translateYAtMax = stateAtMax.translateY;
+
+    // Expand fingers further to 800px distance -> scale remains clamped at 4.0, translateY does not drift
+    wrapper.dispatchEvent(
+      new TouchEvent('touchmove', {
+        touches: [
+          { clientX: -200, clientY: 200 } as Touch,
+          { clientX: 600, clientY: 200 } as Touch,
+        ],
+        cancelable: true,
+      }),
+    );
+
+    const statePastMax = controller.getState();
+    expect(statePastMax.scale).toBe(4.0);
+    expect(statePastMax.translateY).toBe(translateYAtMax);
+  });
+
+  it('maintains focal point invariant during a second pinch while already zoomed', () => {
+    const wrapper = createWrapper();
+    const target = document.createElement('div');
+    wrapper.appendChild(target);
+
+    const controller = new PinchZoomController({
+      wrapper,
+      target,
+      minScale: 0.5,
+      maxScale: 5.0,
+    });
+
+    // First pinch to 2.0x focused at (200, 200)
+    wrapper.dispatchEvent(
+      new TouchEvent('touchstart', {
+        touches: [
+          { clientX: 150, clientY: 200 } as Touch,
+          { clientX: 250, clientY: 200 } as Touch,
+        ],
+        cancelable: true,
+      }),
+    );
+    wrapper.dispatchEvent(
+      new TouchEvent('touchmove', {
+        touches: [
+          { clientX: 100, clientY: 200 } as Touch,
+          { clientX: 300, clientY: 200 } as Touch,
+        ],
+        cancelable: true,
+      }),
+    );
+    wrapper.dispatchEvent(new TouchEvent('touchend', { touches: [], cancelable: true }));
+
+    const state1 = controller.getState();
+    expect(state1.scale).toBe(2.0);
+    expect(state1.translateY).toBe(200);
+
+    // Second pinch starting while already zoomed: midpoint again at (200, 200), distance = 100
+    wrapper.dispatchEvent(
+      new TouchEvent('touchstart', {
+        touches: [
+          { clientX: 150, clientY: 200 } as Touch,
+          { clientX: 250, clientY: 200 } as Touch,
+        ],
+        cancelable: true,
+      }),
+    );
+
+    // Expand to 150px distance -> scaleChange = 1.5, scale = 2.0 * 1.5 = 3.0
+    wrapper.dispatchEvent(
+      new TouchEvent('touchmove', {
+        touches: [
+          { clientX: 125, clientY: 200 } as Touch,
+          { clientX: 275, clientY: 200 } as Touch,
+        ],
+        cancelable: true,
+      }),
+    );
+
+    const state2 = controller.getState();
+    expect(state2.scale).toBe(3.0);
+    // translateY = (-200) * (1 - 1.5) + 200 * 1.5 = 100 + 300 = 400
+    expect(state2.translateY).toBe(400);
+
+    // Initial content point that was at screen (200, 200):
+    // elemY = (200 - 400 - 200) / 2 = -200
+    // At scale 3.0: screenY = 400 + (-200) * 3 + 400 = 200
+    const screenY = 400 + (-200) * state2.scale + state2.translateY;
+    expect(screenY).toBe(200);
+  });
+
+  it('keeps tap coordinate stationary after double-tap zoom', () => {
+    const wrapper = createWrapper();
+    const target = document.createElement('div');
+    wrapper.appendChild(target);
+
+    const controller = new PinchZoomController({
+      wrapper,
+      target,
+      doubleTapScale: 2.5,
+    });
+
+    // Double-tap at (100, 300) in 400x800 viewport (center is 200, 400)
+    // rawX = -(100 - 200) * (2.5 - 1) = 150
+    // rawY = -(300 - 400) * (2.5 - 1) = 150
+    wrapper.dispatchEvent(
+      new TouchEvent('touchstart', {
+        touches: [{ clientX: 100, clientY: 300 } as Touch],
+        cancelable: true,
+      }),
+    );
+    wrapper.dispatchEvent(
+      new TouchEvent('touchend', {
+        touches: [],
+        changedTouches: [{ clientX: 100, clientY: 300 } as Touch],
+        cancelable: true,
+      }),
+    );
+    wrapper.dispatchEvent(
+      new TouchEvent('touchstart', {
+        touches: [{ clientX: 100, clientY: 300 } as Touch],
+        cancelable: true,
+      }),
+    );
+    wrapper.dispatchEvent(
+      new TouchEvent('touchend', {
+        touches: [],
+        changedTouches: [{ clientX: 100, clientY: 300 } as Touch],
+        cancelable: true,
+      }),
+    );
+
+    const state = controller.getState();
+    expect(state.scale).toBe(2.5);
+    expect(state.translateX).toBe(150);
+    expect(state.translateY).toBe(150);
+
+    // Verify tap point screen position after zoom:
+    const screenX = 200 + (100 - 200) * state.scale + state.translateX;
+    const screenY = 400 + (300 - 400) * state.scale + state.translateY;
+    expect(screenX).toBe(100);
+    expect(screenY).toBe(300);
+  });
 });

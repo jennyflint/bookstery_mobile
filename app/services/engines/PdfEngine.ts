@@ -285,17 +285,24 @@ export class PdfEngine extends BaseEngine {
       if (!this.container) return;
       // Disable ResizeObserver re-render loops while a page turn or touch gesture is actively in progress or when zoomed in
       const gestureScale = this.gestureController?.getState().scale ?? 1.0;
+      const viewportEl = this.container.closest<HTMLElement>('[data-testid="reader-viewport"]');
+      const viewportScale = viewportEl ? parseFloat(viewportEl.getAttribute('data-scale') || '1') : 1.0;
       if (
         this.isPageTurnInProgress ||
         this.isGestureActive() ||
         this.zoomScale !== 1.0 ||
-        gestureScale !== 1.0
+        gestureScale !== 1.0 ||
+        viewportScale !== 1.0
       ) {
         return;
       }
       const next = { width: this.container.clientWidth, height: this.container.clientHeight };
       const prev = this.lastLayoutSize;
       if (next.width <= 0 || next.height <= 0) return;
+      // Ignore identical dimensions
+      if (prev && prev.width === next.width && prev.height === next.height) {
+        return;
+      }
       // Ignore sub-pixel fluctuations (< 3px) to prevent jitter from 1px scrollbar or touch fluctuations
       if (prev && Math.abs(next.width - prev.width) < 3 && Math.abs(next.height - prev.height) < 3) {
         return;
