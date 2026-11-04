@@ -2,6 +2,7 @@ import { defineStore } from 'pinia';
 import { SyncQueueService } from '../services/sync/SyncQueueService';
 import { SqliteService } from '../services/database/SqliteService';
 import { GoogleAuthService } from '../services/auth/GoogleAuthService';
+import { useAuthStore } from './authStore';
 import type { SyncVisualState } from '../types';
 
 export const useSyncStore = defineStore('sync', {
@@ -16,25 +17,19 @@ export const useSyncStore = defineStore('sync', {
   }),
   actions: {
     async init(): Promise<void> {
+      const sqlite = SqliteService.getInstance();
+      await sqlite.init();
+
       const queueService = SyncQueueService.getInstance();
       await queueService.init();
       this.isOnline = queueService.getIsOnline();
-      await this.refreshQueueCount();
 
-      const sqlite = SqliteService.getInstance();
       const session = await sqlite.getUserSession();
       if (session) {
         this.lastSyncAt = session.last_sync_at;
       }
 
-      const authService = GoogleAuthService.getInstance();
-      if (!authService.isAuthenticated()) {
-        this.syncVisualState = 'unauthenticated';
-      } else if (!this.isOnline) {
-        this.syncVisualState = 'offline';
-      } else {
-        this.syncVisualState = 'idle';
-      }
+      await this.refreshQueueCount();
     },
 
     setUnauthenticated(): void {
@@ -44,11 +39,15 @@ export const useSyncStore = defineStore('sync', {
 
     async refreshQueueCount(): Promise<void> {
       const sqlite = SqliteService.getInstance();
+      await sqlite.init();
       const queue = await sqlite.getPendingSyncQueue();
       this.pendingQueueCount = queue.length;
 
       const authService = GoogleAuthService.getInstance();
-      if (!authService.isAuthenticated()) {
+      const authStore = useAuthStore();
+      const isAuthed = authStore.isAuthenticated || authService.isAuthenticated();
+
+      if (!isAuthed) {
         this.syncVisualState = 'unauthenticated';
       } else if (!this.isOnline) {
         this.syncVisualState = 'offline';
@@ -59,7 +58,10 @@ export const useSyncStore = defineStore('sync', {
 
     async triggerSync(): Promise<void> {
       const authService = GoogleAuthService.getInstance();
-      if (!authService.isAuthenticated()) {
+      const authStore = useAuthStore();
+      const isAuthed = authStore.isAuthenticated || authService.isAuthenticated();
+
+      if (!isAuthed) {
         this.syncVisualState = 'unauthenticated';
         return;
       }
@@ -79,6 +81,7 @@ export const useSyncStore = defineStore('sync', {
         await this.refreshQueueCount();
 
         const sqlite = SqliteService.getInstance();
+        await sqlite.init();
         const session = await sqlite.getUserSession();
         if (session) {
           this.lastSyncAt = session.last_sync_at;

@@ -12,7 +12,12 @@ const config: CapacitorConfig = {
   bundledWebRuntime: false,
   plugins: {
     GoogleAuth: {
-      scopes: ['profile', 'email'],
+      scopes: [
+        'profile',
+        'email',
+        'https://www.googleapis.com/auth/drive.file',
+        'https://www.googleapis.com/auth/drive.appdata',
+      ],
       serverClientId: googleClientId,
       forceCodeForRefreshToken: false,
     },

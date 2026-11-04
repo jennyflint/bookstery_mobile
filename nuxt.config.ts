@@ -3,6 +3,14 @@ export default defineNuxtConfig({
   ssr: false,
   devtools: { enabled: false },
   telemetry: false,
+  runtimeConfig: {
+    public: {
+      googleWebClientId:
+        process.env.NUXT_PUBLIC_GOOGLE_WEB_CLIENT_ID ||
+        process.env.VITE_GOOGLE_WEB_CLIENT_ID ||
+        '',
+    },
+  },
   modules: ['@nuxt/eslint', '@nuxtjs/i18n', '@nuxtjs/tailwindcss', '@pinia/nuxt'],
   app: {
     head: {

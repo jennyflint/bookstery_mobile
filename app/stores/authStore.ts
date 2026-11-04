@@ -15,6 +15,7 @@ export const useAuthStore = defineStore('auth', {
       this.isLoading = true;
       try {
         const sqlite = SqliteService.getInstance();
+        await sqlite.init();
         const session = await sqlite.getUserSession();
         if (session && session.email) {
           const authService = GoogleAuthService.getInstance();
@@ -22,8 +23,14 @@ export const useAuthStore = defineStore('auth', {
           if (silentUser) {
             this.user = silentUser;
             this.isAuthenticated = true;
+          } else {
+            const restoredUser = authService.restoreUserFromSession(session);
+            this.user = restoredUser;
+            this.isAuthenticated = true;
           }
         }
+        const syncStore = useSyncStore();
+        await syncStore.refreshQueueCount();
       } catch {
       } finally {
         this.isLoading = false;
@@ -38,7 +45,8 @@ export const useAuthStore = defineStore('auth', {
         this.isAuthenticated = true;
 
         const syncStore = useSyncStore();
-        await syncStore.refreshQueueCount();
+        await syncStore.init();
+        await syncStore.triggerSync();
       } finally {
         this.isLoading = false;
       }

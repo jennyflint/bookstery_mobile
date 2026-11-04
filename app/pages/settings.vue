@@ -1,7 +1,9 @@
 <script setup lang="ts">
-import { ref } from 'vue';
+import { ref, onMounted } from 'vue';
 import { useReaderStore } from '../stores/readerStore';
 import { useSettingsStore } from '../stores/useSettingsStore';
+import { useAuth } from '../composables/useAuth';
+import { useBookSync } from '../composables/useBookSync';
 import {
   useAppThemeStore,
   APP_BUTTON_SWATCHES,
@@ -24,6 +26,13 @@ const readerStore = useReaderStore();
 const settingsStore = useSettingsStore();
 const appThemeStore = useAppThemeStore();
 const aiStore = useAiStore();
+const { initAuth } = useAuth();
+const { initSync } = useBookSync();
+
+onMounted(async () => {
+  await initAuth();
+  await initSync();
+});
 
 const buttonColorInputRef = ref<HTMLInputElement | null>(null);
 const appBgColorInputRef = ref<HTMLInputElement | null>(null);

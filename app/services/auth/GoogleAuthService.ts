@@ -1,6 +1,6 @@
 import { GoogleAuth } from '@codetrix-studio/capacitor-google-auth';
 import { SqliteService } from '../database/SqliteService';
-import type { GoogleUser } from '../../types';
+import type { GoogleUser, UserSession } from '../../types';
 
 export class GoogleAuthService {
   private static instance: GoogleAuthService | null = null;
@@ -24,8 +24,42 @@ export class GoogleAuthService {
       return;
     }
     try {
-      await GoogleAuth.initialize({
-        clientId: clientId || 'bookstery-android-client-id.apps.googleusercontent.com',
+      let resolvedClientId = clientId?.trim();
+      if (!resolvedClientId) {
+        try {
+          const nuxtGlobal = globalThis as unknown as {
+            useRuntimeConfig?: () => { public?: { googleWebClientId?: string } };
+          };
+          if (typeof nuxtGlobal.useRuntimeConfig === 'function') {
+            const config = nuxtGlobal.useRuntimeConfig();
+            if (
+              config?.public?.googleWebClientId &&
+              typeof config.public.googleWebClientId === 'string' &&
+              config.public.googleWebClientId.trim().length > 0
+            ) {
+              resolvedClientId = config.public.googleWebClientId.trim();
+            }
+          }
+        } catch {
+          // Runtime config might not be available in non-Nuxt contexts (e.g. tests)
+        }
+      }
+      if (!resolvedClientId) {
+        const metaEnv = (import.meta as unknown as { env?: Record<string, string> }).env;
+        const envVal =
+          typeof process !== 'undefined' && process.env?.VITE_GOOGLE_WEB_CLIENT_ID !== undefined
+            ? process.env.VITE_GOOGLE_WEB_CLIENT_ID
+            : metaEnv?.VITE_GOOGLE_WEB_CLIENT_ID;
+        if (envVal && envVal.trim().length > 0) {
+          resolvedClientId = envVal.trim();
+        }
+      }
+
+      const initOptions: {
+        scopes: string[];
+        grantOfflineAccess: boolean;
+        clientId?: string;
+      } = {
         scopes: [
           'profile',
           'email',
@@ -33,7 +67,13 @@ export class GoogleAuthService {
           'https://www.googleapis.com/auth/drive.appdata',
         ],
         grantOfflineAccess: true,
-      });
+      };
+
+      if (resolvedClientId && resolvedClientId.trim().length > 0) {
+        initOptions.clientId = resolvedClientId.trim();
+      }
+
+      await GoogleAuth.initialize(initOptions);
       this.isInitialized = true;
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : String(err);
@@ -45,14 +85,42 @@ export class GoogleAuthService {
     await this.init();
     try {
       const response = await GoogleAuth.signIn();
+      const email = response.email || '';
+      const displayName =
+        response.name || response.givenName || (email ? email.split('@')[0] : '') || 'Reader';
+
+      let accessToken =
+        response.authentication?.accessToken ||
+        (response as { accessToken?: string }).accessToken ||
+        response.authentication?.idToken ||
+        (response as { idToken?: string }).idToken ||
+        (response as { serverAuthCode?: string }).serverAuthCode ||
+        '';
+
+      if (!accessToken) {
+        try {
+          const refreshed = await GoogleAuth.refresh();
+          accessToken =
+            refreshed?.accessToken ||
+            (refreshed as { authentication?: { accessToken?: string } })?.authentication
+              ?.accessToken ||
+            refreshed?.idToken ||
+            '';
+        } catch {
+          // Deferred refresh; sign-in still succeeds
+        }
+      }
+
       const user: GoogleUser = {
-        id: response.id,
-        email: response.email,
-        displayName: response.name || response.givenName || 'Reader',
+        id: response.id || 'google-user',
+        email,
+        displayName,
         imageUrl: response.imageUrl,
-        accessToken: response.authentication.accessToken,
+        accessToken,
       };
+
       this.currentUser = user;
+      await this.sqliteService.init();
       await this.sqliteService.saveUserSession({
         email: user.email,
         display_name: user.displayName,
@@ -65,22 +133,45 @@ export class GoogleAuthService {
     }
   }
 
+  restoreUserFromSession(session: UserSession): GoogleUser {
+    const email = session.email || '';
+    const displayName =
+      session.display_name || (email ? email.split('@')[0] : '') || 'Reader';
+    const user: GoogleUser = {
+      id: 'cached-user',
+      email,
+      displayName,
+      accessToken: '',
+    };
+    this.currentUser = user;
+    return user;
+  }
+
   async silentSignIn(): Promise<GoogleUser | null> {
     await this.init();
     try {
       const response = await GoogleAuth.refresh();
-      if (response && response.accessToken) {
+      const accessToken =
+        response?.accessToken ||
+        (response as { authentication?: { accessToken?: string } })?.authentication
+          ?.accessToken ||
+        response?.idToken ||
+        '';
+
+      if (response && accessToken) {
         if (this.currentUser) {
-          this.currentUser.accessToken = response.accessToken;
+          this.currentUser.accessToken = accessToken;
           return this.currentUser;
         }
+        await this.sqliteService.init();
         const session = await this.sqliteService.getUserSession();
         if (session && session.email) {
           this.currentUser = {
             id: 'cached-user',
             email: session.email,
-            displayName: session.display_name || 'Reader',
-            accessToken: response.accessToken,
+            displayName:
+              session.display_name || (session.email ? session.email.split('@')[0] : '') || 'Reader',
+            accessToken,
           };
           return this.currentUser;
         }
@@ -97,8 +188,12 @@ export class GoogleAuthService {
     }
     try {
       const refreshed = await GoogleAuth.refresh();
-      if (refreshed && refreshed.accessToken) {
-        this.currentUser.accessToken = refreshed.accessToken;
+      const token =
+        refreshed?.accessToken ||
+        (refreshed as { authentication?: { accessToken?: string } })?.authentication?.accessToken ||
+        refreshed?.idToken;
+      if (token) {
+        this.currentUser.accessToken = token;
       }
     } catch {
     }
@@ -111,6 +206,7 @@ export class GoogleAuthService {
     } catch {
     } finally {
       this.currentUser = null;
+      await this.sqliteService.init();
       await this.sqliteService.resetUserSession();
       await this.sqliteService.setDriveFolderId(null);
     }
