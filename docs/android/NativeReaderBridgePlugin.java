@@ -125,13 +125,40 @@ public class NativeReaderBridgePlugin extends Plugin {
                         scanFiles(new File(fallbackPath), 0, maxDepth, extensions, files);
                     }
                 } else {
-                    scanFiles(new File(stripFileScheme(target)), 0, maxDepth, extensions, files);
+                    File targetDir = resolveTargetDirectory(target);
+                    scanFiles(targetDir, 0, maxDepth, extensions, files);
                 }
                 JSObject result = new JSObject();
                 result.put("files", files);
                 call.resolve(result);
             } catch (Exception e) {
                 call.reject("Directory scan failed: " + e.getMessage(), e);
+            }
+        });
+    }
+
+    @PluginMethod
+    public void scanDownloads(final PluginCall call) {
+        final List<String> extensions = readExtensions(call.getArray("extensions"));
+        final List<String> resolvedExtensions = extensions.isEmpty()
+            ? Arrays.asList(".pdf", ".epub", ".fb2", ".fb2.zip")
+            : extensions;
+        final Integer requestedDepth = call.getInt("maxDepth", DEFAULT_MAX_DEPTH);
+        final int maxDepth = requestedDepth == null ? DEFAULT_MAX_DEPTH : Math.max(0, requestedDepth);
+
+        io.execute(() -> {
+            try {
+                JSArray files = new JSArray();
+                File downloadDir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS);
+                if (downloadDir == null || !downloadDir.exists()) {
+                    downloadDir = new File("/storage/emulated/0/Download");
+                }
+                scanFiles(downloadDir, 0, maxDepth, resolvedExtensions, files);
+                JSObject result = new JSObject();
+                result.put("files", files);
+                call.resolve(result);
+            } catch (Exception e) {
+                call.reject("Downloads scan failed: " + e.getMessage(), e);
             }
         });
     }
@@ -295,6 +322,19 @@ public class NativeReaderBridgePlugin extends Plugin {
             return Uri.decode(value.substring("file://".length()));
         }
         return value;
+    }
+
+    private File resolveTargetDirectory(String target) {
+        if ("DOWNLOADS".equalsIgnoreCase(target) || "DOWNLOAD".equalsIgnoreCase(target)) {
+            File pub = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS);
+            return (pub != null && pub.exists()) ? pub : new File("/storage/emulated/0/Download");
+        }
+        String stripped = stripFileScheme(target);
+        if ("/storage/emulated/0/Download".equalsIgnoreCase(stripped) || "/storage/emulated/0/Downloads".equalsIgnoreCase(stripped)) {
+            File pub = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS);
+            return (pub != null && pub.exists()) ? pub : new File(stripped);
+        }
+        return new File(stripped);
     }
 
     // ---------------------------------------------------------------------------------------

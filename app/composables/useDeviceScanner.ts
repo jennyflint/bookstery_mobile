@@ -47,6 +47,7 @@ export function useDeviceScanner() {
   const scanProgress = ref(0);
   const scannedFiles = ref<ScannedFile[]>([]);
   const duplicateNotice = ref<string | null>(null);
+  const hasStoragePermissionError = ref(false);
   const scannerService = new DeviceFileScannerService();
   const libraryStore = useLibraryStore();
   const coverQueue = CoverGenerationQueueService.getInstance();
@@ -54,6 +55,7 @@ export function useDeviceScanner() {
   const scanDevice = async (): Promise<ScannedFile[]> => {
     isScanning.value = true;
     scannedFiles.value = [];
+    hasStoragePermissionError.value = false;
     try {
       await libraryStore.loadBooks();
       const documentsFiles = await scannerService.scanDirectory('', Directory.Documents);
@@ -71,15 +73,49 @@ export function useDeviceScanner() {
         }
       } catch {}
 
+      if (isNativeReaderBridgeAvailable()) {
+        try {
+          let permissionStatus = await NativeReaderBridge.checkStoragePermission();
+          if (!permissionStatus.granted) {
+            permissionStatus = await NativeReaderBridge.requestStoragePermission();
+          }
+          if (permissionStatus.granted) {
+            const downloadScan = await NativeReaderBridge.scanDirectory({
+              uriOrPath: '/storage/emulated/0/Download',
+              extensions: ['pdf', 'epub', 'fb2', 'fb2.zip'],
+            });
+            for (const file of downloadScan.files) {
+              const format = scannerService.determineFormat(file.name);
+              if (format) {
+                combined.push({
+                  name: file.name,
+                  path: file.uri || file.path,
+                  size: file.size,
+                  format,
+                });
+              }
+            }
+          } else {
+            hasStoragePermissionError.value = true;
+          }
+        } catch (err) {
+          console.warn('[DeviceScanner] Download directory scan failed:', err);
+        }
+      }
+
       const uniqueMap = new Map<string, ScannedFile>();
       for (const f of combined) {
+        const normKey = f.path.replace(/^file:\/\//, '');
+        if (uniqueMap.has(normKey)) {
+          continue;
+        }
         const title = f.name.replace(/\.[^/.]+$/, '').replace(/_/g, ' ');
         const isDuplicate = libraryStore.isDuplicate({
           title,
           file_path: f.path,
         });
         f.isDuplicate = isDuplicate;
-        uniqueMap.set(f.path, f);
+        uniqueMap.set(normKey, f);
       }
       scannedFiles.value = Array.from(uniqueMap.values());
       return scannedFiles.value;
@@ -106,47 +142,65 @@ export function useDeviceScanner() {
         }
 
         try {
-          const imported = await scannerService.importBookFile(
-            file.path,
-            Directory.Documents,
-            libraryStore.books,
-          );
-          if (imported) {
-            const addResult = await libraryStore.addBook(imported);
-            if (addResult.success) {
+          const isNativeTarget =
+            isNativeReaderBridgeAvailable() &&
+            (file.path.startsWith('/') ||
+              file.path.startsWith('file://') ||
+              file.path.startsWith('content://'));
+
+          if (isNativeTarget) {
+            const candidateTitle = file.name.replace(/\.[^/.]+$/, '').replace(/_/g, ' ');
+            const outcome = await importViaBridge(file.path, file.name, candidateTitle);
+            if (outcome.status === 'imported') {
               importedCount++;
-
-              let fileContent: string | ArrayBuffer | Uint8Array | Blob | undefined;
-              try {
-                const readRes = await Filesystem.readFile({
-                  path: imported.file_path,
-                  directory: Directory.Data,
-                });
-                fileContent = readRes.data;
-              } catch {
-                try {
-                  const readRes = await Filesystem.readFile({
-                    path: file.path,
-                    directory: Directory.Documents,
-                  });
-                  fileContent = readRes.data;
-                } catch {}
-              }
-
-              if (fileContent) {
-                coverQueue.enqueue(imported.id, imported.format, fileContent).then((coverPath) => {
-                  if (coverPath) {
-                    libraryStore.updateCover(imported.id, coverPath);
-                  }
-                });
-              }
-            } else if (addResult.isDuplicate) {
+            } else if (outcome.status === 'duplicate') {
               duplicateCount++;
             }
           } else {
-            duplicateCount++;
+            const imported = await scannerService.importBookFile(
+              file.path,
+              Directory.Documents,
+              libraryStore.books,
+            );
+            if (imported) {
+              const addResult = await libraryStore.addBook(imported);
+              if (addResult.success) {
+                importedCount++;
+
+                let fileContent: string | ArrayBuffer | Uint8Array | Blob | undefined;
+                try {
+                  const readRes = await Filesystem.readFile({
+                    path: imported.file_path,
+                    directory: Directory.Data,
+                  });
+                  fileContent = readRes.data;
+                } catch {
+                  try {
+                    const readRes = await Filesystem.readFile({
+                      path: file.path,
+                      directory: Directory.Documents,
+                    });
+                    fileContent = readRes.data;
+                  } catch {}
+                }
+
+                if (fileContent) {
+                  coverQueue.enqueue(imported.id, imported.format, fileContent).then((coverPath) => {
+                    if (coverPath) {
+                      libraryStore.updateCover(imported.id, coverPath);
+                    }
+                  });
+                }
+              } else if (addResult.isDuplicate) {
+                duplicateCount++;
+              }
+            } else {
+              duplicateCount++;
+            }
           }
-        } catch {}
+        } catch (err) {
+          console.warn(`[DeviceScanner] Failed to import ${file.name}:`, err);
+        }
         scanProgress.value = Math.round(((i + 1) / files.length) * 100);
       }
       return { importedCount, duplicateCount };
@@ -447,10 +501,12 @@ export function useDeviceScanner() {
     scanProgress,
     scannedFiles,
     duplicateNotice,
+    hasStoragePermissionError,
     scanDevice,
     importFiles,
     importBook,
     importFromBlob,
+    importViaBridge,
     importNativeFiles,
     clearDuplicateNotice,
   };

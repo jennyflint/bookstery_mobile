@@ -74,8 +74,14 @@ export interface NativeVolumeKeyEvent {
   direction: 'up' | 'down';
 }
 
+export interface NativeScanDownloadsOptions {
+  extensions?: string[];
+  maxDepth?: number;
+}
+
 export interface NativeReaderBridgePlugin {
   scanDirectory(options: NativeScanDirectoryOptions): Promise<NativeScanDirectoryResult>;
+  scanDownloads?(options?: NativeScanDownloadsOptions): Promise<NativeScanDirectoryResult>;
   resolveStreamableUrl(
     options: NativeResolveStreamableOptions,
   ): Promise<NativeResolveStreamableResult>;

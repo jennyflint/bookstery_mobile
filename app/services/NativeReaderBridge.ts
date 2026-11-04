@@ -12,6 +12,9 @@ export const NativeReaderBridge = registerPlugin<NativeReaderBridgePlugin>('Nati
     async scanDirectory() {
       return { files: [] };
     },
+    async scanDownloads() {
+      return { files: [] };
+    },
     async resolveStreamableUrl(options: { uriOrPath: string }) {
       return { path: options.uriOrPath, size: 0, cached: false };
     },

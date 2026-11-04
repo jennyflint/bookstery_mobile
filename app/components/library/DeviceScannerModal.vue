@@ -20,6 +20,7 @@ const {
   scanProgress,
   scannedFiles,
   duplicateNotice,
+  hasStoragePermissionError,
   scanDevice,
   importFiles,
   importFromBlob,
@@ -30,15 +31,33 @@ const {
 const selectedFiles = ref<Set<string>>(new Set());
 const fileInputRef = ref<HTMLInputElement | null>(null);
 const duplicateMessage = ref<string | null>(null);
+const permissionMessage = ref<string | null>(null);
 
 const dismissDuplicateNotice = () => {
   duplicateMessage.value = null;
   clearDuplicateNotice();
 };
 
+const dismissPermissionNotice = () => {
+  permissionMessage.value = null;
+  if (hasStoragePermissionError) {
+    hasStoragePermissionError.value = false;
+  }
+};
+
 const handleScan = async () => {
   dismissDuplicateNotice();
+  dismissPermissionNotice();
   const files = await scanDevice();
+  if (hasStoragePermissionError.value) {
+    permissionMessage.value = t('scanner.storagePermissionError');
+  }
+  const duplicates = files.filter((f) => f.isDuplicate);
+  if (duplicates.length > 0 && files.length === duplicates.length) {
+    duplicateMessage.value = t('scanner.noNewFilesToImport');
+  } else if (duplicates.length > 0) {
+    duplicateMessage.value = t('scanner.duplicatesSkipped', { count: duplicates.length });
+  }
   selectedFiles.value = new Set(files.filter((f) => !f.isDuplicate).map((f) => f.path));
 };
 
@@ -52,6 +71,7 @@ const toggleFileSelection = (path: string) => {
 
 const handleImportSelected = async () => {
   dismissDuplicateNotice();
+  dismissPermissionNotice();
   const toImport = scannedFiles.value.filter((f) => selectedFiles.value.has(f.path) && !f.isDuplicate);
   if (toImport.length > 0) {
     const result = await importFiles(toImport);
@@ -183,6 +203,28 @@ const handleFileChosen = async (event: Event) => {
       </div>
 
       <div class="flex-1 overflow-y-auto py-4 space-y-4">
+        <!-- Permission Warning Banner -->
+        <div
+          v-if="permissionMessage"
+          class="p-3 rounded-xl bg-amber-50 border border-amber-200 text-amber-900 text-xs flex items-start justify-between gap-2"
+        >
+          <div class="flex items-start gap-2">
+            <svg class="w-4 h-4 text-amber-600 mt-0.5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+            </svg>
+            <span>{{ permissionMessage }}</span>
+          </div>
+          <button
+            type="button"
+            class="text-amber-500 hover:text-amber-700"
+            @click="dismissPermissionNotice"
+          >
+            <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+        </div>
+
         <!-- Duplicate Warning Banner -->
         <div
           v-if="duplicateMessage || duplicateNotice"
@@ -293,7 +335,7 @@ const handleFileChosen = async (event: Event) => {
           class="px-4 py-2.5 rounded-xl text-zinc-600 hover:bg-zinc-100 font-medium text-sm transition-colors"
           @click="emit('close')"
         >
-          {{ t('dictionary.delete') === 'Remove' ? 'Cancel' : 'Скасувати' }}
+          {{ t('common.cancel') }}
         </button>
         <button
           v-if="scannedFiles.length > 0"

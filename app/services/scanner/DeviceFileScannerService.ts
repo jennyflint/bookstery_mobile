@@ -19,6 +19,10 @@ export class DeviceFileScannerService {
     return null;
   }
 
+  isNativePath(path: string): boolean {
+    return path.startsWith('/') || path.startsWith('file://') || path.startsWith('content://');
+  }
+
   async scanDirectory(path: string = '', directory: Directory = Directory.Documents): Promise<ScannedFile[]> {
     const results: ScannedFile[] = [];
 
