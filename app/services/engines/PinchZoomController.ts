@@ -45,6 +45,7 @@ export class PinchZoomController {
   private onSwipePrev?: () => void;
   private isRenderZoomSupported?: () => boolean;
   private getContentSize?: () => { width: number; height: number } | null;
+  private getScrollContainer?: () => HTMLElement | null;
   private onStateChange?: (state: PinchZoomStateSnapshot) => void;
 
   private scale: number = 1.0;
@@ -94,6 +95,7 @@ export class PinchZoomController {
     this.onSwipePrev = config.onSwipePrev;
     this.isRenderZoomSupported = config.isRenderZoomSupported;
     this.getContentSize = config.getContentSize;
+    this.getScrollContainer = config.getScrollContainer;
     this.onStateChange = config.onStateChange;
 
     this.boundTouchStart = this.handleTouchStart.bind(this);
@@ -135,6 +137,58 @@ export class PinchZoomController {
 
   public didInteractRecently(): boolean {
     return this.didGestureMove || this.isPinching || this.isPanning;
+  }
+
+  public findScrollableContainer(): HTMLElement | null {
+    if (this.getScrollContainer) {
+      const el = this.getScrollContainer();
+      if (el) return el;
+    }
+
+    const reflow = this.wrapper.querySelector<HTMLElement>('[data-testid="pdf-reflow-view"]');
+    if (reflow && reflow.scrollHeight > reflow.clientHeight) {
+      return reflow;
+    }
+
+    const pdfScroll = this.wrapper.querySelector<HTMLElement>('.pdf-scroll-container');
+    if (pdfScroll && pdfScroll.scrollHeight > pdfScroll.clientHeight) {
+      return pdfScroll;
+    }
+
+    const fb2Scroll = this.wrapper.querySelector<HTMLElement>('.fb2-document-wrapper');
+    if (fb2Scroll && fb2Scroll.scrollHeight > fb2Scroll.clientHeight) {
+      return fb2Scroll;
+    }
+
+    const epubContainer = this.wrapper.querySelector<HTMLElement>('.epub-container');
+    if (epubContainer && epubContainer.scrollHeight > epubContainer.clientHeight) {
+      return epubContainer;
+    }
+
+    const iframes = this.wrapper.querySelectorAll<HTMLIFrameElement>('iframe');
+    for (const iframe of Array.from(iframes)) {
+      try {
+        const docEl = iframe.contentDocument?.scrollingElement as HTMLElement | null;
+        if (docEl && docEl.scrollHeight > docEl.clientHeight) {
+          return docEl;
+        }
+      } catch {
+        // Ignore cross-origin access errors
+      }
+    }
+
+    const engineContainer = this.wrapper.querySelector<HTMLElement>(
+      '[data-testid="reader-engine-container"]',
+    );
+    if (engineContainer && engineContainer.scrollHeight > engineContainer.clientHeight) {
+      return engineContainer;
+    }
+
+    if (this.target && this.target.scrollHeight > this.target.clientHeight) {
+      return this.target;
+    }
+
+    return null;
   }
 
   private getViewportDimensions(): { width: number; height: number; left: number; top: number } {
@@ -333,6 +387,8 @@ export class PinchZoomController {
 
     if (e.touches.length === 1 && !this.isPinching) {
       const t = e.touches[0];
+      const stepX = t.clientX - this.lastTouchX;
+      const stepY = t.clientY - this.lastTouchY;
       this.lastTouchX = t.clientX;
       this.lastTouchY = t.clientY;
       const deltaX = t.clientX - this.touchStartX;
@@ -346,11 +402,18 @@ export class PinchZoomController {
         if (e.cancelable) {
           e.preventDefault();
         }
-        const clamped = this.clampTranslation(
-          this.panStartX + deltaX,
-          this.panStartY + deltaY,
-          this.scale,
-        );
+        const rawNextX = this.translateX + stepX;
+        const rawNextY = this.translateY + stepY;
+        const clamped = this.clampTranslation(rawNextX, rawNextY, this.scale);
+        const overflowY = rawNextY - clamped.y;
+
+        if (Math.abs(overflowY) > 0) {
+          const scrollEl = this.findScrollableContainer();
+          if (scrollEl) {
+            scrollEl.scrollTop -= overflowY / this.scale;
+          }
+        }
+
         this.translateX = Math.round(clamped.x);
         this.translateY = Math.round(clamped.y);
         this.applyTransform();
@@ -377,6 +440,8 @@ export class PinchZoomController {
         if (e.touches.length === 1 && this.scale > 1.0) {
           this.touchStartX = e.touches[0].clientX;
           this.touchStartY = e.touches[0].clientY;
+          this.lastTouchX = e.touches[0].clientX;
+          this.lastTouchY = e.touches[0].clientY;
           this.panStartX = this.translateX;
           this.panStartY = this.translateY;
           this.isPanning = true;
@@ -544,6 +609,15 @@ export class PinchZoomController {
     const nextX = this.translateX - deltaX;
     const nextY = this.translateY - deltaY;
     const clamped = this.clampTranslation(nextX, nextY, this.scale);
+    const overflowY = nextY - clamped.y;
+
+    if (Math.abs(overflowY) > 0) {
+      const scrollEl = this.findScrollableContainer();
+      if (scrollEl) {
+        scrollEl.scrollTop -= overflowY / this.scale;
+      }
+    }
+
     this.translateX = Math.round(clamped.x);
     this.translateY = Math.round(clamped.y);
     this.applyTransform();

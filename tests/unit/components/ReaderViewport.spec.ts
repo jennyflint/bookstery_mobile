@@ -245,7 +245,8 @@ describe('ReaderViewport Component', () => {
     expect(vm.translateX).toBe(0);
     expect(vm.translateY).toBe(0);
 
-    // Zoom again and verify automatic reset when changing pages
+    // Zoom again and verify automatic reset when changing pages in paginated mode
+    readerStore.setPaginationMode('paginated');
     await vi.advanceTimersByTimeAsync(400);
     viewportEl.dispatchEvent(createTouchEvent('touchstart', [{ clientX: 120, clientY: 250 }]));
     viewportEl.dispatchEvent(
@@ -431,5 +432,121 @@ describe('ReaderViewport Component', () => {
 
     // Inner scroll position must not have been reset or altered by layout reflow
     expect(innerScrollEl.scrollTop).toBe(420);
+  });
+
+  it('should preserve zoom level when locator or currentPage changes in scroll mode', async () => {
+    const wrapper = mount(ReaderViewport);
+    const readerStore = useReaderStore();
+    const viewportEl = wrapper.find('[data-testid="reader-viewport"]').element as HTMLElement;
+
+    readerStore.setPaginationMode('scroll');
+
+    vi.spyOn(viewportEl, 'getBoundingClientRect').mockReturnValue({
+      width: 400,
+      height: 800,
+      left: 0,
+      top: 0,
+      right: 400,
+      bottom: 800,
+      x: 0,
+      y: 0,
+      toJSON: () => ({}),
+    });
+
+    // Double-tap zoom to 2.5x
+    viewportEl.dispatchEvent(createTouchEvent('touchstart', [{ clientX: 200, clientY: 400 }]));
+    viewportEl.dispatchEvent(
+      createTouchEvent('touchend', [], [{ clientX: 200, clientY: 400 }]),
+    );
+    await vi.advanceTimersByTimeAsync(100);
+    viewportEl.dispatchEvent(createTouchEvent('touchstart', [{ clientX: 200, clientY: 400 }]));
+    viewportEl.dispatchEvent(
+      createTouchEvent('touchend', [], [{ clientX: 200, clientY: 400 }]),
+    );
+
+    const vm = wrapper.vm as unknown as { scale: number };
+    expect(vm.scale).toBe(2.5);
+
+    // Scroll updates location & page
+    readerStore.updateLocation({ locator: 'loc-42', currentPage: 5, progressPercentage: 45 });
+    await wrapper.vm.$nextTick();
+
+    // Zoom must stay active in scroll mode
+    expect(vm.scale).toBe(2.5);
+
+    // Switching book id resets zoom
+    readerStore.currentBook = {
+      id: 'diff-book',
+      title: 'Different',
+      author: 'Author',
+      format: 'pdf',
+      fileSize: 100,
+      addedAt: 0,
+      lastReadAt: 0,
+      currentPage: 1,
+      totalPages: 1,
+      progressPercentage: 0,
+    };
+    await wrapper.vm.$nextTick();
+    expect(vm.scale).toBe(1);
+  });
+
+  it('should forward vertical pan overflow to the inner scroll container when zoomed in', async () => {
+    const wrapper = mount(ReaderViewport);
+    const viewportEl = wrapper.find('[data-testid="reader-viewport"]').element as HTMLElement;
+    const engineContainer = wrapper.find('[data-testid="reader-engine-container"]').element as HTMLElement;
+
+    vi.spyOn(viewportEl, 'getBoundingClientRect').mockReturnValue({
+      width: 400,
+      height: 800,
+      left: 0,
+      top: 0,
+      right: 400,
+      bottom: 800,
+      x: 0,
+      y: 0,
+      toJSON: () => ({}),
+    });
+
+    // Create a mock scroll container inside engine container
+    const scrollContainer = document.createElement('div');
+    scrollContainer.className = 'pdf-scroll-container';
+    Object.defineProperty(scrollContainer, 'clientHeight', { value: 800, writable: true });
+    Object.defineProperty(scrollContainer, 'scrollHeight', { value: 2400, writable: true });
+    scrollContainer.scrollTop = 100;
+    engineContainer.appendChild(scrollContainer);
+
+    // Pinch to 2.0x (maxOffsetY = (800 * 2 - 800) / 2 = 400)
+    viewportEl.dispatchEvent(
+      createTouchEvent('touchstart', [
+        { clientX: 200, clientY: 350 },
+        { clientX: 200, clientY: 450 },
+      ]),
+    );
+    viewportEl.dispatchEvent(
+      createTouchEvent('touchmove', [
+        { clientX: 200, clientY: 300 },
+        { clientX: 200, clientY: 500 },
+      ]),
+    );
+    viewportEl.dispatchEvent(createTouchEvent('touchend', []));
+    await vi.advanceTimersByTimeAsync(200);
+
+    const vm = wrapper.vm as unknown as { scale: number; translateY: number };
+    expect(vm.scale).toBe(2.0);
+
+    // Single-finger drag upward by 500px:
+    // translateY moves from 0 to -400 (reaches boundary).
+    // Remaining 100px overflows into scroll container: scrollTop += 100 / 2.0 = 50.
+    viewportEl.dispatchEvent(createTouchEvent('touchstart', [{ clientX: 200, clientY: 400 }]));
+    viewportEl.dispatchEvent(createTouchEvent('touchmove', [{ clientX: 200, clientY: -100 }]));
+
+    expect(vm.translateY).toBe(-400);
+    expect(scrollContainer.scrollTop).toBe(150);
+
+    // Drag another 80px upward: translateY stays -400, scrollTop += 80 / 2 = 40.
+    viewportEl.dispatchEvent(createTouchEvent('touchmove', [{ clientX: 200, clientY: -180 }]));
+    expect(vm.translateY).toBe(-400);
+    expect(scrollContainer.scrollTop).toBe(190);
   });
 });

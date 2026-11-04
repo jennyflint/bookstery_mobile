@@ -65,6 +65,34 @@ const {
     }
     return null;
   },
+  getScrollContainer: () => {
+    if (readerStore.currentBook?.format === 'pdf' && readerStore.isReflowMode) {
+      const reflowEl = document.querySelector(
+        '[data-testid="pdf-reflow-view"]',
+      ) as HTMLElement | null;
+      if (reflowEl && reflowEl.scrollHeight > reflowEl.clientHeight) return reflowEl;
+    }
+    const engineContainer = containerRef.value;
+    if (!engineContainer) return null;
+    const engineScrollEl = engineContainer.__readerGetScrollContainer?.();
+    if (engineScrollEl) return engineScrollEl;
+
+    const inner = engineContainer.querySelector<HTMLElement>(
+      '.pdf-scroll-container, .fb2-document-wrapper, .epub-container',
+    );
+    if (inner && inner.scrollHeight > inner.clientHeight) return inner;
+
+    const iframe = engineContainer.querySelector<HTMLIFrameElement>('iframe');
+    if (iframe) {
+      try {
+        const docEl = iframe.contentDocument?.scrollingElement as HTMLElement | null;
+        if (docEl && docEl.scrollHeight > docEl.clientHeight) return docEl;
+      } catch {}
+    }
+
+    if (engineContainer.scrollHeight > engineContainer.clientHeight) return engineContainer;
+    return null;
+  },
   // Visual viewport zoom is decoupled from engine re-rendering across all formats.
   // Zoom gestures scale content purely via GPU-accelerated CSS transform without re-rendering.
   isRenderZoomSupported: () => false,
@@ -92,6 +120,17 @@ onMounted(() => {
 
 watch(
   () => [readerStore.locator, readerStore.currentPage],
+  () => {
+    // In scroll pagination mode, scrolling down continually updates locator and currentPage.
+    // Only reset zoom when paginated page turns occur.
+    if (readerStore.settings.paginationMode !== 'scroll') {
+      resetZoom(true);
+    }
+  },
+);
+
+watch(
+  () => readerStore.currentBook?.id,
   () => {
     resetZoom(true);
   },

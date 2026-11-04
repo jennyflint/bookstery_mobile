@@ -453,6 +453,26 @@ export class EpubEngine extends BaseEngine {
       this.updatePaginationFromLocation(this.rendition.location);
     }
 
+    const zoomableContainer = this.container as ZoomableContainerElement | null;
+    if (zoomableContainer) {
+      zoomableContainer.__readerGetScrollContainer = () => {
+        const epubContainer = this.container?.querySelector<HTMLElement>('.epub-container');
+        if (epubContainer && epubContainer.clientHeight > 0 && epubContainer.scrollHeight > epubContainer.clientHeight) {
+          return epubContainer;
+        }
+        const iframe = this.container?.querySelector<HTMLIFrameElement>('iframe');
+        if (iframe) {
+          try {
+            const docEl = iframe.contentDocument?.scrollingElement as HTMLElement | null;
+            if (docEl && docEl.clientHeight > 0 && docEl.scrollHeight > docEl.clientHeight) {
+              return docEl;
+            }
+          } catch {}
+        }
+        return epubContainer || null;
+      };
+    }
+
     this.applyScrollContainerStyles();
   }
 
@@ -816,6 +836,10 @@ export class EpubEngine extends BaseEngine {
     this.totalPages = 1;
     this.currentChapterTitle = null;
     this.location = this.getCurrentLocation();
+
+    if (this.container) {
+      delete (this.container as ZoomableContainerElement).__readerGetScrollContainer;
+    }
 
     super.destroy();
   }

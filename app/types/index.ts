@@ -116,6 +116,8 @@ export interface PinchZoomOptions {
   isRenderZoomSupported?: () => boolean;
   /** Content size at scale 1.0; when provided, pan limits follow the content, and small content stays centered. */
   getContentSize?: () => { width: number; height: number } | null;
+  /** Locates the active vertical scroll element for overflowing vertical pans and wheel scrolls. */
+  getScrollContainer?: () => HTMLElement | null;
   onSwipeNext?: () => void;
   onSwipePrev?: () => void;
 }
@@ -128,6 +130,8 @@ export interface ZoomableContainerElement extends HTMLElement {
   __readerCanRenderZoom?: () => boolean;
   /** Logical size of the page at zoom 1.0, used to bound panning to the page instead of the viewport. */
   __readerGetContentSize?: () => { width: number; height: number } | null;
+  /** Returns the active scrollable container element (e.g. .pdf-scroll-container, .epub-container, .fb2-document-wrapper). */
+  __readerGetScrollContainer?: () => HTMLElement | null;
   /** Lets engines that render inside iframes forward the iframe's touches to the pinch controller. */
   __readerBindTouchSource?: (doc: Document, frame: HTMLElement) => () => void;
 }

@@ -385,6 +385,9 @@ export class PdfEngine extends BaseEngine {
     zoomableContainer.__readerCanRenderZoom = () => false;
     zoomableContainer.__readerGetContentSize = () =>
       this.paginationMode === 'scroll' ? null : this.basePageSize;
+    zoomableContainer.__readerGetScrollContainer = () => {
+      return this.scrollContainer || this.container?.querySelector<HTMLElement>('.pdf-scroll-container') || null;
+    };
 
     this.touchStartListener = () => {
       this.isTouchActive = true;
@@ -1835,6 +1838,7 @@ export class PdfEngine extends BaseEngine {
       delete zoomableContainer.__readerResetZoom;
       delete zoomableContainer.__readerCanRenderZoom;
       delete zoomableContainer.__readerGetContentSize;
+      delete zoomableContainer.__readerGetScrollContainer;
       this.container.innerHTML = '';
     }
 

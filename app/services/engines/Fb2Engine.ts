@@ -1,7 +1,7 @@
 import JSZip from 'jszip';
 import { BaseEngine } from './BaseEngine';
 import { createRangeFromOffsets } from '../../utils/highlightRenderer';
-import type { HighlightRecord, ReaderLocation } from '../../types';
+import type { HighlightRecord, ReaderLocation, ZoomableContainerElement } from '../../types';
 
 export class Fb2Engine extends BaseEngine {
   private rawXml: string = '';
@@ -340,6 +340,11 @@ export class Fb2Engine extends BaseEngine {
     wrapper.appendChild(article);
     this.container.appendChild(wrapper);
 
+    const zoomableContainer = this.container as unknown as ZoomableContainerElement;
+    if (zoomableContainer) {
+      zoomableContainer.__readerGetScrollContainer = () => this.scrollContainer;
+    }
+
     this.scrollHandler = () => {
       this.updateLocationOnScroll();
     };
@@ -625,6 +630,9 @@ export class Fb2Engine extends BaseEngine {
     this.paragraphElements = [];
     this.parsedDocument = null;
     this.scrollContainer = null;
+    if (this.container) {
+      delete (this.container as unknown as ZoomableContainerElement).__readerGetScrollContainer;
+    }
     super.destroy();
   }
 }

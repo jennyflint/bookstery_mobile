@@ -307,4 +307,110 @@ describe('PinchZoomController pan limits', () => {
     expect(screenX).toBe(100);
     expect(screenY).toBe(300);
   });
+
+  it('forwards overflowing vertical pan deltas to the scroll container at 1:1 screen speed', () => {
+    const wrapper = createWrapper();
+    const target = document.createElement('div');
+    wrapper.appendChild(target);
+
+    const scrollEl = document.createElement('div');
+    scrollEl.className = 'fb2-document-wrapper';
+    Object.defineProperty(scrollEl, 'clientHeight', { value: 800, writable: true });
+    Object.defineProperty(scrollEl, 'scrollHeight', { value: 3000, writable: true });
+    scrollEl.scrollTop = 500;
+    target.appendChild(scrollEl);
+
+    const controller = new PinchZoomController({
+      wrapper,
+      target,
+    });
+
+    controller.setScale(2.0);
+    // Viewport 400x800 at scale 2.0 -> maxOffsetY = (800 * 2 - 800) / 2 = 400
+
+    // Touch start at (200, 400)
+    wrapper.dispatchEvent(
+      new TouchEvent('touchstart', {
+        touches: [{ clientX: 200, clientY: 400 } as Touch],
+        cancelable: true,
+      }),
+    );
+
+    // Pan up by 500px:
+    // translateY goes from 0 to -400 (boundary).
+    // Remaining 100px overflows: scrollTop += 100 / 2.0 = 50 -> 550.
+    wrapper.dispatchEvent(
+      new TouchEvent('touchmove', {
+        touches: [{ clientX: 200, clientY: -100 } as Touch],
+        cancelable: true,
+      }),
+    );
+
+    expect(controller.getState().translateY).toBe(-400);
+    expect(scrollEl.scrollTop).toBe(550);
+
+    // Pan up by another 60px:
+    // translateY remains clamped at -400.
+    // 60px overflows: scrollTop += 60 / 2.0 = 30 -> 580.
+    wrapper.dispatchEvent(
+      new TouchEvent('touchmove', {
+        touches: [{ clientX: 200, clientY: -160 } as Touch],
+        cancelable: true,
+      }),
+    );
+
+    expect(controller.getState().translateY).toBe(-400);
+    expect(scrollEl.scrollTop).toBe(580);
+  });
+
+  it('forwards overflowing wheel deltas to the scroll container at 1:1 screen speed', () => {
+    const wrapper = createWrapper();
+    const target = document.createElement('div');
+    wrapper.appendChild(target);
+
+    const scrollEl = document.createElement('div');
+    scrollEl.className = 'epub-container';
+    Object.defineProperty(scrollEl, 'clientHeight', { value: 800, writable: true });
+    Object.defineProperty(scrollEl, 'scrollHeight', { value: 3000, writable: true });
+    scrollEl.scrollTop = 200;
+    target.appendChild(scrollEl);
+
+    const controller = new PinchZoomController({
+      wrapper,
+      target,
+    });
+
+    controller.setScale(2.0);
+
+    // Wheel down by 450px:
+    // translateY goes from 0 to -400 (boundary).
+    // Remaining 50px overflows: scrollTop += 50 / 2.0 = 25 -> 225.
+    wrapper.dispatchEvent(new WheelEvent('wheel', { deltaX: 0, deltaY: 450, cancelable: true }));
+
+    expect(controller.getState().translateY).toBe(-400);
+    expect(scrollEl.scrollTop).toBe(225);
+
+    // Wheel down by another 100px:
+    // translateY stays -400.
+    // 100px overflows: scrollTop += 100 / 2.0 = 50 -> 275.
+    wrapper.dispatchEvent(new WheelEvent('wheel', { deltaX: 0, deltaY: 100, cancelable: true }));
+
+    expect(controller.getState().translateY).toBe(-400);
+    expect(scrollEl.scrollTop).toBe(275);
+  });
+
+  it('finds scrollable container across EPUB, PDF, FB2 and reflow elements', () => {
+    const wrapper = createWrapper();
+    const controller = new PinchZoomController({ wrapper });
+
+    expect(controller.findScrollableContainer()).toBeNull();
+
+    const epub = document.createElement('div');
+    epub.className = 'epub-container';
+    Object.defineProperty(epub, 'clientHeight', { value: 600, writable: true });
+    Object.defineProperty(epub, 'scrollHeight', { value: 1200, writable: true });
+    wrapper.appendChild(epub);
+
+    expect(controller.findScrollableContainer()).toBe(epub);
+  });
 });
