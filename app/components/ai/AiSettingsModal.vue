@@ -128,6 +128,14 @@ const applyCustomPreset = (preset: { name: string; url: string; defaultModel: st
   testResult.value = null;
 };
 
+const isEndpointPresetActive = (presetUrl: string): boolean => {
+  if (!baseUrl.value) return false;
+  return (
+    baseUrl.value.trim().replace(/\/+$/, '').toLowerCase() ===
+    presetUrl.trim().replace(/\/+$/, '').toLowerCase()
+  );
+};
+
 const selectPresetModel = (selectedModelId: string) => {
   modelId.value = selectedModelId;
   customModelId.value = selectedModelId;
@@ -298,7 +306,12 @@ const handleResetPrompts = async () => {
               v-for="ep in CUSTOM_ENDPOINT_PRESETS"
               :key="ep.name"
               type="button"
-              class="rounded-xl border border-gray-200 bg-gray-50 px-3 py-1 text-xs font-semibold text-gray-800 transition hover:bg-gray-100"
+              class="rounded-xl border px-3 py-1.5 text-xs font-bold transition-all active:scale-95"
+              :class="
+                isEndpointPresetActive(ep.url)
+                  ? 'border-[#3E5725] bg-[#3E5725] text-white shadow-xs'
+                  : 'border-gray-300 bg-white text-gray-800 hover:border-[#3E5725]/50 hover:bg-gray-50'
+              "
               @click="applyCustomPreset(ep)"
             >
               {{ ep.name }}
@@ -424,7 +437,12 @@ const handleResetPrompts = async () => {
                 v-for="m in fetchedModels"
                 :key="m"
                 type="button"
-                class="rounded-lg border border-gray-200 bg-white px-2 py-1 text-[11px] font-medium text-gray-800 transition hover:bg-gray-100"
+                class="rounded-lg border px-2 py-1 text-[11px] font-medium transition-all active:scale-95"
+                :class="
+                  modelId === m
+                    ? 'border-[#3E5725] bg-[#3E5725] text-white shadow-xs'
+                    : 'border-gray-200 bg-white text-gray-800 hover:bg-gray-100'
+                "
                 @click="selectPresetModel(m)"
               >
                 {{ m }}

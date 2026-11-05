@@ -19,3 +19,36 @@ export interface AuthState {
   isAuthenticated: boolean;
   isLoading: boolean;
 }
+
+export interface BooksteryGoogleAuthResponse {
+  id: string;
+  email: string;
+  name?: string;
+  givenName?: string;
+  familyName?: string;
+  imageUrl?: string | null;
+  accessToken: string;
+  authentication: {
+    accessToken: string;
+    idToken?: string;
+  };
+}
+
+export interface BooksteryGoogleAuthRefreshResponse {
+  accessToken: string;
+  authentication: {
+    accessToken: string;
+    idToken?: string;
+  };
+}
+
+export interface BooksteryGoogleAuthPlugin {
+  initialize(options?: {
+    scopes?: string[];
+    grantOfflineAccess?: boolean;
+    clientId?: string;
+  }): Promise<void>;
+  signIn(): Promise<BooksteryGoogleAuthResponse>;
+  refresh(): Promise<BooksteryGoogleAuthRefreshResponse>;
+  signOut(): Promise<void>;
+}

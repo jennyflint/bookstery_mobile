@@ -1,20 +1,40 @@
+import { Capacitor, registerPlugin } from '@capacitor/core';
 import { GoogleAuth } from '@codetrix-studio/capacitor-google-auth';
 import { SqliteService } from '../database/SqliteService';
-import type { GoogleUser, UserSession } from '../../types';
+import type { GoogleUser, UserSession, BooksteryGoogleAuthPlugin } from '../../types';
+
+export const BooksteryGoogleAuth =
+  registerPlugin<BooksteryGoogleAuthPlugin>('BooksteryGoogleAuth', {
+    web: () => ({
+      async initialize() {},
+      async signIn() {
+        throw new Error('BooksteryGoogleAuth is only available on native platforms');
+      },
+      async refresh() {
+        throw new Error('BooksteryGoogleAuth is only available on native platforms');
+      },
+      async signOut() {},
+    }),
+  });
 
 export class GoogleAuthService {
   private static instance: GoogleAuthService | null = null;
   private currentUser: GoogleUser | null = null;
   private isInitialized: boolean = false;
   private sqliteService: SqliteService;
+  private nativeAuthPlugin: BooksteryGoogleAuthPlugin;
 
-  constructor(sqliteService?: SqliteService) {
+  constructor(
+    sqliteService?: SqliteService,
+    nativeAuthPlugin?: BooksteryGoogleAuthPlugin,
+  ) {
     this.sqliteService = sqliteService || SqliteService.getInstance();
+    this.nativeAuthPlugin = nativeAuthPlugin || BooksteryGoogleAuth;
   }
 
-  static getInstance(): GoogleAuthService {
+  static getInstance(nativeAuthPlugin?: BooksteryGoogleAuthPlugin): GoogleAuthService {
     if (!GoogleAuthService.instance) {
-      GoogleAuthService.instance = new GoogleAuthService();
+      GoogleAuthService.instance = new GoogleAuthService(undefined, nativeAuthPlugin);
     }
     return GoogleAuthService.instance;
   }
@@ -23,6 +43,18 @@ export class GoogleAuthService {
     if (this.isInitialized) {
       return;
     }
+
+    if (Capacitor.isNativePlatform()) {
+      try {
+        await this.nativeAuthPlugin.initialize();
+        this.isInitialized = true;
+        return;
+      } catch (err: unknown) {
+        const message = err instanceof Error ? err.message : String(err);
+        throw new Error(`GoogleAuth initialization failed: ${message}`);
+      }
+    }
+
     try {
       let resolvedClientId = clientId?.trim();
       if (!resolvedClientId) {
@@ -84,7 +116,11 @@ export class GoogleAuthService {
   async signIn(): Promise<GoogleUser> {
     await this.init();
     try {
-      const response = await GoogleAuth.signIn();
+      const isNative = Capacitor.isNativePlatform();
+      const response = isNative
+        ? await this.nativeAuthPlugin.signIn()
+        : await GoogleAuth.signIn();
+
       const email = response.email || '';
       const displayName =
         response.name || response.givenName || (email ? email.split('@')[0] : '') || 'Reader';
@@ -99,12 +135,14 @@ export class GoogleAuthService {
 
       if (!accessToken) {
         try {
-          const refreshed = await GoogleAuth.refresh();
+          const refreshed = isNative
+            ? await this.nativeAuthPlugin.refresh()
+            : await GoogleAuth.refresh();
           accessToken =
             refreshed?.accessToken ||
             (refreshed as { authentication?: { accessToken?: string } })?.authentication
               ?.accessToken ||
-            refreshed?.idToken ||
+            (refreshed as { idToken?: string })?.idToken ||
             '';
         } catch {
           // Deferred refresh; sign-in still succeeds
@@ -115,7 +153,7 @@ export class GoogleAuthService {
         id: response.id || 'google-user',
         email,
         displayName,
-        imageUrl: response.imageUrl,
+        imageUrl: response.imageUrl || undefined,
         accessToken,
       };
 
@@ -143,18 +181,27 @@ export class GoogleAuthService {
           ? String(errorObj.code)
           : undefined;
 
-      let errorMessage = code
-        ? `Google Sign-In failed (code ${code}): ${rawMessage}`
-        : `Google Sign-In failed: ${rawMessage}`;
+      let errorMessage = rawMessage;
+      if (!errorMessage.startsWith('Google Sign-In failed')) {
+        errorMessage = code
+          ? `Google Sign-In failed (code ${code}): ${rawMessage}`
+          : `Google Sign-In failed: ${rawMessage}`;
+      }
 
       if (code === '10') {
-        errorMessage +=
-          ' (DEVELOPER_ERROR: verify Web Client ID in .env / strings.xml and SHA-1 fingerprint in Google Cloud Console)';
+        if (!errorMessage.includes('DEVELOPER_ERROR')) {
+          errorMessage +=
+            ' (DEVELOPER_ERROR: check package name and SHA-1 certificate fingerprint in Google Cloud Console)';
+        }
       } else if (code === '12500') {
-        errorMessage +=
-          ' (SIGN_IN_FAILED: verify OAuth Consent Screen Test Users and SHA-1)';
+        if (!errorMessage.includes('SIGN_IN_FAILED')) {
+          errorMessage +=
+            ' (SIGN_IN_FAILED: verify OAuth Consent Screen Test Users and SHA-1)';
+        }
       } else if (code === '12501') {
-        errorMessage += ' (SIGN_IN_CANCELLED: user cancelled sign-in)';
+        if (!errorMessage.includes('SIGN_IN_CANCELLED')) {
+          errorMessage += ' (SIGN_IN_CANCELLED: user cancelled sign-in)';
+        }
       }
 
       throw new Error(errorMessage);
@@ -178,12 +225,15 @@ export class GoogleAuthService {
   async silentSignIn(): Promise<GoogleUser | null> {
     await this.init();
     try {
-      const response = await GoogleAuth.refresh();
+      const isNative = Capacitor.isNativePlatform();
+      const response = isNative
+        ? await this.nativeAuthPlugin.refresh()
+        : await GoogleAuth.refresh();
       const accessToken =
         response?.accessToken ||
         (response as { authentication?: { accessToken?: string } })?.authentication
           ?.accessToken ||
-        response?.idToken ||
+        (response as { idToken?: string })?.idToken ||
         '';
 
       if (response && accessToken) {
@@ -215,11 +265,14 @@ export class GoogleAuthService {
       throw new Error('User is not authenticated with Google');
     }
     try {
-      const refreshed = await GoogleAuth.refresh();
+      const isNative = Capacitor.isNativePlatform();
+      const refreshed = isNative
+        ? await this.nativeAuthPlugin.refresh()
+        : await GoogleAuth.refresh();
       const token =
         refreshed?.accessToken ||
         (refreshed as { authentication?: { accessToken?: string } })?.authentication?.accessToken ||
-        refreshed?.idToken;
+        (refreshed as { idToken?: string })?.idToken;
       if (token) {
         this.currentUser.accessToken = token;
       }
@@ -230,7 +283,11 @@ export class GoogleAuthService {
 
   async signOut(): Promise<void> {
     try {
-      await GoogleAuth.signOut();
+      if (Capacitor.isNativePlatform()) {
+        await this.nativeAuthPlugin.signOut();
+      } else {
+        await GoogleAuth.signOut();
+      }
     } catch {
     } finally {
       this.currentUser = null;

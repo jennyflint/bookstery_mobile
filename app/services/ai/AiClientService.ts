@@ -15,7 +15,7 @@ export interface StreamChatOptions {
   author?: string;
   currentPage?: number | string;
   messages: { role: 'user' | 'assistant' | 'system'; content: string }[];
-  pageContext?: string;
+  pageContext?: string | Promise<string>;
   selectedText?: string;
   customSystemPrompt?: string;
   abortSignal?: AbortSignal;
@@ -129,16 +129,26 @@ Instructions:
 - Avoid unsolicited spoilers beyond the current location unless explicitly asked by the user.
 - Be concise, engaging, and structured in your explanations. Use markdown formatting where helpful.`;
 
-    if (options.customSystemPrompt?.trim()) {
-      system += `\n\nUser Custom Instructions:\n${options.customSystemPrompt.trim()}`;
+    const rawPageContext =
+      options.pageContext && typeof (options.pageContext as Promise<unknown>).then === 'function'
+        ? await options.pageContext
+        : options.pageContext;
+    const safePageContext = typeof rawPageContext === 'string' ? rawPageContext.trim() : '';
+    const safeCustomPrompt =
+      typeof options.customSystemPrompt === 'string' ? options.customSystemPrompt.trim() : '';
+    const safeSelectedText =
+      typeof options.selectedText === 'string' ? options.selectedText.trim() : '';
+
+    if (safeCustomPrompt) {
+      system += `\n\nUser Custom Instructions:\n${safeCustomPrompt}`;
     }
 
-    if (options.pageContext?.trim()) {
-      system += `\n\nActive Page/Scene Text:\n"""\n${options.pageContext.trim().substring(0, 3500)}\n"""`;
+    if (safePageContext) {
+      system += `\n\nActive Page/Scene Text:\n"""\n${safePageContext.substring(0, 3500)}\n"""`;
     }
 
-    if (options.selectedText?.trim()) {
-      system += `\n\nCurrently Selected Passage from Book:\n"""\n${options.selectedText.trim()}\n"""`;
+    if (safeSelectedText) {
+      system += `\n\nCurrently Selected Passage from Book:\n"""\n${safeSelectedText}\n"""`;
     }
 
     try {

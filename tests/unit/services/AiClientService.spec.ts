@@ -230,6 +230,55 @@ describe('AiClientService', () => {
         }),
       ).rejects.toThrow('Rate limit or quota exceeded');
     });
+
+    it('should safely handle Promise<string> as pageContext without throwing trim error', async () => {
+      vi.spyOn(LlmProviderFactory, 'createLanguageModel').mockResolvedValue({} as any);
+
+      async function* mockTextStream() {
+        yield 'Response chunk';
+      }
+
+      mockStreamText.mockReturnValue({
+        textStream: mockTextStream(),
+      } as any);
+
+      const asyncPageContext = Promise.resolve('Asynchronously resolved PDF page text.');
+
+      const result = await service.streamChat({
+        bookId: 'book-1',
+        messages: [{ role: 'user', content: 'What is happening?' }],
+        pageContext: asyncPageContext,
+        onChunk: vi.fn(),
+      });
+
+      expect(result).toBe('Response chunk');
+      expect(mockStreamText).toHaveBeenCalled();
+      const callArgs = mockStreamText.mock.calls[0][0];
+      expect(callArgs.system).toContain('Asynchronously resolved PDF page text.');
+    });
+
+    it('should safely handle non-string values in pageContext, customSystemPrompt, and selectedText', async () => {
+      vi.spyOn(LlmProviderFactory, 'createLanguageModel').mockResolvedValue({} as any);
+
+      async function* mockTextStream() {
+        yield 'Safe response';
+      }
+
+      mockStreamText.mockReturnValue({
+        textStream: mockTextStream(),
+      } as any);
+
+      const result = await service.streamChat({
+        bookId: 'book-1',
+        messages: [{ role: 'user', content: 'Hello' }],
+        pageContext: 12345 as unknown as string,
+        customSystemPrompt: { prompt: 'bad' } as unknown as string,
+        selectedText: null as unknown as string,
+        onChunk: vi.fn(),
+      });
+
+      expect(result).toBe('Safe response');
+    });
   });
 
   describe('lookupDictionary', () => {

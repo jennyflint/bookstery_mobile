@@ -99,6 +99,31 @@ export const mockGoogleAuth = {
   signOut: vi.fn().mockResolvedValue(undefined),
 };
 
+export const mockBooksteryGoogleAuth = {
+  initialize: vi.fn().mockResolvedValue(undefined),
+  signIn: vi.fn().mockResolvedValue({
+    id: 'native-google-user-456',
+    email: 'native-reader@example.com',
+    name: 'Native Book Reader',
+    givenName: 'Native',
+    familyName: 'Reader',
+    imageUrl: 'https://example.com/native-avatar.png',
+    accessToken: 'mock-native-access-token',
+    authentication: {
+      accessToken: 'mock-native-access-token',
+      idToken: '',
+    },
+  }),
+  refresh: vi.fn().mockResolvedValue({
+    accessToken: 'mock-refreshed-native-token',
+    authentication: {
+      accessToken: 'mock-refreshed-native-token',
+      idToken: '',
+    },
+  }),
+  signOut: vi.fn().mockResolvedValue(undefined),
+};
+
 export const mockSqliteConnection = {
   createConnection: vi.fn(),
   closeConnection: vi.fn(),

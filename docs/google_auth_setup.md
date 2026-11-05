@@ -1,10 +1,25 @@
 # Android Google Sign-In & Drive Sync Configuration
 
-This guide documents the native Android configuration required for `@codetrix-studio/capacitor-google-auth` in Bookstery Mobile.
+This guide documents the native Android configuration for Google Authentication and Drive Sync in Bookstery Mobile.
 
 ---
 
-## 1. Capacitor Configuration (`capacitor.config.ts`)
+## 1. Native Android Plugin (`BooksteryGoogleAuthPlugin`)
+
+On Android, authentication is handled natively by `BooksteryGoogleAuthPlugin` (`com.bookstery.app.BooksteryGoogleAuthPlugin`).
+This plugin uses Google Play Services `GoogleSignInOptions` purely with the **Android OAuth 2.0 Client ID** (`com.bookstery.app` + APK SHA-1 fingerprint):
+
+- Does **not** request ID tokens (`requestIdToken`) or server auth codes (`requestServerAuthCode`).
+- Requests scopes: `profile`, `email`, `https://www.googleapis.com/auth/drive.file`, and `https://www.googleapis.com/auth/drive.appdata`.
+- Uses `GoogleAuthUtil.getToken(...)` on a background thread to retrieve OAuth2 access tokens for Google Drive API.
+- Automatically handles `UserRecoverableAuthException` to present the Google Drive consent dialog to the user when needed.
+- If status code `10` (`DEVELOPER_ERROR`) or `12500` (`SIGN_IN_FAILED`) occurs, the error message dynamically includes the package name and runtime `APK_SHA1` fingerprint (`pkg=com.bookstery.app, APK_SHA1=...`) to diagnose Google Cloud Console SHA-1 mismatches immediately.
+
+`@codetrix-studio/capacitor-google-auth` is retained solely as a fallback for web browser development.
+
+---
+
+## 2. Capacitor Configuration (`capacitor.config.ts`)
 
 In `capacitor.config.ts`, `plugins.GoogleAuth` must configure `clientId`, `androidClientId`, and `serverClientId` with the Google Web Client ID, along with Google Drive scopes and offline token refresh:
 

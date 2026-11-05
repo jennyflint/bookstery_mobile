@@ -343,4 +343,43 @@ describe('AiChatDrawer', () => {
 
     expect(regenSpy).toHaveBeenCalledTimes(1);
   });
+
+  it('should safely resolve Promise pageText and pass resolved string to sendChatMessage', async () => {
+    const aiStore = useAiStore();
+    aiStore.isChatDrawerOpen = true;
+
+    const readerStore = useReaderStore();
+    readerStore.currentBook = mockBook;
+
+    const sendSpy = vi.spyOn(aiStore, 'sendChatMessage').mockResolvedValue();
+
+    const asyncPageText = Promise.resolve('Async PDF extracted text content');
+
+    const wrapper = mount(AiChatDrawer, {
+      props: {
+        pageText: asyncPageText,
+      },
+      global: {
+        mocks: {
+          t: (k: string) => k,
+        },
+      },
+    });
+
+    await flushPromises();
+
+    const textarea = wrapper.find('textarea');
+    await textarea.setValue('Summarize this page');
+
+    const sendBtn = wrapper.find('[data-testid="send-chat-btn"]');
+    await sendBtn.trigger('click');
+    await flushPromises();
+
+    expect(sendSpy).toHaveBeenCalledWith(
+      expect.objectContaining({
+        userText: 'Summarize this page',
+        pageContext: 'Async PDF extracted text content',
+      }),
+    );
+  });
 });

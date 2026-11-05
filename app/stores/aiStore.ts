@@ -197,9 +197,9 @@ export const useAiStore = defineStore('ai', {
       bookTitle?: string;
       author?: string;
       currentPage?: number | string;
-      pageContext?: string;
+      pageContext?: string | Promise<string>;
     }): Promise<void> {
-      const text = params.userText.trim();
+      const text = typeof params.userText === 'string' ? params.userText.trim() : '';
       if (!text || !this.activeBookId) {
         return;
       }
@@ -249,13 +249,22 @@ export const useAiStore = defineStore('ai', {
           content: m.content,
         }));
 
+        let resolvedPageContext: string | undefined;
+        if (this.includePageContext && params.pageContext !== undefined && params.pageContext !== null) {
+          const raw =
+            typeof (params.pageContext as Promise<unknown>)?.then === 'function'
+              ? await params.pageContext
+              : params.pageContext;
+          resolvedPageContext = typeof raw === 'string' && raw.trim().length > 0 ? raw.trim() : undefined;
+        }
+
         const result = await client.streamChat({
           bookId: this.activeBookId,
           bookTitle: params.bookTitle,
           author: params.author,
           currentPage: params.currentPage,
           messages: history,
-          pageContext: this.includePageContext ? params.pageContext : undefined,
+          pageContext: resolvedPageContext,
           selectedText: attachedQuote || undefined,
           customSystemPrompt: this.settings.custom_system_prompt || undefined,
           abortSignal: controller.signal,
@@ -281,7 +290,7 @@ export const useAiStore = defineStore('ai', {
       bookTitle?: string;
       author?: string;
       currentPage?: number | string;
-      pageContext?: string;
+      pageContext?: string | Promise<string>;
     }): Promise<void> {
       if (!this.activeBookId || this.chatMessages.length === 0) {
         return;

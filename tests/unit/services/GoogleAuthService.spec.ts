@@ -1,7 +1,11 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { GoogleAuthService } from '../../../app/services/auth/GoogleAuthService';
+import { Capacitor } from '@capacitor/core';
+import {
+  GoogleAuthService,
+  BooksteryGoogleAuth,
+} from '../../../app/services/auth/GoogleAuthService';
 import { SqliteService } from '../../../app/services/database/SqliteService';
-import { mockGoogleAuth } from '../../mocks/capacitor-plugins';
+import { mockGoogleAuth, mockBooksteryGoogleAuth } from '../../mocks/capacitor-plugins';
 
 describe('GoogleAuthService', () => {
   let authService: GoogleAuthService;
@@ -200,5 +204,113 @@ describe('GoogleAuthService', () => {
     expect(googleAuth?.androidClientId).toBeDefined();
     expect(googleAuth?.serverClientId).toBeDefined();
     expect(googleAuth?.forceCodeForRefreshToken).toBe(true);
+  });
+
+  describe('Native Android platform (BooksteryGoogleAuth)', () => {
+    let nativeAuth: GoogleAuthService;
+
+    beforeEach(() => {
+      vi.spyOn(Capacitor, 'isNativePlatform').mockReturnValue(true);
+      mockBooksteryGoogleAuth.initialize.mockClear();
+      mockBooksteryGoogleAuth.signIn.mockClear();
+      mockBooksteryGoogleAuth.refresh.mockClear();
+      mockBooksteryGoogleAuth.signOut.mockClear();
+
+      mockBooksteryGoogleAuth.initialize.mockResolvedValue(undefined);
+      mockBooksteryGoogleAuth.signIn.mockResolvedValue({
+        id: 'native-123',
+        email: 'native@example.com',
+        name: 'Native User',
+        givenName: 'Native',
+        familyName: 'User',
+        imageUrl: 'https://example.com/native.png',
+        accessToken: 'native-token-abc',
+        authentication: {
+          accessToken: 'native-token-abc',
+          idToken: '',
+        },
+      });
+      mockBooksteryGoogleAuth.refresh.mockResolvedValue({
+        accessToken: 'native-refreshed-token',
+        authentication: {
+          accessToken: 'native-refreshed-token',
+          idToken: '',
+        },
+      });
+      mockBooksteryGoogleAuth.signOut.mockResolvedValue(undefined);
+
+      nativeAuth = new GoogleAuthService(sqliteService, mockBooksteryGoogleAuth);
+    });
+
+    it('should initialize native plugin on native platform without requiring web clientId', async () => {
+      await nativeAuth.init();
+
+      expect(mockBooksteryGoogleAuth.initialize).toHaveBeenCalled();
+      expect(mockGoogleAuth.initialize).not.toHaveBeenCalled();
+    });
+
+    it('should sign in via BooksteryGoogleAuth on native platform', async () => {
+      const user = await nativeAuth.signIn();
+
+      expect(mockBooksteryGoogleAuth.signIn).toHaveBeenCalled();
+      expect(mockGoogleAuth.signIn).not.toHaveBeenCalled();
+      expect(user.email).toBe('native@example.com');
+      expect(user.displayName).toBe('Native User');
+      expect(user.accessToken).toBe('native-token-abc');
+      expect(nativeAuth.isAuthenticated()).toBe(true);
+
+      const session = await sqliteService.getUserSession();
+      expect(session?.email).toBe('native@example.com');
+      expect(session?.display_name).toBe('Native User');
+    });
+
+    it('should preserve runtime APK_SHA1 and package name on native code 10 failure', async () => {
+      const nativeError = Object.assign(
+        new Error(
+          'Google Sign-In failed (code 10): DEVELOPER_ERROR: Check Google Cloud Console OAuth 2.0 Android Client ID. pkg=com.bookstery.app, APK_SHA1=AA:BB:CC:DD',
+        ),
+        { code: '10' },
+      );
+      mockBooksteryGoogleAuth.signIn.mockRejectedValueOnce(nativeError);
+
+      await expect(nativeAuth.signIn()).rejects.toThrow(
+        /Google Sign-In failed \(code 10\): DEVELOPER_ERROR.*pkg=com\.bookstery\.app.*APK_SHA1=AA:BB:CC:DD/,
+      );
+    });
+
+    it('should refresh token on silentSignIn via BooksteryGoogleAuth', async () => {
+      await sqliteService.saveUserSession({
+        email: 'native@example.com',
+        display_name: 'Native User',
+        last_sync_at: 1700000000000,
+      });
+
+      const user = await nativeAuth.silentSignIn();
+
+      expect(mockBooksteryGoogleAuth.refresh).toHaveBeenCalled();
+      expect(user).not.toBeNull();
+      expect(user?.accessToken).toBe('native-refreshed-token');
+      expect(nativeAuth.isAuthenticated()).toBe(true);
+    });
+
+    it('should fetch access token via BooksteryGoogleAuth refresh on native platform', async () => {
+      await nativeAuth.signIn();
+      const token = await nativeAuth.getAccessToken();
+
+      expect(mockBooksteryGoogleAuth.refresh).toHaveBeenCalled();
+      expect(token).toBe('native-refreshed-token');
+    });
+
+    it('should sign out via BooksteryGoogleAuth on native platform', async () => {
+      await nativeAuth.signIn();
+      await nativeAuth.signOut();
+
+      expect(mockBooksteryGoogleAuth.signOut).toHaveBeenCalled();
+      expect(mockGoogleAuth.signOut).not.toHaveBeenCalled();
+      expect(nativeAuth.isAuthenticated()).toBe(false);
+
+      const session = await sqliteService.getUserSession();
+      expect(session).toBeNull();
+    });
   });
 });

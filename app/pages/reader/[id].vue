@@ -574,12 +574,32 @@ const handleNavigatePage = async (page: number): Promise<void> => {
   }
 };
 
-const activePageText = computed((): string => {
-  return activeEngine.value?.getCurrentPageText?.() || '';
-});
+const activePageText = ref<string>('');
+
+const updateActivePageText = async (): Promise<string> => {
+  try {
+    const raw = await activeEngine.value?.getCurrentPageText?.();
+    const text = typeof raw === 'string' ? raw : '';
+    activePageText.value = text;
+    return text;
+  } catch {
+    activePageText.value = '';
+    return '';
+  }
+};
+
+watch(
+  [() => readerStore.currentPage, () => readerStore.locator, () => aiStore.isChatDrawerOpen],
+  async ([, , isChatOpen]) => {
+    if (isChatOpen) {
+      await updateActivePageText();
+    }
+  },
+);
 
 const handleOpenAiChat = async (): Promise<void> => {
   if (bookId) {
+    await updateActivePageText();
     await aiStore.openChat(bookId);
   }
 };

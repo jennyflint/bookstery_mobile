@@ -132,4 +132,87 @@ describe('AiSettingsModal', () => {
     expect(keyInput.classes()).toContain('bg-white');
     expect(keyInput.classes()).toContain('border-gray-300');
   });
+
+  it('should highlight active Quick Endpoint preset button when selected', async () => {
+    const store = useAiStore();
+    store.settings.provider = 'custom';
+    store.settings.base_url = '';
+
+    const wrapper = mount(AiSettingsModal, {
+      props: {
+        isOpen: true,
+      },
+      global: {
+        mocks: {
+          t: (key: string) => key,
+        },
+      },
+    });
+
+    await flushPromises();
+
+    // Click Custom provider button to ensure custom section is visible
+    const providerBtns = wrapper.findAll('button');
+    const customProviderBtn = providerBtns.find((b) => b.text().includes('Custom'));
+    expect(customProviderBtn).toBeDefined();
+    await customProviderBtn!.trigger('click');
+    await flushPromises();
+
+    const buttons = wrapper.findAll('button');
+    const ollamaBtn = buttons.find((b) => b.text().includes('Ollama'));
+    expect(ollamaBtn).toBeDefined();
+
+    expect(ollamaBtn!.classes()).not.toContain('bg-[#3E5725]');
+
+    await ollamaBtn!.trigger('click');
+    await flushPromises();
+
+    expect(ollamaBtn!.classes()).toContain('bg-[#3E5725]');
+    expect(ollamaBtn!.classes()).toContain('text-white');
+    expect(ollamaBtn!.classes()).toContain('border-[#3E5725]');
+  });
+
+  it('should highlight selected fetched model button', async () => {
+    const store = useAiStore();
+    store.settings.provider = 'custom';
+    store.settings.base_url = 'http://localhost:11434/v1';
+
+    const wrapper = mount(AiSettingsModal, {
+      props: {
+        isOpen: true,
+      },
+      global: {
+        mocks: {
+          t: (key: string) => key,
+        },
+      },
+    });
+
+    await flushPromises();
+
+    const vm = wrapper.vm as unknown as { fetchedModels: string[] };
+    vm.fetchedModels = ['llama3.2', 'mistral'];
+    await wrapper.vm.$nextTick();
+
+    const buttons = wrapper.findAll('button');
+    const llamaBtn = buttons.find((b) => b.text().trim() === 'llama3.2');
+    const mistralBtn = buttons.find((b) => b.text().trim() === 'mistral');
+
+    expect(llamaBtn).toBeDefined();
+    expect(mistralBtn).toBeDefined();
+
+    await llamaBtn!.trigger('click');
+    await wrapper.vm.$nextTick();
+
+    expect(llamaBtn!.classes()).toContain('bg-[#3E5725]');
+    expect(llamaBtn!.classes()).toContain('text-white');
+    expect(mistralBtn!.classes()).not.toContain('bg-[#3E5725]');
+
+    await mistralBtn!.trigger('click');
+    await wrapper.vm.$nextTick();
+
+    expect(mistralBtn!.classes()).toContain('bg-[#3E5725]');
+    expect(mistralBtn!.classes()).toContain('text-white');
+    expect(llamaBtn!.classes()).not.toContain('bg-[#3E5725]');
+  });
 });

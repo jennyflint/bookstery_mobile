@@ -5,7 +5,7 @@ import { useReaderStore } from '../../stores/readerStore';
 import type { CustomQuickPrompt } from '../../types';
 
 const props = defineProps<{
-  pageText?: string;
+  pageText?: string | Promise<string>;
 }>();
 
 const emit = defineEmits<{
@@ -24,6 +24,21 @@ const copyFeedbackId = ref<string | null>(null);
 const activeBookTitle = computed(() => readerStore.currentBook?.title || t('reader.book'));
 const activeAuthor = computed(() => readerStore.currentBook?.author || '');
 const currentPageNum = computed(() => readerStore.currentPage || readerStore.locator || 1);
+
+const resolvePageContext = async (): Promise<string> => {
+  if (!props.pageText) {
+    return '';
+  }
+  try {
+    const raw =
+      typeof (props.pageText as Promise<unknown>)?.then === 'function'
+        ? await props.pageText
+        : props.pageText;
+    return typeof raw === 'string' ? raw : '';
+  } catch {
+    return '';
+  }
+};
 
 const scrollToBottom = async () => {
   await nextTick();
@@ -63,33 +78,36 @@ const handleSendMessage = async () => {
     textareaRef.value.style.height = 'auto';
   }
 
+  const pageContext = await resolvePageContext();
   await aiStore.sendChatMessage({
     userText: text,
     bookTitle: activeBookTitle.value,
     author: activeAuthor.value,
     currentPage: currentPageNum.value,
-    pageContext: props.pageText,
+    pageContext,
   });
 };
 
 const handleSendPresetPrompt = async (preset: CustomQuickPrompt) => {
   if (aiStore.isChatStreaming) return;
+  const pageContext = await resolvePageContext();
   await aiStore.sendChatMessage({
     userText: preset.prompt,
     bookTitle: activeBookTitle.value,
     author: activeAuthor.value,
     currentPage: currentPageNum.value,
-    pageContext: props.pageText,
+    pageContext,
   });
 };
 
 const handleRegenerate = async () => {
   if (aiStore.isChatStreaming) return;
+  const pageContext = await resolvePageContext();
   await aiStore.regenerateLastChatMessage({
     bookTitle: activeBookTitle.value,
     author: activeAuthor.value,
     currentPage: currentPageNum.value,
-    pageContext: props.pageText,
+    pageContext,
   });
 };
 

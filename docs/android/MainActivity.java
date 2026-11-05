@@ -4,7 +4,6 @@ import android.os.Bundle;
 import android.view.KeyEvent;
 import androidx.activity.OnBackPressedCallback;
 
-import com.codetrixstudio.capacitor.GoogleAuth.GoogleAuth;
 import com.getcapacitor.BridgeActivity;
 import com.getcapacitor.Plugin;
 import com.getcapacitor.PluginHandle;
@@ -13,7 +12,7 @@ import com.getcapacitor.PluginHandle;
 public class MainActivity extends BridgeActivity {
     @Override
     public void onCreate(Bundle savedInstanceState) {
-        registerPlugin(GoogleAuth.class);
+        registerPlugin(BooksteryGoogleAuthPlugin.class);
         registerPlugin(NativeReaderBridgePlugin.class);
         super.onCreate(savedInstanceState);
 
