@@ -1,8 +1,26 @@
+import { createRequire } from 'node:module';
+
+const require = createRequire(import.meta.url);
+let djvuResolvedPath: string;
+try {
+  djvuResolvedPath = require.resolve('djvujs-dist/library/src/index.js');
+} catch {
+  djvuResolvedPath = '';
+}
+
 export default defineNuxtConfig({
   compatibilityDate: '2026-10-31',
   ssr: false,
   devtools: { enabled: false },
   telemetry: false,
+  alias: {
+    ...(djvuResolvedPath
+      ? {
+          'djvujs-dist/library/src/index.js': djvuResolvedPath,
+          'djvujs-dist': djvuResolvedPath,
+        }
+      : {}),
+  },
   runtimeConfig: {
     public: {
       googleWebClientId:
@@ -39,6 +57,16 @@ export default defineNuxtConfig({
     cssPath: '~/assets/css/tailwind.css',
   },
   vite: {
+    resolve: {
+      alias: {
+        ...(djvuResolvedPath
+          ? {
+              'djvujs-dist/library/src/index.js': djvuResolvedPath,
+              'djvujs-dist': djvuResolvedPath,
+            }
+          : {}),
+      },
+    },
     optimizeDeps: {
       include: [
         '@capawesome/capacitor-file-picker',
