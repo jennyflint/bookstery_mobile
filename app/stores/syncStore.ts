@@ -3,6 +3,7 @@ import { SyncQueueService } from '../services/sync/SyncQueueService';
 import { SqliteService } from '../services/database/SqliteService';
 import { GoogleAuthService } from '../services/auth/GoogleAuthService';
 import { useAuthStore } from './authStore';
+import { useLibraryStore } from './libraryStore';
 import type { SyncVisualState } from '../types';
 
 export const useSyncStore = defineStore('sync', {
@@ -78,6 +79,9 @@ export const useSyncStore = defineStore('sync', {
 
       try {
         await queueService.flushPending();
+        try {
+          await useLibraryStore().loadBooks();
+        } catch {}
         await this.refreshQueueCount();
 
         const sqlite = SqliteService.getInstance();

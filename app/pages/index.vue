@@ -3,6 +3,8 @@ import { ref, onMounted } from 'vue';
 import { useRouter } from 'vue-router';
 import { useLibraryStore } from '../stores/libraryStore';
 import { useCollectionStore } from '../stores/collectionStore';
+import { useAuthStore } from '../stores/authStore';
+import { useSyncStore } from '../stores/syncStore';
 import { useAuth } from '../composables/useAuth';
 import { useBookSync } from '../composables/useBookSync';
 import { useAndroidBackButton, BACK_PRIORITY } from '../composables/useAndroidBackButton';
@@ -38,6 +40,11 @@ onMounted(async () => {
   await initSync();
   await libraryStore.loadBooks();
   await collectionStore.fetchCollections();
+  const authStore = useAuthStore();
+  if (authStore.isAuthenticated) {
+    const syncStore = useSyncStore();
+    void syncStore.triggerSync();
+  }
 });
 
 const handleSelectBook = (book: BookRecord) => {

@@ -1,5 +1,5 @@
 import { Filesystem, Directory } from '@capacitor/filesystem';
-import { FileHashService } from './FileHashService';
+import { FileHashService, computeCanonicalBookId } from './FileHashService';
 import type { BookFormat, BookRecord, ScannedFile } from '../../types';
 
 export class DeviceFileScannerService {
@@ -147,8 +147,37 @@ export class DeviceFileScannerService {
       }
     }
 
-    const rawString = typeof fileData.data === 'string' ? fileData.data : '';
-    const hash = await FileHashService.calculateSha256(rawString);
+    let fileSize = 0;
+    try {
+      const stat = await Filesystem.stat({
+        path: sourcePath,
+        directory: sourceDirectory,
+      });
+      fileSize = stat.size || 0;
+    } catch {
+      try {
+        const stat = await Filesystem.stat({
+          path: sourcePath,
+          directory: Directory.Data,
+        });
+        fileSize = stat.size || 0;
+      } catch {
+        try {
+          const stat = await Filesystem.stat({
+            path: sourcePath,
+          });
+          fileSize = stat.size || 0;
+        } catch {
+          if (typeof fileData.data === 'string') {
+            fileSize = Math.floor((fileData.data.length * 3) / 4);
+          } else if (fileData.data instanceof Blob) {
+            fileSize = fileData.data.size;
+          }
+        }
+      }
+    }
+
+    const hash = await computeCanonicalBookId(fileName, fileSize);
 
     const destinationPath = `books/${hash}_${fileName}`;
     if (
@@ -189,6 +218,8 @@ export class DeviceFileScannerService {
       total_items: 0,
       last_read_at: now,
       updated_at: now,
+      file_size: fileSize,
+      file_hash: hash,
     };
 
     return bookRecord;

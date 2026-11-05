@@ -23,6 +23,8 @@ import { loadBookBytesNative, readBookViaFilesystem } from '../../services/BookF
 import { createSampleMobi } from '../../services/engines/MobiParser';
 import { createSampleDjvu } from '../../services/engines/DjvuParser';
 import { TranslationService } from '../../services/translation/TranslationService';
+import { SyncQueueService } from '../../services/sync/SyncQueueService';
+import { GoogleAuthService } from '../../services/auth/GoogleAuthService';
 import type { EnginePageTapDetail, EngineSelectionDetail, TranslationResult } from '../../types';
 import ReaderViewport from '../../components/reader/ReaderViewport.vue';
 import ReaderOverlayControls from '../../components/reader/ReaderOverlayControls.vue';
@@ -245,6 +247,29 @@ startxref
         rawData = createSampleDjvu(600, 800, 100, `Bookstery DjVu: ${book.title}`);
       } else {
         rawData = new Uint8Array([0, 1, 2, 3]);
+      }
+    }
+
+    const authService = GoogleAuthService.getInstance();
+    const syncQueue = SyncQueueService.getInstance();
+    if (authService.isAuthenticated() && syncQueue.getIsOnline()) {
+      try {
+        const pullPromise = syncQueue.pullSingleBookProgress(book.id);
+        const timeoutPromise = new Promise<null>((resolve) =>
+          setTimeout(() => resolve(null), 2500),
+        );
+        const remote = await Promise.race([pullPromise, timeoutPromise]);
+        if (
+          remote &&
+          (remote.updatedAt > book.updated_at ||
+            (book.progress_percentage === 0 && remote.progressPercentage > book.progress_percentage))
+        ) {
+          book.locator = remote.locator;
+          book.progress_percentage = remote.progressPercentage;
+          book.updated_at = remote.updatedAt;
+        }
+      } catch {
+        // Fallback safely if remote pull times out or fails
       }
     }
 

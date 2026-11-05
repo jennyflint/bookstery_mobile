@@ -14,11 +14,15 @@ export interface BookProgressRecord {
   progressPercentage: number;
   updatedAt: number;
   deviceId?: string;
+  title?: string;
+  fileSize?: number;
 }
 
 export interface SyncManifestItem {
   updatedAt: number;
   progressPercentage: number;
+  title?: string;
+  fileSize?: number;
 }
 
 export type SyncManifest = Record<string, SyncManifestItem>;

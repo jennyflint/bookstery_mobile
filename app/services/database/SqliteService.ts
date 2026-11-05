@@ -354,8 +354,9 @@ export class SqliteService {
     bookId: string,
     locator: string,
     progressPercentage: number,
+    updatedAt?: number,
   ): Promise<void> {
-    const now = Date.now();
+    const timestamp = updatedAt ?? Date.now();
     if (this.isNative && this.db) {
       try {
         const query = `
@@ -363,7 +364,7 @@ export class SqliteService {
           SET locator = ?, progress_percentage = ?, last_read_at = ?, updated_at = ?
           WHERE id = ?;
         `;
-        await this.db.run(query, [locator, progressPercentage, now, now, bookId]);
+        await this.db.run(query, [locator, progressPercentage, timestamp, timestamp, bookId]);
         return;
       } catch {}
     }
@@ -372,8 +373,8 @@ export class SqliteService {
     if (book) {
       book.locator = locator;
       book.progress_percentage = progressPercentage;
-      book.last_read_at = now;
-      book.updated_at = now;
+      book.last_read_at = timestamp;
+      book.updated_at = timestamp;
       writeStorage(STORAGE_KEYS.BOOKS, books);
     }
   }

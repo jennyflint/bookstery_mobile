@@ -31,6 +31,9 @@ export const useAuthStore = defineStore('auth', {
         }
         const syncStore = useSyncStore();
         await syncStore.refreshQueueCount();
+        if (this.isAuthenticated) {
+          void syncStore.triggerSync();
+        }
       } catch {
       } finally {
         this.isLoading = false;

@@ -134,6 +134,16 @@ export class BookRepository {
     return newPinned === 1;
   }
 
+  async updateReadingPosition(
+    id: string,
+    locator: string,
+    progressPercentage: number,
+    updatedAt?: number,
+  ): Promise<void> {
+    await this.sqliteService.init();
+    await this.sqliteService.updateReadingPosition(id, locator, progressPercentage, updatedAt);
+  }
+
   async upsertBook(book: BookRecord): Promise<void> {
     await this.sqliteService.init();
     await this.sqliteService.upsertBook(book);

@@ -6,7 +6,7 @@ import {
   isNativeReaderBridgeAvailable,
   toWebViewUrl,
 } from '../NativeReaderBridge';
-import { FileHashService } from './FileHashService';
+import { FileHashService, computeCanonicalBookId } from './FileHashService';
 import { ScanDirectoryRepository, normalizeDirectoryUri } from '../database/ScanDirectoryRepository';
 import { SqliteService } from '../database/SqliteService';
 import { BookRepository } from '../database/BookRepository';
@@ -441,6 +441,7 @@ export class AutoScanService {
       const originalName = match ? match[1] : book.file_path.split('/').pop()?.split('\\').pop();
       if (originalName && book.file_size) {
         existingByNameAndSize.set(`${originalName}|${book.file_size}`, book);
+        existingByNameAndSize.set(`${originalName.trim().toLowerCase()}|${book.file_size}`, book);
       }
     }
 
@@ -533,10 +534,11 @@ export class AutoScanService {
   ): Promise<void> {
     const pathMap = existingByPath instanceof Map ? existingByPath : new Map<string, BookRecord>();
     const nameMap = existingByNameAndSize ?? new Map<string, BookRecord>();
-    const nameAndSizeKey = `${file.name}|${file.size}`;
+    const normalizedName = file.name.trim().toLowerCase();
+    const nameAndSizeKey = `${normalizedName}|${file.size}`;
 
     // 1. Check if known by (name, size)
-    const existingByName = nameMap.get(nameAndSizeKey);
+    const existingByName = nameMap.get(nameAndSizeKey) || nameMap.get(`${file.name}|${file.size}`);
     if (existingByName) {
       if (SANDBOX_BOOK_PATH.test(existingByName.file_path)) {
         // Reclaim duplicate sandbox copy: point to original file and delete sandbox file
@@ -564,8 +566,8 @@ export class AutoScanService {
       return;
     }
 
-    // 2. Deterministic hash without copying or reading into RAM
-    const hash = await FileHashService.calculateSha256(nameAndSizeKey);
+    // 2. Deterministic canonical hash without copying or reading into RAM
+    const hash = await computeCanonicalBookId(file.name, file.size);
     const existingByHash = existingById.get(hash);
     if (existingByHash) {
       if (SANDBOX_BOOK_PATH.test(existingByHash.file_path)) {
@@ -638,6 +640,8 @@ export class AutoScanService {
     await this.sqliteService.updateFilePathAndSize(newBook.id, newBook.file_path, newBook.file_size);
 
     existingById.set(newBook.id, newBook);
+    nameMap.set(`${file.name.trim().toLowerCase()}|${file.size}`, newBook);
+    nameMap.set(`${file.name}|${file.size}`, newBook);
     pathMap.set(file.path, newBook);
     nameMap.set(nameAndSizeKey, newBook);
 

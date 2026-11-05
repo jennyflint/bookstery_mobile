@@ -29,4 +29,20 @@ export class FileHashService {
     }
     return hash.toString(16).padStart(64, '0');
   }
+
+  static async computeCanonicalBookId(
+    fileName: string,
+    fileSize: number,
+  ): Promise<string> {
+    const normalizedFileName = fileName.trim().toLowerCase();
+    return FileHashService.calculateSha256(`${normalizedFileName}|${fileSize}`);
+  }
 }
+
+export async function computeCanonicalBookId(
+  fileName: string,
+  fileSize: number,
+): Promise<string> {
+  return FileHashService.computeCanonicalBookId(fileName, fileSize);
+}
+

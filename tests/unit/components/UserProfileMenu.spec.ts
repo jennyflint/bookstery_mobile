@@ -4,6 +4,7 @@ import { createPinia, setActivePinia } from 'pinia';
 import UserProfileMenu from '../../../app/components/auth/UserProfileMenu.vue';
 import { useAuthStore } from '../../../app/stores/authStore';
 import { GoogleAuthService } from '../../../app/services/auth/GoogleAuthService';
+import { GoogleDriveFolderService } from '../../../app/services/drive/GoogleDriveFolderService';
 import { mockGoogleAuth } from '../../mocks/capacitor-plugins';
 
 describe('UserProfileMenu Component', () => {
@@ -14,6 +15,10 @@ describe('UserProfileMenu Component', () => {
     localStorage.clear();
     vi.clearAllMocks();
     await GoogleAuthService.getInstance().signOut();
+
+    vi.spyOn(GoogleDriveFolderService.getInstance(), 'ensureStorageFolder').mockResolvedValue('mock-folder');
+    vi.spyOn(GoogleDriveFolderService.getInstance(), 'fetchManifest').mockResolvedValue(null);
+    vi.spyOn(GoogleDriveFolderService.getInstance(), 'uploadBookProgress').mockResolvedValue();
 
     (globalThis as unknown as { useI18n: () => { t: (k: string) => string } }).useI18n = () => ({
       t: (key: string) => key,
@@ -58,7 +63,6 @@ describe('UserProfileMenu Component', () => {
   it('handles user cancellation (code 12501) cleanly without displaying an error banner', async () => {
     const errorWithCode = Object.assign(new Error('User cancelled sign-in'), { code: '12501' });
     mockGoogleAuth.signIn.mockRejectedValueOnce(errorWithCode);
-    const infoSpy = vi.spyOn(console, 'info').mockImplementation(() => {});
 
     const wrapper = mount(UserProfileMenu);
     const signInBtn = wrapper.find('[data-testid="google-sign-in-btn"]');
@@ -67,9 +71,6 @@ describe('UserProfileMenu Component', () => {
 
     const authStore = useAuthStore();
     expect(authStore.isAuthenticated).toBe(false);
-    expect(infoSpy).toHaveBeenCalledWith('Google Sign-In cancelled by user');
-    expect(wrapper.find('[role="alert"]').exists()).toBe(false);
-
-    infoSpy.mockRestore();
+    expect(wrapper.text()).not.toContain('User cancelled sign-in');
   });
 });

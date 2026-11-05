@@ -180,7 +180,15 @@ export class GoogleDriveFolderService {
       }
     }
 
-    await this.updateManifestItem(folderId, bookId, data.updatedAt, data.progressPercentage, token);
+    await this.updateManifestItem(
+      folderId,
+      bookId,
+      data.updatedAt,
+      data.progressPercentage,
+      token,
+      data.title,
+      data.fileSize,
+    );
   }
 
   private async updateManifestItem(
@@ -189,12 +197,16 @@ export class GoogleDriveFolderService {
     updatedAt: number,
     progressPercentage: number,
     token: string,
+    title?: string,
+    fileSize?: number,
   ): Promise<void> {
     try {
       const currentManifest = (await this.fetchManifest(folderId, token)) || {};
       currentManifest[bookId] = {
         updatedAt,
         progressPercentage,
+        ...(title !== undefined ? { title } : {}),
+        ...(fileSize !== undefined ? { fileSize } : {}),
       };
 
       const content = JSON.stringify(currentManifest);

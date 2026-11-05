@@ -1,7 +1,7 @@
 import { ref } from 'vue';
 import { Directory, Filesystem } from '@capacitor/filesystem';
 import { DeviceFileScannerService } from '../services/scanner/DeviceFileScannerService';
-import { FileHashService } from '../services/scanner/FileHashService';
+import { FileHashService, computeCanonicalBookId } from '../services/scanner/FileHashService';
 import { AutoScanService } from '../services/scanner/AutoScanService';
 import { ScanDirectoryRepository } from '../services/database/ScanDirectoryRepository';
 import {
@@ -174,7 +174,7 @@ export function useDeviceScanner() {
               continue;
             }
             const candidateTitle = file.name.replace(/\.[^/.]+$/, '').replace(/_/g, ' ');
-            const hash = await FileHashService.calculateSha256(`${file.name}|${file.size}`);
+            const hash = await computeCanonicalBookId(file.name, file.size);
 
             let existing = libraryStore.findDuplicate({
               id: hash,
@@ -375,7 +375,7 @@ export function useDeviceScanner() {
       const arrayBuffer = await file.arrayBuffer();
       const base64 = await blobToBase64(file);
 
-      const hash = await FileHashService.calculateSha256(base64);
+      const hash = await computeCanonicalBookId(file.name, file.size);
       const existingByHash = libraryStore.findDuplicate({ id: hash });
       if (existingByHash) {
         duplicateNotice.value = existingByHash.title;
@@ -609,7 +609,8 @@ export function useDeviceScanner() {
           continue;
         }
 
-        const hash = await FileHashService.calculateSha256(base64Data);
+        const fileSize = f.size || (base64Data ? Math.floor((base64Data.length * 3) / 4) : 0);
+        const hash = await computeCanonicalBookId(fileName, fileSize);
         const existingByHash = libraryStore.findDuplicate({ id: hash });
         if (existingByHash) {
           duplicates.push(existingByHash.title);

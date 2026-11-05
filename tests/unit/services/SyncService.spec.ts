@@ -28,6 +28,7 @@ describe('SyncService', () => {
     vi.spyOn(authService, 'getAccessToken').mockResolvedValue('mock-token');
     vi.spyOn(folderService, 'ensureStorageFolder').mockResolvedValue('test-folder');
     vi.spyOn(folderService, 'fetchBookProgress').mockResolvedValue(null);
+    vi.spyOn(folderService, 'fetchManifest').mockResolvedValue(null);
     vi.spyOn(folderService, 'uploadBookProgress').mockResolvedValue();
 
     syncService = new SyncService(sqliteService, authService, folderService);
