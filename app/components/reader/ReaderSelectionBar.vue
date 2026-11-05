@@ -6,7 +6,7 @@ import { useTextSelection } from '../../composables/useTextSelection';
 import { TranslationService } from '../../services/translation/TranslationService';
 import { useAiReader } from '../../composables/useAiReader';
 import { useAiStore } from '../../stores/aiStore';
-import { HIGHLIGHT_COLORS, type HighlightColor } from '../../types';
+import { HIGHLIGHT_COLORS, type HighlightColor, type BookFormat } from '../../types';
 
 const emit = defineEmits<{
   (e: 'translate', text: string): void;
@@ -63,7 +63,7 @@ const handleApplyHighlight = async (color: HighlightColor) => {
     highlightStore.setActiveSelection({
       text,
       locator: readerStore.selection.locator || readerStore.locator || '1',
-      format: (readerStore.currentBook?.format || 'epub') as 'pdf' | 'epub' | 'fb2',
+      format: (readerStore.currentBook?.format || 'epub') as BookFormat,
       x: readerStore.selection.x,
       y: readerStore.selection.y,
       width: readerStore.selection.width,
@@ -92,7 +92,7 @@ const handleAddNote = () => {
     highlightStore.setActiveSelection({
       text,
       locator: readerStore.selection.locator || readerStore.locator || '1',
-      format: (readerStore.currentBook?.format || 'epub') as 'pdf' | 'epub' | 'fb2',
+      format: (readerStore.currentBook?.format || 'epub') as BookFormat,
       x: readerStore.selection.x,
       y: readerStore.selection.y,
       width: readerStore.selection.width,
@@ -121,7 +121,7 @@ const handleQuoteCard = () => {
     highlightStore.setActiveSelection({
       text,
       locator: readerStore.selection.locator || readerStore.locator || '1',
-      format: (readerStore.currentBook?.format || 'epub') as 'pdf' | 'epub' | 'fb2',
+      format: (readerStore.currentBook?.format || 'epub') as BookFormat,
       x: readerStore.selection.x,
       y: readerStore.selection.y,
       width: readerStore.selection.width,

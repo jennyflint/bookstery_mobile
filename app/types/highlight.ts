@@ -1,6 +1,6 @@
 export type HighlightColor = 'yellow' | 'green' | 'pink' | 'blue' | 'purple';
 
-type BookFormat = 'pdf' | 'epub' | 'fb2';
+type BookFormat = 'pdf' | 'epub' | 'fb2' | 'mobi';
 
 export interface HighlightColorConfig {
   name: HighlightColor;

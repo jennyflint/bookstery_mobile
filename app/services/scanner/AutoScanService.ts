@@ -11,6 +11,7 @@ import { ScanDirectoryRepository, normalizeDirectoryUri } from '../database/Scan
 import { SqliteService } from '../database/SqliteService';
 import { BookRepository } from '../database/BookRepository';
 import { CoverGenerationQueueService } from '../covers/CoverGenerationQueueService';
+import { extractMobiMetadata } from '../covers/CoverExtractorService';
 import type {
   BookFormat,
   BookRecord,
@@ -19,7 +20,16 @@ import type {
   ScanResultSummary,
 } from '../../types';
 
-const NATIVE_SCAN_EXTENSIONS = ['.pdf', '.epub', '.fb2', '.fb2.zip'];
+const NATIVE_SCAN_EXTENSIONS = [
+  '.pdf',
+  '.epub',
+  '.fb2',
+  '.fb2.zip',
+  '.mobi',
+  '.azw',
+  '.azw3',
+  '.kf8',
+];
 const SANDBOX_BOOK_PATH = /^books\/[0-9a-f]{8,}_(.+)$/i;
 
 export function deriveDisplayNameFromUri(uri: string): string {
@@ -80,8 +90,16 @@ export class AutoScanService {
       lower.endsWith('.pdf') ||
       lower.endsWith('.epub') ||
       lower.endsWith('.fb2') ||
-      lower.endsWith('.fb2.zip')
+      lower.endsWith('.fb2.zip') ||
+      lower.endsWith('.mobi') ||
+      lower.endsWith('.azw') ||
+      lower.endsWith('.azw3') ||
+      lower.endsWith('.kf8')
     );
+  }
+
+  isSupportedBookFile(fileName: string): boolean {
+    return this.isSupportedFile(fileName);
   }
 
   determineFormat(fileName: string): BookFormat | null {
@@ -95,7 +113,19 @@ export class AutoScanService {
     if (lower.endsWith('.fb2') || lower.endsWith('.fb2.zip')) {
       return 'fb2';
     }
+    if (
+      lower.endsWith('.mobi') ||
+      lower.endsWith('.azw') ||
+      lower.endsWith('.azw3') ||
+      lower.endsWith('.kf8')
+    ) {
+      return 'mobi';
+    }
     return null;
+  }
+
+  detectFormat(fileName: string): BookFormat | null {
+    return this.determineFormat(fileName);
   }
 
   /**
@@ -558,14 +588,35 @@ export class AutoScanService {
 
     // 3. New book: Zero-copy direct referencing
     const now = Date.now();
+    let bookTitle = this.extractTitleFromFileName(file.name);
+    let bookAuthor: string | null = null;
+
+    if (file.format === 'mobi') {
+      try {
+        const fileBytes = await fetchBookBytes(file.path);
+        if (fileBytes && fileBytes.byteLength > 0) {
+          const meta = extractMobiMetadata(fileBytes);
+          if (meta.title) bookTitle = meta.title;
+          if (meta.author) bookAuthor = meta.author;
+        }
+      } catch {}
+    }
+
     const newBook: BookRecord = {
       id: hash,
-      title: this.extractTitleFromFileName(file.name),
-      author: null,
+      title: bookTitle,
+      author: bookAuthor,
       format: file.format,
       file_path: file.path,
       cover_path: null,
-      locator: file.format === 'pdf' ? '1' : file.format === 'fb2' ? 'fb2-p-0' : '',
+      locator:
+        file.format === 'pdf'
+          ? '1'
+          : file.format === 'fb2'
+            ? 'fb2-p-0'
+            : file.format === 'mobi'
+              ? 'mobi-p-0'
+              : '',
       progress_percentage: 0,
       total_items: 0,
       last_read_at: now,
@@ -893,7 +944,7 @@ export class AutoScanService {
 
   private extractTitleFromFileName(fileName: string): string {
     return fileName
-      .replace(/\.(pdf|epub|fb2\.zip|fb2)$/i, '')
+      .replace(/\.(pdf|epub|fb2\.zip|fb2|mobi|azw3|azw|kf8)$/i, '')
       .replace(/[_-]+/g, ' ')
       .trim();
   }

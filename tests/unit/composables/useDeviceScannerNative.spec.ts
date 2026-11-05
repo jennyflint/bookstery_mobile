@@ -99,7 +99,16 @@ describe('useDeviceScanner native import of picked files', () => {
 
     expect(bridge.scanDirectory).toHaveBeenCalledWith({
       uriOrPath: '/storage/emulated/0/Download',
-      extensions: ['pdf', 'epub', 'fb2', 'fb2.zip'],
+      extensions: [
+        'pdf',
+        'epub',
+        'fb2',
+        'fb2.zip',
+        'mobi',
+        'azw',
+        'azw3',
+        'kf8',
+      ],
     });
 
     const novel = files.find((f) => f.name === 'Novel.epub');

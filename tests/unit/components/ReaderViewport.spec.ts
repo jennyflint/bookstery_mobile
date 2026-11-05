@@ -480,7 +480,7 @@ describe('ReaderViewport Component', () => {
       title: 'Different',
       author: 'Author',
       format: 'pdf',
-      fileSize: 100,
+      file_size: 100,
       addedAt: 0,
       lastReadAt: 0,
       currentPage: 1,

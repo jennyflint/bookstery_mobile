@@ -3,7 +3,16 @@ import { FileHashService } from './FileHashService';
 import type { BookFormat, BookRecord, ScannedFile } from '../../types';
 
 export class DeviceFileScannerService {
-  private readonly supportedExtensions = ['.pdf', '.epub', '.fb2', '.fb2.zip'];
+  private readonly supportedExtensions = [
+    '.pdf',
+    '.epub',
+    '.fb2',
+    '.fb2.zip',
+    '.mobi',
+    '.azw',
+    '.azw3',
+    '.kf8',
+  ];
 
   determineFormat(fileName: string): BookFormat | null {
     const lower = fileName.toLowerCase();
@@ -15,6 +24,14 @@ export class DeviceFileScannerService {
     }
     if (lower.endsWith('.fb2') || lower.endsWith('.fb2.zip')) {
       return 'fb2';
+    }
+    if (
+      lower.endsWith('.mobi') ||
+      lower.endsWith('.azw') ||
+      lower.endsWith('.azw3') ||
+      lower.endsWith('.kf8')
+    ) {
+      return 'mobi';
     }
     return null;
   }
@@ -145,7 +162,14 @@ export class DeviceFileScannerService {
       recursive: true,
     });
 
-    const initialLocator = format === 'pdf' ? '1' : format === 'fb2' ? 'fb2-p-0' : '';
+    const initialLocator =
+      format === 'pdf'
+        ? '1'
+        : format === 'fb2'
+          ? 'fb2-p-0'
+          : format === 'mobi'
+            ? 'mobi-p-0'
+            : '';
     const now = Date.now();
 
     const bookRecord: BookRecord = {

@@ -21,9 +21,17 @@ function formatLocatorLabel(locator: string, format: string): string {
     }
   }
   if (format === 'fb2') {
-    const asNum = parseInt(locator, 10);
+    const clean = locator.replace(/^fb2-p-/, '');
+    const asNum = parseInt(clean, 10);
     if (!isNaN(asNum)) {
-      return `Paragraph ${asNum}`;
+      return `Paragraph ${asNum + 1}`;
+    }
+  }
+  if (format === 'mobi') {
+    const clean = locator.replace(/^mobi-p-/, '');
+    const asNum = parseInt(clean, 10);
+    if (!isNaN(asNum)) {
+      return `Paragraph ${asNum + 1}`;
     }
   }
   return locator;

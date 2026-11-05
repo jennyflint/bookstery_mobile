@@ -160,6 +160,11 @@ export class PinchZoomController {
       return fb2Scroll;
     }
 
+    const mobiScroll = this.wrapper.querySelector<HTMLElement>('.mobi-document-wrapper');
+    if (mobiScroll && mobiScroll.scrollHeight > mobiScroll.clientHeight) {
+      return mobiScroll;
+    }
+
     const epubContainer = this.wrapper.querySelector<HTMLElement>('.epub-container');
     if (epubContainer && epubContainer.scrollHeight > epubContainer.clientHeight) {
       return epubContainer;

@@ -11,6 +11,7 @@ import {
   SCHEMA_AI,
   SCHEMA_AI_CHAT,
   SCHEMA_VOCABULARY,
+  migrateFormatCheckConstraints,
 } from './migrations';
 import type {
   AiChatMessage,
@@ -191,6 +192,10 @@ export class SqliteService {
 
       try {
         await this.db.execute('ALTER TABLE books ADD COLUMN file_hash TEXT DEFAULT NULL;');
+      } catch {}
+
+      try {
+        await migrateFormatCheckConstraints(this.db);
       } catch {}
 
       this.isInitialized = true;

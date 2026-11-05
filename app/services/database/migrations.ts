@@ -3,7 +3,7 @@ CREATE TABLE IF NOT EXISTS books (
   id TEXT PRIMARY KEY,
   title TEXT NOT NULL,
   author TEXT,
-  format TEXT NOT NULL CHECK (format IN ('pdf', 'epub', 'fb2')),
+  format TEXT NOT NULL CHECK (format IN ('pdf', 'epub', 'fb2', 'mobi')),
   file_path TEXT NOT NULL,
   cover_path TEXT,
   locator TEXT NOT NULL,
@@ -66,7 +66,7 @@ CREATE INDEX IF NOT EXISTS idx_book_collection_collection ON book_collection(col
 CREATE TABLE IF NOT EXISTS highlights (
   id TEXT PRIMARY KEY,
   book_id TEXT NOT NULL REFERENCES books(id) ON DELETE CASCADE,
-  format TEXT NOT NULL CHECK (format IN ('pdf', 'epub', 'fb2')),
+  format TEXT NOT NULL CHECK (format IN ('pdf', 'epub', 'fb2', 'mobi')),
   locator TEXT NOT NULL,
   selected_text TEXT NOT NULL,
   color TEXT NOT NULL CHECK (color IN ('yellow', 'green', 'pink', 'blue', 'purple')),
@@ -82,7 +82,7 @@ export const SCHEMA_HIGHLIGHTS = `
 CREATE TABLE IF NOT EXISTS highlights (
   id TEXT PRIMARY KEY,
   book_id TEXT NOT NULL REFERENCES books(id) ON DELETE CASCADE,
-  format TEXT NOT NULL CHECK (format IN ('pdf', 'epub', 'fb2')),
+  format TEXT NOT NULL CHECK (format IN ('pdf', 'epub', 'fb2', 'mobi')),
   locator TEXT NOT NULL,
   selected_text TEXT NOT NULL,
   color TEXT NOT NULL CHECK (color IN ('yellow', 'green', 'pink', 'blue', 'purple')),
@@ -188,5 +188,106 @@ CREATE TABLE IF NOT EXISTS vocabulary_words (
 CREATE INDEX IF NOT EXISTS idx_vocab_created ON vocabulary_words(created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_vocab_book ON vocabulary_words(book_id);
 `;
+
+export async function migrateFormatCheckConstraints(db: {
+  query: (statement: string, values?: any[]) => Promise<{ values?: any[] }>;
+  execute: (statements: string) => Promise<any>;
+}): Promise<void> {
+  try {
+    const booksMaster = await db.query("SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'books';");
+    const booksSql = (booksMaster.values?.[0] as { sql?: string } | undefined)?.sql || '';
+    if (booksSql && !booksSql.includes("'mobi'")) {
+      await db.execute('PRAGMA foreign_keys = OFF;');
+      await db.execute(`
+        CREATE TABLE books_mobi_mig (
+          id TEXT PRIMARY KEY,
+          title TEXT NOT NULL,
+          author TEXT,
+          format TEXT NOT NULL CHECK (format IN ('pdf', 'epub', 'fb2', 'mobi')),
+          file_path TEXT NOT NULL,
+          cover_path TEXT,
+          locator TEXT NOT NULL,
+          progress_percentage REAL NOT NULL DEFAULT 0.0,
+          total_items INTEGER NOT NULL DEFAULT 0,
+          last_read_at INTEGER NOT NULL,
+          updated_at INTEGER NOT NULL,
+          is_pinned INTEGER NOT NULL DEFAULT 0 CHECK (is_pinned IN (0, 1)),
+          pinned_at INTEGER DEFAULT NULL,
+          file_size INTEGER DEFAULT NULL,
+          file_hash TEXT DEFAULT NULL
+        );
+      `);
+
+      const info = await db.query('PRAGMA table_info(books);');
+      const cols = ((info.values as Array<{ name: string }>) || []).map((c) => c.name);
+      const hasSize = cols.includes('file_size');
+      const hasHash = cols.includes('file_hash');
+      const hasPinned = cols.includes('is_pinned');
+      const hasPinnedAt = cols.includes('pinned_at');
+
+      const selectCols = [
+        'id',
+        'title',
+        'author',
+        'format',
+        'file_path',
+        'cover_path',
+        'locator',
+        'progress_percentage',
+        'total_items',
+        'last_read_at',
+        'updated_at',
+        hasPinned ? 'is_pinned' : '0 AS is_pinned',
+        hasPinnedAt ? 'pinned_at' : 'NULL AS pinned_at',
+        hasSize ? 'file_size' : 'NULL AS file_size',
+        hasHash ? 'file_hash' : 'NULL AS file_hash',
+      ].join(', ');
+
+      await db.execute(`
+        INSERT INTO books_mobi_mig (id, title, author, format, file_path, cover_path, locator, progress_percentage, total_items, last_read_at, updated_at, is_pinned, pinned_at, file_size, file_hash)
+        SELECT ${selectCols} FROM books;
+      `);
+      await db.execute('DROP TABLE books;');
+      await db.execute('ALTER TABLE books_mobi_mig RENAME TO books;');
+      await db.execute('CREATE INDEX IF NOT EXISTS idx_books_updated_at ON books(updated_at);');
+      await db.execute('CREATE INDEX IF NOT EXISTS idx_books_pinned ON books(is_pinned DESC, pinned_at DESC);');
+      await db.execute('PRAGMA foreign_keys = ON;');
+    }
+  } catch (err) {
+    console.error('Failed to migrate books format constraint:', err);
+  }
+
+  try {
+    const hlMaster = await db.query("SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'highlights';");
+    const hlSql = (hlMaster.values?.[0] as { sql?: string } | undefined)?.sql || '';
+    if (hlSql && !hlSql.includes("'mobi'")) {
+      await db.execute('PRAGMA foreign_keys = OFF;');
+      await db.execute(`
+        CREATE TABLE highlights_mobi_mig (
+          id TEXT PRIMARY KEY,
+          book_id TEXT NOT NULL REFERENCES books(id) ON DELETE CASCADE,
+          format TEXT NOT NULL CHECK (format IN ('pdf', 'epub', 'fb2', 'mobi')),
+          locator TEXT NOT NULL,
+          selected_text TEXT NOT NULL,
+          color TEXT NOT NULL CHECK (color IN ('yellow', 'green', 'pink', 'blue', 'purple')),
+          note TEXT DEFAULT NULL,
+          created_at INTEGER NOT NULL,
+          updated_at INTEGER NOT NULL
+        );
+      `);
+      await db.execute(`
+        INSERT INTO highlights_mobi_mig (id, book_id, format, locator, selected_text, color, note, created_at, updated_at)
+        SELECT id, book_id, format, locator, selected_text, color, note, created_at, updated_at FROM highlights;
+      `);
+      await db.execute('DROP TABLE highlights;');
+      await db.execute('ALTER TABLE highlights_mobi_mig RENAME TO highlights;');
+      await db.execute('CREATE INDEX IF NOT EXISTS idx_highlights_book ON highlights(book_id, created_at DESC);');
+      await db.execute('PRAGMA foreign_keys = ON;');
+    }
+  } catch (err) {
+    console.error('Failed to migrate highlights format constraint:', err);
+  }
+}
+
 
 

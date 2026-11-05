@@ -72,7 +72,7 @@ export function useTextSelection() {
 
         const blockContainer =
           startElem?.closest<HTMLElement>(
-            '[data-block-id], [data-message-id], [data-line-index], .pdf-text-layer span, .textLayer span, [id^="fb2-p-"], [id^="reflow-"]',
+            '[data-block-id], [data-message-id], [data-line-index], .pdf-text-layer span, .textLayer span, [id^="fb2-p-"], [id^="mobi-p-"], [id^="reflow-"]',
           ) ??
           startElem?.closest<HTMLElement>(
             'p, h1, h2, h3, h4, h5, h6, [data-part-type]',

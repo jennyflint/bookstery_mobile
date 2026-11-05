@@ -1,6 +1,12 @@
 import * as pdfjsLib from 'pdfjs-dist';
 import JSZip from 'jszip';
 import type { BookFormat } from '../../types';
+import {
+  parsePalmDb,
+  parseRecord0,
+  detectImageMimeType,
+  MobiParser,
+} from '../engines/MobiParser';
 
 function initPdfWorker(): void {
   if (typeof window !== 'undefined' && pdfjsLib.GlobalWorkerOptions) {
@@ -186,6 +192,8 @@ export class CoverExtractorService {
         return this.extractEpubCover(data);
       case 'fb2':
         return this.extractFb2Cover(data);
+      case 'mobi':
+        return this.extractMobiCover(data);
       default:
         return null;
     }
@@ -443,4 +451,96 @@ export class CoverExtractorService {
     const decodedBytes = base64ToUint8Array(base64Data);
     return await convertImageBytesToWebP(decodedBytes, contentType, 300, 0.8);
   }
+
+  async extractMobiCover(
+    data: Uint8Array | ArrayBuffer | Blob | string,
+  ): Promise<Uint8Array | null> {
+    try {
+      const rawBytes = await normalizeToUint8Array(data);
+      const parsedDb = parsePalmDb(rawBytes);
+      if (parsedDb.records.length === 0) return null;
+
+      const rec0 = parseRecord0(parsedDb.records[0]);
+      let targetRec0 = rec0;
+      let firstImageIndex = rec0.mobi.firstImageIndex;
+
+      if (
+        rec0.exth.kf8BoundaryIndex !== undefined &&
+        rec0.exth.kf8BoundaryIndex > 0 &&
+        rec0.exth.kf8BoundaryIndex < parsedDb.records.length &&
+        rec0.exth.kf8BoundaryIndex !== 0xffffffff
+      ) {
+        try {
+          const kf8Header = parseRecord0(parsedDb.records[rec0.exth.kf8BoundaryIndex]);
+          if (kf8Header.mobi.firstImageIndex !== 0xffffffff) {
+            targetRec0 = kf8Header;
+            firstImageIndex = kf8Header.mobi.firstImageIndex;
+          }
+        } catch {}
+      }
+
+      if (firstImageIndex === 0xffffffff || firstImageIndex >= parsedDb.records.length) {
+        return null;
+      }
+
+      const coverOffset = targetRec0.exth.coverOffset ?? rec0.exth.coverOffset;
+      const thumbOffset = targetRec0.exth.thumbnailOffset ?? rec0.exth.thumbnailOffset;
+
+      let coverBytes: Uint8Array | null = null;
+      let coverMime = 'image/jpeg';
+
+      if (coverOffset !== undefined && coverOffset !== 0xffffffff) {
+        const idx = firstImageIndex + coverOffset;
+        if (idx < parsedDb.records.length) {
+          const bytes = parsedDb.records[idx];
+          const mime = detectImageMimeType(bytes);
+          if (mime) {
+            coverBytes = bytes;
+            coverMime = mime;
+          }
+        }
+      }
+
+      if (!coverBytes && thumbOffset !== undefined && thumbOffset !== 0xffffffff) {
+        const idx = firstImageIndex + thumbOffset;
+        if (idx < parsedDb.records.length) {
+          const bytes = parsedDb.records[idx];
+          const mime = detectImageMimeType(bytes);
+          if (mime) {
+            coverBytes = bytes;
+            coverMime = mime;
+          }
+        }
+      }
+
+      if (!coverBytes) {
+        for (let r = firstImageIndex; r < parsedDb.records.length; r++) {
+          const bytes = parsedDb.records[r];
+          const mime = detectImageMimeType(bytes);
+          if (mime) {
+            coverBytes = bytes;
+            coverMime = mime;
+            break;
+          }
+        }
+      }
+
+      if (!coverBytes) {
+        return null;
+      }
+
+      return await convertImageBytesToWebP(coverBytes, coverMime, 300, 0.8);
+    } catch {
+      return null;
+    }
+  }
 }
+
+export function extractMobiMetadata(buffer: Uint8Array): {
+  title?: string;
+  author?: string;
+  description?: string;
+} {
+  return MobiParser.extractMetadata(buffer);
+}
+

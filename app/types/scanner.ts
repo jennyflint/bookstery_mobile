@@ -28,5 +28,5 @@ export interface CrawledBookFile {
   path: string;
   size: number;
   mtime?: number;
-  format: 'pdf' | 'epub' | 'fb2';
+  format: 'pdf' | 'epub' | 'fb2' | 'mobi';
 }

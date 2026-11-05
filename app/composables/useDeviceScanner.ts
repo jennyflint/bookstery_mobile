@@ -11,6 +11,7 @@ import {
   toWebViewUrl,
 } from '../services/NativeReaderBridge';
 import { CoverGenerationQueueService } from '../services/covers/CoverGenerationQueueService';
+import { extractMobiMetadata } from '../services/covers/CoverExtractorService';
 import { SqliteService } from '../services/database/SqliteService';
 import { useLibraryStore } from '../stores/libraryStore';
 import type { AddBookResult, BookRecord, ImportFilesResult, ScannedFile } from '../types';
@@ -82,7 +83,16 @@ export function useDeviceScanner() {
           if (permissionStatus.granted) {
             const downloadScan = await NativeReaderBridge.scanDirectory({
               uriOrPath: '/storage/emulated/0/Download',
-              extensions: ['pdf', 'epub', 'fb2', 'fb2.zip'],
+              extensions: [
+                'pdf',
+                'epub',
+                'fb2',
+                'fb2.zip',
+                'mobi',
+                'azw',
+                'azw3',
+                'kf8',
+              ],
             });
             for (const file of downloadScan.files) {
               const format = scannerService.determineFormat(file.name);
@@ -214,7 +224,14 @@ export function useDeviceScanner() {
                 format,
                 file_path: normalizedPath,
                 cover_path: null,
-                locator: format === 'pdf' ? '1' : format === 'fb2' ? 'fb2-p-0' : '',
+                locator:
+                  format === 'pdf'
+                    ? '1'
+                    : format === 'fb2'
+                      ? 'fb2-p-0'
+                      : format === 'mobi'
+                        ? 'mobi-p-0'
+                        : '',
                 progress_percentage: 0,
                 total_items: 0,
                 last_read_at: now,
@@ -243,6 +260,19 @@ export function useDeviceScanner() {
                     }
                     const bytes = await fetchBookBytes(normalizedPath);
                     if (bytes && bytes.byteLength > 0) {
+                      if (format === 'mobi') {
+                        try {
+                          const meta = extractMobiMetadata(bytes);
+                          if (meta.title && meta.title !== bookRecord.title) {
+                            bookRecord.title = meta.title;
+                            await SqliteService.getInstance().upsertBook(bookRecord);
+                          }
+                          if (meta.author && meta.author !== bookRecord.author) {
+                            bookRecord.author = meta.author;
+                            await SqliteService.getInstance().upsertBook(bookRecord);
+                          }
+                        } catch {}
+                      }
                       const coverPath = await coverQueue.enqueue(
                         bookRecord.id,
                         bookRecord.format,
@@ -364,13 +394,30 @@ export function useDeviceScanner() {
         recursive: true,
       });
 
-      const initialLocator = format === 'pdf' ? '1' : format === 'fb2' ? 'fb2-p-0' : '';
+      const initialLocator =
+        format === 'pdf'
+          ? '1'
+          : format === 'fb2'
+            ? 'fb2-p-0'
+            : format === 'mobi'
+              ? 'mobi-p-0'
+              : '';
       const now = Date.now();
+
+      let finalTitle = candidateTitle;
+      let finalAuthor: string | null = null;
+      if (format === 'mobi') {
+        try {
+          const meta = extractMobiMetadata(new Uint8Array(arrayBuffer));
+          if (meta.title) finalTitle = meta.title;
+          if (meta.author) finalAuthor = meta.author;
+        } catch {}
+      }
 
       const bookRecord: BookRecord = {
         id: hash,
-        title: candidateTitle,
-        author: null,
+        title: finalTitle,
+        author: finalAuthor,
         format,
         file_path: destinationPath,
         cover_path: null,
@@ -441,7 +488,14 @@ export function useDeviceScanner() {
       format,
       file_path: copy.relativePath,
       cover_path: null,
-      locator: format === 'pdf' ? '1' : format === 'fb2' ? 'fb2-p-0' : '',
+      locator:
+        format === 'pdf'
+          ? '1'
+          : format === 'fb2'
+            ? 'fb2-p-0'
+            : format === 'mobi'
+              ? 'mobi-p-0'
+              : '',
       progress_percentage: 0,
       total_items: 0,
       last_read_at: now,
@@ -470,10 +524,24 @@ export function useDeviceScanner() {
             // Encrypted or malformed PDF: try the JS extractor.
           }
         }
+        const fileBytes = await fetchBookBytes(copy.path);
+        if (format === 'mobi' && fileBytes && fileBytes.byteLength > 0) {
+          try {
+            const meta = extractMobiMetadata(fileBytes);
+            if (meta.title && meta.title !== bookRecord.title) {
+              bookRecord.title = meta.title;
+              await SqliteService.getInstance().upsertBook(bookRecord);
+            }
+            if (meta.author && meta.author !== bookRecord.author) {
+              bookRecord.author = meta.author;
+              await SqliteService.getInstance().upsertBook(bookRecord);
+            }
+          } catch {}
+        }
         const coverPath = await coverQueue.enqueue(
           bookRecord.id,
           bookRecord.format,
-          await fetchBookBytes(copy.path),
+          fileBytes,
         );
         if (coverPath) {
           await libraryStore.updateCover(bookRecord.id, coverPath);

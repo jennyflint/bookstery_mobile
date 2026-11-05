@@ -12,8 +12,9 @@ export * from './tts';
 export * from './reflow';
 export * from './settings';
 export * from './volume';
+export * from './mobi';
 
-export type BookFormat = 'pdf' | 'epub' | 'fb2';
+export type BookFormat = 'pdf' | 'epub' | 'fb2' | 'mobi';
 
 export type ReaderTheme = 'light' | 'sepia' | 'night' | 'oled' | 'custom';
 

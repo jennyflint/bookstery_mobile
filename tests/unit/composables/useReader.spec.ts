@@ -91,12 +91,23 @@ describe('useReader Composable', () => {
     expect(readerStore.currentBook?.format).toBe('fb2');
   });
 
+  it('should initialize MobiEngine for mobi book', async () => {
+    const { openBook, activeEngine } = useReader();
+    const readerStore = useReaderStore();
+    const mockMobiBook = { ...mockPdfBook, format: 'mobi' as const };
+
+    await openBook(container, mockMobiBook, 'dummy data');
+
+    expect(activeEngine.value).not.toBeNull();
+    expect(readerStore.currentBook?.format).toBe('mobi');
+  });
+
   it('should throw an error for unsupported book format', async () => {
     const { openBook } = useReader();
-    const invalidBook = { ...mockPdfBook, format: 'mobi' as unknown as 'pdf' };
+    const invalidBook = { ...mockPdfBook, format: 'txt' as unknown as 'pdf' };
 
     await expect(openBook(container, invalidBook, new Uint8Array([]))).rejects.toThrow(
-      'Unsupported book format: mobi',
+      'Unsupported book format: txt',
     );
   });
 

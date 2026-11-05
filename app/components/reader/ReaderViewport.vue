@@ -78,7 +78,7 @@ const {
     if (engineScrollEl) return engineScrollEl;
 
     const inner = engineContainer.querySelector<HTMLElement>(
-      '.pdf-scroll-container, .fb2-document-wrapper, .epub-container',
+      '.pdf-scroll-container, .fb2-document-wrapper, .mobi-document-wrapper, .epub-container',
     );
     if (inner && inner.scrollHeight > inner.clientHeight) return inner;
 

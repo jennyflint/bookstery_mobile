@@ -20,6 +20,7 @@ import { useBookSync } from '../../composables/useBookSync';
 import { useAppLifecycle } from '../../composables/useAppLifecycle';
 import { useTextSelection } from '../../composables/useTextSelection';
 import { loadBookBytesNative, readBookViaFilesystem } from '../../services/BookFileLoader';
+import { createSampleMobi } from '../../services/engines/MobiParser';
 import { TranslationService } from '../../services/translation/TranslationService';
 import type { EnginePageTapDetail, EngineSelectionDetail, TranslationResult } from '../../types';
 import ReaderViewport from '../../components/reader/ReaderViewport.vue';
@@ -234,6 +235,11 @@ startxref
 178
 %%EOF`;
         rawData = new TextEncoder().encode(minimalPdf);
+      } else if (book.format === 'mobi') {
+        rawData = createSampleMobi({
+          title: book.title,
+          author: book.author || undefined,
+        });
       } else {
         rawData = new Uint8Array([0, 1, 2, 3]);
       }
