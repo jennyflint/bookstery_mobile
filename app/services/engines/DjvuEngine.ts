@@ -12,6 +12,7 @@ import { isDjVuBuffer, parseDjVuDocument } from './DjvuParser';
 
 const MAX_CANVAS_PIXELS = 16_000_000;
 const CACHE_WINDOW_RADIUS = 5;
+const RESIZE_DEBOUNCE_MS = 150;
 
 function isDarkColor(hexOrRgb: string): boolean {
   if (!hexOrRgb) return false;
@@ -46,6 +47,8 @@ export class DjvuEngine extends BaseEngine {
   private pageTextMap = new Map<number, string>();
   private currentColors: { bg: string; text: string } | null = null;
   private zoomScale: number = 1.0;
+  private lastLayoutSize: { width: number; height: number } | null = null;
+  private resizeTimer: ReturnType<typeof setTimeout> | null = null;
   private resizeObserver: ResizeObserver | null = null;
   private isProgrammaticScroll: boolean = false;
   private pageSizes: Array<{ width: number; height: number; dpi: number }> = [];
@@ -89,6 +92,7 @@ export class DjvuEngine extends BaseEngine {
     }
 
     this.updateLocation();
+    this.setupResizeObserver();
   }
 
   private async normalizeData(data: Uint8Array | ArrayBuffer | string | Blob): Promise<Uint8Array> {
@@ -738,7 +742,86 @@ export class DjvuEngine extends BaseEngine {
     });
   }
 
+  private setupResizeObserver(): void {
+    this.disconnectResizeObserver();
+    if (!this.container || typeof ResizeObserver === 'undefined') {
+      return;
+    }
+    this.lastLayoutSize = {
+      width: this.container.clientWidth,
+      height: this.container.clientHeight,
+    };
+    this.resizeObserver = new ResizeObserver(() => {
+      if (!this.container) return;
+      const next = { width: this.container.clientWidth, height: this.container.clientHeight };
+      const prev = this.lastLayoutSize;
+      if (next.width <= 0 || next.height <= 0) return;
+      if (prev && prev.width === next.width && prev.height === next.height) {
+        return;
+      }
+      if (prev && Math.abs(next.width - prev.width) < 3 && Math.abs(next.height - prev.height) < 3) {
+        return;
+      }
+
+      const wasLandscape = prev ? prev.width > prev.height : false;
+      const isLandscape = next.width > next.height;
+      const isOrientationOrMajorResize =
+        !prev || wasLandscape !== isLandscape || Math.abs(next.width - prev.width) > 40;
+
+      if (!isOrientationOrMajorResize) {
+        return;
+      }
+
+      this.zoomScale = 1.0;
+      (this.container as ZoomableContainerElement).__onEngineResetZoom?.();
+
+      if (this.resizeTimer) clearTimeout(this.resizeTimer);
+      this.resizeTimer = setTimeout(() => {
+        this.resizeTimer = null;
+        this.lastLayoutSize = next;
+        void this.handleContainerResize();
+      }, RESIZE_DEBOUNCE_MS);
+    });
+    this.resizeObserver.observe(this.container);
+  }
+
+  private disconnectResizeObserver(): void {
+    if (this.resizeTimer) {
+      clearTimeout(this.resizeTimer);
+      this.resizeTimer = null;
+    }
+    this.resizeObserver?.disconnect();
+    this.resizeObserver = null;
+  }
+
+  private async handleContainerResize(): Promise<void> {
+    if (!this.container || !this.doc) return;
+    this.zoomScale = 1.0;
+    (this.container as ZoomableContainerElement).__onEngineResetZoom?.();
+    this.pageCache.forEach((entry) => {
+      entry.canvas.width = 0;
+      entry.canvas.height = 0;
+    });
+    this.pageCache.clear();
+    this.renderedPages.clear();
+
+    if (this.paginationMode === 'scroll') {
+      await this.renderScrollMode();
+    } else {
+      await this.renderButtonsMode();
+    }
+  }
+
+  private async renderScrollMode(): Promise<void> {
+    await this.initScrollMode();
+  }
+
+  private async renderButtonsMode(): Promise<void> {
+    await this.initButtonsMode();
+  }
+
   override destroy(): void {
+    this.disconnectResizeObserver();
     this.cleanup();
     this.unbindZoomableInterface();
     super.destroy();
@@ -761,10 +844,5 @@ export class DjvuEngine extends BaseEngine {
     this.pageCache.clear();
     this.renderedPages.clear();
     this.pageTextMap.clear();
-
-    if (this.resizeObserver) {
-      this.resizeObserver.disconnect();
-      this.resizeObserver = null;
-    }
   }
 }

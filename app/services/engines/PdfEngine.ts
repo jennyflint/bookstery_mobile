@@ -283,19 +283,6 @@ export class PdfEngine extends BaseEngine {
     this.lastLayoutSize = { width: this.container.clientWidth, height: this.container.clientHeight };
     this.resizeObserver = new ResizeObserver(() => {
       if (!this.container) return;
-      // Disable ResizeObserver re-render loops while a page turn or touch gesture is actively in progress or when zoomed in
-      const gestureScale = this.gestureController?.getState().scale ?? 1.0;
-      const viewportEl = this.container.closest<HTMLElement>('[data-testid="reader-viewport"]');
-      const viewportScale = viewportEl ? parseFloat(viewportEl.getAttribute('data-scale') || '1') : 1.0;
-      if (
-        this.isPageTurnInProgress ||
-        this.isGestureActive() ||
-        this.zoomScale !== 1.0 ||
-        gestureScale !== 1.0 ||
-        viewportScale !== 1.0
-      ) {
-        return;
-      }
       const next = { width: this.container.clientWidth, height: this.container.clientHeight };
       const prev = this.lastLayoutSize;
       if (next.width <= 0 || next.height <= 0) return;
@@ -307,6 +294,30 @@ export class PdfEngine extends BaseEngine {
       if (prev && Math.abs(next.width - prev.width) < 3 && Math.abs(next.height - prev.height) < 3) {
         return;
       }
+
+      const wasLandscape = prev ? prev.width > prev.height : false;
+      const isLandscape = next.width > next.height;
+      const isOrientationOrMajorResize =
+        !prev || wasLandscape !== isLandscape || Math.abs(next.width - prev.width) > 40;
+
+      const gestureScale = this.gestureController?.getState().scale ?? 1.0;
+      const viewportEl = this.container.closest<HTMLElement>('[data-testid="reader-viewport"]');
+      const viewportScale = viewportEl ? parseFloat(viewportEl.getAttribute('data-scale') || '1') : 1.0;
+      const isZoomed = this.zoomScale !== 1.0 || gestureScale !== 1.0 || viewportScale !== 1.0;
+
+      if (isOrientationOrMajorResize && isZoomed) {
+        this.zoomScale = 1.0;
+        this.gestureController?.resetZoom(true);
+        (this.container as ZoomableContainerElement).__onEngineResetZoom?.();
+      } else if (
+        this.isPageTurnInProgress ||
+        this.isGestureActive() ||
+        isZoomed
+      ) {
+        // Disable ResizeObserver re-render loops while a page turn or touch gesture is actively in progress or when zoomed in
+        return;
+      }
+
       if (this.resizeTimer) clearTimeout(this.resizeTimer);
       this.resizeTimer = setTimeout(() => {
         this.resizeTimer = null;
@@ -330,6 +341,7 @@ export class PdfEngine extends BaseEngine {
   private async relayout(): Promise<void> {
     if (!this.pdfDocument || !this.container) return;
     try {
+      this.pageCache.clear();
       if (this.paginationMode === 'scroll') {
         await this.renderScrollMode();
         this.scrollToPage(this.currentPageNumber, false);

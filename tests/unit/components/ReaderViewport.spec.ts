@@ -549,4 +549,90 @@ describe('ReaderViewport Component', () => {
     expect(vm.translateY).toBe(-400);
     expect(scrollContainer.scrollTop).toBe(190);
   });
+
+  it('should reset zoom and invoke activeEngine.resetZoom on orientationchange or screen orientation change', async () => {
+    const mockEngine = {
+      resetZoom: vi.fn(),
+      init: vi.fn(),
+      destroy: vi.fn(),
+      goTo: vi.fn(),
+      next: vi.fn(),
+      prev: vi.fn(),
+      getCurrentLocation: vi.fn(),
+      setPaginationMode: vi.fn(),
+      applyTheme: vi.fn(),
+      setHighlights: vi.fn(),
+    };
+    const wrapper = mount(ReaderViewport, {
+      props: { activeEngine: mockEngine as any },
+    });
+
+    const vm = wrapper.vm as any;
+    vm.setZoom(2.5);
+    expect(vm.scale).toBe(2.5);
+
+    window.dispatchEvent(new Event('orientationchange'));
+    await wrapper.vm.$nextTick();
+
+    expect(vm.scale).toBe(1.0);
+    expect(vm.cssScale).toBe(1.0);
+    expect(vm.translateX).toBe(0);
+    expect(vm.translateY).toBe(0);
+    expect(mockEngine.resetZoom).toHaveBeenCalled();
+  });
+
+  it('should reset zoom when ResizeObserver detects an orientation flip or width change > 40px', async () => {
+    let notifyResize: (() => void) | null = null;
+    class FakeResizeObserver {
+      constructor(cb: () => void) {
+        notifyResize = cb;
+      }
+      observe(): void {}
+      disconnect(): void {}
+    }
+    vi.stubGlobal('ResizeObserver', FakeResizeObserver);
+
+    try {
+      const mockEngine = {
+        resetZoom: vi.fn(),
+        init: vi.fn(),
+        destroy: vi.fn(),
+        goTo: vi.fn(),
+        next: vi.fn(),
+        prev: vi.fn(),
+        getCurrentLocation: vi.fn(),
+        setPaginationMode: vi.fn(),
+        applyTheme: vi.fn(),
+        setHighlights: vi.fn(),
+      };
+      const wrapper = mount(ReaderViewport, {
+        props: { activeEngine: mockEngine as any },
+      });
+
+      const viewportEl = wrapper.find('[data-testid="reader-viewport"]').element as HTMLElement;
+      Object.defineProperty(viewportEl, 'clientWidth', { value: 800, configurable: true });
+      Object.defineProperty(viewportEl, 'clientHeight', { value: 400, configurable: true });
+
+      // First resize notification records landscape
+      notifyResize?.();
+
+      const vm = wrapper.vm as any;
+      vm.setZoom(2.0);
+      expect(vm.scale).toBe(2.0);
+
+      // Now rotate to portrait: 400x800
+      Object.defineProperty(viewportEl, 'clientWidth', { value: 380, configurable: true });
+      Object.defineProperty(viewportEl, 'clientHeight', { value: 800, configurable: true });
+      notifyResize?.();
+      await wrapper.vm.$nextTick();
+
+      expect(vm.scale).toBe(1.0);
+      expect(vm.cssScale).toBe(1.0);
+      expect(vm.translateX).toBe(0);
+      expect(vm.translateY).toBe(0);
+      expect(mockEngine.resetZoom).toHaveBeenCalled();
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
 });

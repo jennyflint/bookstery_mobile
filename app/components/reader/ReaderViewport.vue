@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, watch, onMounted } from 'vue';
+import { ref, computed, watch, onMounted, onUnmounted } from 'vue';
 import { useReaderStore } from '../../stores/readerStore';
 import { usePinchZoom } from '../../composables/usePinchZoom';
 import { useTextSelection } from '../../composables/useTextSelection';
@@ -108,6 +108,47 @@ const {
   },
 });
 
+interface ViewportDimensionSnapshot {
+  width: number;
+  height: number;
+  isLandscape: boolean;
+}
+
+let lastViewportSize: ViewportDimensionSnapshot | null = null;
+let resizeObserver: ResizeObserver | null = null;
+
+const checkOrientationOrResize = (): void => {
+  const el = viewportWrapperRef.value;
+  const width = el
+    ? el.clientWidth || el.getBoundingClientRect?.().width || (typeof window !== 'undefined' ? window.innerWidth : 0)
+    : (typeof window !== 'undefined' ? window.innerWidth : 0);
+  const height = el
+    ? el.clientHeight || el.getBoundingClientRect?.().height || (typeof window !== 'undefined' ? window.innerHeight : 0)
+    : (typeof window !== 'undefined' ? window.innerHeight : 0);
+  if (width <= 0 || height <= 0) return;
+
+  const isLandscape = width > height;
+
+  if (lastViewportSize) {
+    const wasLandscape = lastViewportSize.isLandscape;
+    const isOrientationChange = wasLandscape !== isLandscape;
+    const isMajorWidthChange = Math.abs(width - lastViewportSize.width) > 40;
+
+    if (isOrientationChange || isMajorWidthChange) {
+      resetZoom(true);
+      props.activeEngine?.resetZoom?.();
+    }
+  }
+
+  lastViewportSize = { width, height, isLandscape };
+};
+
+const handleOrientationChange = (): void => {
+  resetZoom(true);
+  props.activeEngine?.resetZoom?.();
+  checkOrientationOrResize();
+};
+
 onMounted(() => {
   if (containerRef.value) {
     containerRef.value.__onEngineResetZoom = () => {
@@ -116,6 +157,36 @@ onMounted(() => {
     containerRef.value.__readerBindTouchSource = bindTouchSource;
     containerRef.value.__readerCanRenderZoom = () => false;
   }
+
+  checkOrientationOrResize();
+
+  if (typeof window !== 'undefined') {
+    window.addEventListener('orientationchange', handleOrientationChange);
+  }
+  if (typeof screen !== 'undefined' && typeof screen.orientation?.addEventListener === 'function') {
+    screen.orientation.addEventListener('change', handleOrientationChange);
+  }
+
+  if (typeof ResizeObserver !== 'undefined' && viewportWrapperRef.value) {
+    resizeObserver = new ResizeObserver(() => {
+      checkOrientationOrResize();
+    });
+    resizeObserver.observe(viewportWrapperRef.value);
+  }
+});
+
+onUnmounted(() => {
+  if (typeof window !== 'undefined') {
+    window.removeEventListener('orientationchange', handleOrientationChange);
+  }
+  if (typeof screen !== 'undefined' && typeof screen.orientation?.removeEventListener === 'function') {
+    screen.orientation.removeEventListener('change', handleOrientationChange);
+  }
+  if (resizeObserver) {
+    resizeObserver.disconnect();
+    resizeObserver = null;
+  }
+  lastViewportSize = null;
 });
 
 watch(

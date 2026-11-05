@@ -185,4 +185,46 @@ describe('DjvuEngine', () => {
     const overlay = slot?.querySelector('.djvu-highlight-overlay');
     expect(overlay).not.toBeNull();
   });
+
+  it('resets zoom to 1.0 and re-renders on orientation flip or major container resize', async () => {
+    vi.useFakeTimers();
+    let notifyResize: (() => void) | null = null;
+    class FakeResizeObserver {
+      constructor(cb: () => void) {
+        notifyResize = cb;
+      }
+      observe(): void {}
+      disconnect(): void {}
+    }
+    vi.stubGlobal('ResizeObserver', FakeResizeObserver);
+
+    try {
+      const sample = createSampleDjvu(400, 600, 100, 'Resize DjVu test');
+      Object.defineProperty(container, 'clientWidth', { value: 800, configurable: true });
+      Object.defineProperty(container, 'clientHeight', { value: 400, configurable: true });
+
+      await engine.init(container, sample, '1');
+      await engine.setPaginationMode('buttons');
+
+      const resetSpy = vi.fn();
+      (container as any).__onEngineResetZoom = resetSpy;
+
+      await engine.setZoom(2.0);
+      expect(engine.getZoom()).toBe(2.0);
+
+      // Rotate to portrait (380x800)
+      Object.defineProperty(container, 'clientWidth', { value: 380, configurable: true });
+      Object.defineProperty(container, 'clientHeight', { value: 800, configurable: true });
+
+      notifyResize?.();
+      await vi.advanceTimersByTimeAsync(200);
+
+      expect(engine.getZoom()).toBe(1.0);
+      expect(resetSpy).toHaveBeenCalled();
+      expect(engine.getCurrentLocation().locator).toBe('1');
+    } finally {
+      vi.useRealTimers();
+      vi.unstubAllGlobals();
+    }
+  });
 });

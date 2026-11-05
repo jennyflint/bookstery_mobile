@@ -268,6 +268,55 @@ describe('PdfEngine', () => {
     }
   });
 
+  it('should reset zoom and re-fit page when orientation changes or major resize occurs while zoomed in', async () => {
+    vi.useFakeTimers();
+    let notifyResize: (() => void) | null = null;
+    class FakeResizeObserver {
+      constructor(cb: () => void) {
+        notifyResize = cb;
+      }
+      observe(): void {}
+      disconnect(): void {}
+    }
+    vi.stubGlobal('ResizeObserver', FakeResizeObserver);
+
+    const setSize = (width: number, height: number): void => {
+      Object.defineProperty(container, 'clientWidth', { value: width, configurable: true });
+      Object.defineProperty(container, 'clientHeight', { value: height, configurable: true });
+    };
+
+    try {
+      mockPdfPage.getViewport.mockImplementation(({ scale }: { scale: number }) => ({
+        width: 600 * scale,
+        height: 800 * scale,
+        scale,
+      }));
+      // Start in landscape: 832x432
+      setSize(832, 432);
+      await engine.init(container, new Uint8Array([1, 2, 3]));
+      await engine.setPaginationMode('buttons');
+
+      const resetSpy = vi.fn();
+      (container as any).__onEngineResetZoom = resetSpy;
+
+      // Zoom in to 2.0
+      await engine.setZoom(2.0);
+      expect(engine.getZoom()).toBe(2.0);
+
+      // Rotate to portrait: 432x832
+      setSize(432, 832);
+      notifyResize!();
+      await vi.advanceTimersByTimeAsync(200);
+
+      // Should have reset zoom to 1.0 and invoked onEngineResetZoom
+      expect(engine.getZoom()).toBe(1.0);
+      expect(resetSpy).toHaveBeenCalled();
+    } finally {
+      vi.useRealTimers();
+      vi.unstubAllGlobals();
+    }
+  });
+
   it('should await the cancelled render before starting a new one on the same page', async () => {
     await engine.init(container, new Uint8Array([1, 2, 3]));
     await engine.setPaginationMode('buttons');
