@@ -108,6 +108,8 @@ describe('useDeviceScanner native import of picked files', () => {
         'azw',
         'azw3',
         'kf8',
+        'djvu',
+        'djv',
       ],
     });
 

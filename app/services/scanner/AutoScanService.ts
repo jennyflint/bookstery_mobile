@@ -29,6 +29,8 @@ const NATIVE_SCAN_EXTENSIONS = [
   '.azw',
   '.azw3',
   '.kf8',
+  '.djvu',
+  '.djv',
 ];
 const SANDBOX_BOOK_PATH = /^books\/[0-9a-f]{8,}_(.+)$/i;
 
@@ -94,7 +96,9 @@ export class AutoScanService {
       lower.endsWith('.mobi') ||
       lower.endsWith('.azw') ||
       lower.endsWith('.azw3') ||
-      lower.endsWith('.kf8')
+      lower.endsWith('.kf8') ||
+      lower.endsWith('.djvu') ||
+      lower.endsWith('.djv')
     );
   }
 
@@ -120,6 +124,9 @@ export class AutoScanService {
       lower.endsWith('.kf8')
     ) {
       return 'mobi';
+    }
+    if (lower.endsWith('.djvu') || lower.endsWith('.djv')) {
+      return 'djvu';
     }
     return null;
   }
@@ -610,7 +617,7 @@ export class AutoScanService {
       file_path: file.path,
       cover_path: null,
       locator:
-        file.format === 'pdf'
+        file.format === 'pdf' || file.format === 'djvu'
           ? '1'
           : file.format === 'fb2'
             ? 'fb2-p-0'
@@ -944,7 +951,7 @@ export class AutoScanService {
 
   private extractTitleFromFileName(fileName: string): string {
     return fileName
-      .replace(/\.(pdf|epub|fb2\.zip|fb2|mobi|azw3|azw|kf8)$/i, '')
+      .replace(/\.(pdf|epub|fb2\.zip|fb2|mobi|azw3|azw|kf8|djvu|djv)$/i, '')
       .replace(/[_-]+/g, ' ')
       .trim();
   }

@@ -3,6 +3,7 @@ import { PdfEngine } from '../services/engines/PdfEngine';
 import { EpubEngine } from '../services/engines/EpubEngine';
 import { Fb2Engine } from '../services/engines/Fb2Engine';
 import { MobiEngine } from '../services/engines/MobiEngine';
+import { DjvuEngine } from '../services/engines/DjvuEngine';
 import type { ReaderEngineInterface, BookRecord, ReaderPaginationMode } from '../types';
 import { useReaderStore } from '../stores/readerStore';
 import { useLibraryStore } from '../stores/libraryStore';
@@ -26,6 +27,8 @@ export function useReader() {
         return new Fb2Engine();
       case 'mobi':
         return new MobiEngine();
+      case 'djvu':
+        return new DjvuEngine();
       default:
         throw new Error(`Unsupported book format: ${format}`);
     }

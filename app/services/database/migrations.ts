@@ -3,7 +3,7 @@ CREATE TABLE IF NOT EXISTS books (
   id TEXT PRIMARY KEY,
   title TEXT NOT NULL,
   author TEXT,
-  format TEXT NOT NULL CHECK (format IN ('pdf', 'epub', 'fb2', 'mobi')),
+  format TEXT NOT NULL CHECK (format IN ('pdf', 'epub', 'fb2', 'mobi', 'djvu')),
   file_path TEXT NOT NULL,
   cover_path TEXT,
   locator TEXT NOT NULL,
@@ -66,7 +66,7 @@ CREATE INDEX IF NOT EXISTS idx_book_collection_collection ON book_collection(col
 CREATE TABLE IF NOT EXISTS highlights (
   id TEXT PRIMARY KEY,
   book_id TEXT NOT NULL REFERENCES books(id) ON DELETE CASCADE,
-  format TEXT NOT NULL CHECK (format IN ('pdf', 'epub', 'fb2', 'mobi')),
+  format TEXT NOT NULL CHECK (format IN ('pdf', 'epub', 'fb2', 'mobi', 'djvu')),
   locator TEXT NOT NULL,
   selected_text TEXT NOT NULL,
   color TEXT NOT NULL CHECK (color IN ('yellow', 'green', 'pink', 'blue', 'purple')),
@@ -82,7 +82,7 @@ export const SCHEMA_HIGHLIGHTS = `
 CREATE TABLE IF NOT EXISTS highlights (
   id TEXT PRIMARY KEY,
   book_id TEXT NOT NULL REFERENCES books(id) ON DELETE CASCADE,
-  format TEXT NOT NULL CHECK (format IN ('pdf', 'epub', 'fb2', 'mobi')),
+  format TEXT NOT NULL CHECK (format IN ('pdf', 'epub', 'fb2', 'mobi', 'djvu')),
   locator TEXT NOT NULL,
   selected_text TEXT NOT NULL,
   color TEXT NOT NULL CHECK (color IN ('yellow', 'green', 'pink', 'blue', 'purple')),
@@ -196,14 +196,14 @@ export async function migrateFormatCheckConstraints(db: {
   try {
     const booksMaster = await db.query("SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'books';");
     const booksSql = (booksMaster.values?.[0] as { sql?: string } | undefined)?.sql || '';
-    if (booksSql && !booksSql.includes("'mobi'")) {
+    if (booksSql && !booksSql.includes("'djvu'")) {
       await db.execute('PRAGMA foreign_keys = OFF;');
       await db.execute(`
-        CREATE TABLE books_mobi_mig (
+        CREATE TABLE books_format_mig (
           id TEXT PRIMARY KEY,
           title TEXT NOT NULL,
           author TEXT,
-          format TEXT NOT NULL CHECK (format IN ('pdf', 'epub', 'fb2', 'mobi')),
+          format TEXT NOT NULL CHECK (format IN ('pdf', 'epub', 'fb2', 'mobi', 'djvu')),
           file_path TEXT NOT NULL,
           cover_path TEXT,
           locator TEXT NOT NULL,
@@ -244,11 +244,11 @@ export async function migrateFormatCheckConstraints(db: {
       ].join(', ');
 
       await db.execute(`
-        INSERT INTO books_mobi_mig (id, title, author, format, file_path, cover_path, locator, progress_percentage, total_items, last_read_at, updated_at, is_pinned, pinned_at, file_size, file_hash)
+        INSERT INTO books_format_mig (id, title, author, format, file_path, cover_path, locator, progress_percentage, total_items, last_read_at, updated_at, is_pinned, pinned_at, file_size, file_hash)
         SELECT ${selectCols} FROM books;
       `);
       await db.execute('DROP TABLE books;');
-      await db.execute('ALTER TABLE books_mobi_mig RENAME TO books;');
+      await db.execute('ALTER TABLE books_format_mig RENAME TO books;');
       await db.execute('CREATE INDEX IF NOT EXISTS idx_books_updated_at ON books(updated_at);');
       await db.execute('CREATE INDEX IF NOT EXISTS idx_books_pinned ON books(is_pinned DESC, pinned_at DESC);');
       await db.execute('PRAGMA foreign_keys = ON;');
@@ -260,13 +260,13 @@ export async function migrateFormatCheckConstraints(db: {
   try {
     const hlMaster = await db.query("SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'highlights';");
     const hlSql = (hlMaster.values?.[0] as { sql?: string } | undefined)?.sql || '';
-    if (hlSql && !hlSql.includes("'mobi'")) {
+    if (hlSql && !hlSql.includes("'djvu'")) {
       await db.execute('PRAGMA foreign_keys = OFF;');
       await db.execute(`
-        CREATE TABLE highlights_mobi_mig (
+        CREATE TABLE highlights_format_mig (
           id TEXT PRIMARY KEY,
           book_id TEXT NOT NULL REFERENCES books(id) ON DELETE CASCADE,
-          format TEXT NOT NULL CHECK (format IN ('pdf', 'epub', 'fb2', 'mobi')),
+          format TEXT NOT NULL CHECK (format IN ('pdf', 'epub', 'fb2', 'mobi', 'djvu')),
           locator TEXT NOT NULL,
           selected_text TEXT NOT NULL,
           color TEXT NOT NULL CHECK (color IN ('yellow', 'green', 'pink', 'blue', 'purple')),
@@ -276,11 +276,11 @@ export async function migrateFormatCheckConstraints(db: {
         );
       `);
       await db.execute(`
-        INSERT INTO highlights_mobi_mig (id, book_id, format, locator, selected_text, color, note, created_at, updated_at)
+        INSERT INTO highlights_format_mig (id, book_id, format, locator, selected_text, color, note, created_at, updated_at)
         SELECT id, book_id, format, locator, selected_text, color, note, created_at, updated_at FROM highlights;
       `);
       await db.execute('DROP TABLE highlights;');
-      await db.execute('ALTER TABLE highlights_mobi_mig RENAME TO highlights;');
+      await db.execute('ALTER TABLE highlights_format_mig RENAME TO highlights;');
       await db.execute('CREATE INDEX IF NOT EXISTS idx_highlights_book ON highlights(book_id, created_at DESC);');
       await db.execute('PRAGMA foreign_keys = ON;');
     }

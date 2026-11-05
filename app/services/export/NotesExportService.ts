@@ -8,7 +8,7 @@ import type {
 } from '../../types';
 
 function formatLocatorLabel(locator: string, format: string): string {
-  if (format === 'pdf') {
+  if (format === 'pdf' || format === 'djvu') {
     try {
       const parsed = JSON.parse(locator);
       if (parsed && typeof parsed.page === 'number') {

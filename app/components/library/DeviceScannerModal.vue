@@ -273,7 +273,7 @@ const handleFileChosen = async (event: Event) => {
           <input
             ref="fileInputRef"
             type="file"
-            accept=".pdf,.epub,.fb2,.zip,.mobi,.azw,.azw3,.kf8"
+            accept=".pdf,.epub,.fb2,.zip,.mobi,.azw,.azw3,.kf8,.djvu,.djv"
             multiple
             class="hidden"
             @change="handleFileChosen"

@@ -278,6 +278,18 @@ const unpinnedBooks = computed((): BookRecord[] => {
         >
           {{ t('library.filterMobi') }}
         </button>
+        <button
+          type="button"
+          class="whitespace-nowrap rounded-xl px-4 py-2 text-xs font-semibold transition-all"
+          :class="
+            libraryStore.formatFilter === 'djvu'
+              ? 'bg-zinc-900 text-white shadow-sm'
+              : 'bg-zinc-100 text-zinc-600 hover:bg-zinc-200'
+          "
+          @click="setFormat('djvu')"
+        >
+          {{ t('library.filterDjvu') }}
+        </button>
       </div>
 
       <BookSortControl

@@ -275,4 +275,20 @@ describe('CoverExtractorService', () => {
       expect(result).toBeNull();
     });
   });
+
+  describe('DjVu cover extraction', () => {
+    it('should extract cover from valid DjVu buffer', async () => {
+      const { createSampleDjvu } = await import('../../../app/services/engines/DjvuParser');
+      const djvuBytes = createSampleDjvu(200, 300, 100, 'DjVu Cover Page');
+      const result = await service.extractCover('djvu', djvuBytes);
+      expect(result).not.toBeNull();
+      expect(result instanceof Uint8Array).toBe(true);
+    });
+
+    it('should return null when DjVu buffer is invalid', async () => {
+      const invalid = new Uint8Array([1, 2, 3, 4, 5]);
+      const result = await service.extractCover('djvu', invalid);
+      expect(result).toBeNull();
+    });
+  });
 });

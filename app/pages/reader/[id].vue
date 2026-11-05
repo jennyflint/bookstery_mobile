@@ -21,6 +21,7 @@ import { useAppLifecycle } from '../../composables/useAppLifecycle';
 import { useTextSelection } from '../../composables/useTextSelection';
 import { loadBookBytesNative, readBookViaFilesystem } from '../../services/BookFileLoader';
 import { createSampleMobi } from '../../services/engines/MobiParser';
+import { createSampleDjvu } from '../../services/engines/DjvuParser';
 import { TranslationService } from '../../services/translation/TranslationService';
 import type { EnginePageTapDetail, EngineSelectionDetail, TranslationResult } from '../../types';
 import ReaderViewport from '../../components/reader/ReaderViewport.vue';
@@ -240,6 +241,8 @@ startxref
           title: book.title,
           author: book.author || undefined,
         });
+      } else if (book.format === 'djvu') {
+        rawData = createSampleDjvu(600, 800, 100, `Bookstery DjVu: ${book.title}`);
       } else {
         rawData = new Uint8Array([0, 1, 2, 3]);
       }

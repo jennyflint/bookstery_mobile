@@ -165,6 +165,11 @@ export class PinchZoomController {
       return mobiScroll;
     }
 
+    const djvuScroll = this.wrapper.querySelector<HTMLElement>('.djvu-scroll-container');
+    if (djvuScroll && djvuScroll.scrollHeight > djvuScroll.clientHeight) {
+      return djvuScroll;
+    }
+
     const epubContainer = this.wrapper.querySelector<HTMLElement>('.epub-container');
     if (epubContainer && epubContainer.scrollHeight > epubContainer.clientHeight) {
       return epubContainer;

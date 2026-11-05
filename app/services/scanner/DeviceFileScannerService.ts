@@ -12,6 +12,8 @@ export class DeviceFileScannerService {
     '.azw',
     '.azw3',
     '.kf8',
+    '.djvu',
+    '.djv',
   ];
 
   determineFormat(fileName: string): BookFormat | null {
@@ -32,6 +34,9 @@ export class DeviceFileScannerService {
       lower.endsWith('.kf8')
     ) {
       return 'mobi';
+    }
+    if (lower.endsWith('.djvu') || lower.endsWith('.djv')) {
+      return 'djvu';
     }
     return null;
   }
@@ -163,7 +168,7 @@ export class DeviceFileScannerService {
     });
 
     const initialLocator =
-      format === 'pdf'
+      format === 'pdf' || format === 'djvu'
         ? '1'
         : format === 'fb2'
           ? 'fb2-p-0'

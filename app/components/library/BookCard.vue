@@ -74,6 +74,8 @@ const formatBadgeClass = (format: string) => {
       return 'bg-emerald-100 text-emerald-700 border-emerald-200';
     case 'mobi':
       return 'bg-amber-100 text-amber-700 border-amber-200';
+    case 'djvu':
+      return 'bg-cyan-100 text-cyan-700 border-cyan-200';
     default:
       return 'bg-zinc-100 text-zinc-700 border-zinc-200';
   }

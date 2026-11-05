@@ -83,6 +83,9 @@ describe('AutoScanService', () => {
       expect(service.isSupportedFile('classic.fb2')).toBe(true);
       expect(service.isSupportedFile('archive.fb2.zip')).toBe(true);
       expect(service.isSupportedFile('TALE.FB2.ZIP')).toBe(true);
+      expect(service.isSupportedFile('kindle.mobi')).toBe(true);
+      expect(service.isSupportedFile('scanned.djvu')).toBe(true);
+      expect(service.isSupportedFile('DOCUMENT.DJV')).toBe(true);
     });
 
     it('should ignore unsupported file formats such as txt, docx, jpg, png', () => {

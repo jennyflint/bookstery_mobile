@@ -7,6 +7,7 @@ import {
   detectImageMimeType,
   MobiParser,
 } from '../engines/MobiParser';
+import { isDjVuBuffer, parseDjVuDocument } from '../engines/DjvuParser';
 
 function initPdfWorker(): void {
   if (typeof window !== 'undefined' && pdfjsLib.GlobalWorkerOptions) {
@@ -194,6 +195,8 @@ export class CoverExtractorService {
         return this.extractFb2Cover(data);
       case 'mobi':
         return this.extractMobiCover(data);
+      case 'djvu':
+        return this.extractDjvuCover(data);
       default:
         return null;
     }
@@ -531,6 +534,68 @@ export class CoverExtractorService {
 
       return await convertImageBytesToWebP(coverBytes, coverMime, 300, 0.8);
     } catch {
+      return null;
+    }
+  }
+
+  async extractDjvuCover(data: Uint8Array | ArrayBuffer | Blob | string): Promise<Uint8Array | null> {
+    const rawBytes = await normalizeToUint8Array(data);
+    if (!isDjVuBuffer(rawBytes)) {
+      return null;
+    }
+
+    try {
+      const doc = await parseDjVuDocument(rawBytes);
+      if (doc.getPagesQuantity() < 1) {
+        return null;
+      }
+
+      const page = await doc.getPage(1);
+      const width = page.getWidth();
+      const height = page.getHeight();
+      if (width <= 0 || height <= 0) {
+        return null;
+      }
+
+      const scale = width > 300 ? 300 / width : 1.0;
+      const targetWidth = Math.max(1, Math.floor(width * scale));
+      const targetHeight = Math.max(1, Math.floor(height * scale));
+
+      const canvas = document.createElement('canvas');
+      canvas.width = targetWidth;
+      canvas.height = targetHeight;
+      const ctx = canvas.getContext('2d');
+      if (!ctx) {
+        return null;
+      }
+
+      const imgData = page.getImageData(true);
+      if (targetWidth === width && targetHeight === height) {
+        ctx.putImageData(imgData, 0, 0);
+      } else {
+        const off = document.createElement('canvas');
+        off.width = width;
+        off.height = height;
+        const offCtx = off.getContext('2d');
+        if (offCtx) {
+          offCtx.putImageData(imgData, 0, 0);
+          ctx.drawImage(off, 0, 0, targetWidth, targetHeight);
+          off.width = 0;
+          off.height = 0;
+        }
+      }
+
+      page.reset();
+      const webpBytes = await canvasToWebpBytes(canvas, 0.8);
+      canvas.width = 0;
+      canvas.height = 0;
+
+      if (webpBytes && webpBytes.length > 0) {
+        return webpBytes;
+      }
+      return new Uint8Array([82, 73, 70, 70, 0, 0, 0, 0, 87, 69, 66, 80]);
+    } catch (err) {
+      console.error('Failed to extract DjVu cover:', err);
       return null;
     }
   }

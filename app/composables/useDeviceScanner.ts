@@ -92,6 +92,8 @@ export function useDeviceScanner() {
                 'azw',
                 'azw3',
                 'kf8',
+                'djvu',
+                'djv',
               ],
             });
             for (const file of downloadScan.files) {
@@ -225,7 +227,7 @@ export function useDeviceScanner() {
                 file_path: normalizedPath,
                 cover_path: null,
                 locator:
-                  format === 'pdf'
+                  format === 'pdf' || format === 'djvu'
                     ? '1'
                     : format === 'fb2'
                       ? 'fb2-p-0'
@@ -395,7 +397,7 @@ export function useDeviceScanner() {
       });
 
       const initialLocator =
-        format === 'pdf'
+        format === 'pdf' || format === 'djvu'
           ? '1'
           : format === 'fb2'
             ? 'fb2-p-0'
@@ -489,7 +491,7 @@ export function useDeviceScanner() {
       file_path: copy.relativePath,
       cover_path: null,
       locator:
-        format === 'pdf'
+        format === 'pdf' || format === 'djvu'
           ? '1'
           : format === 'fb2'
             ? 'fb2-p-0'
