@@ -18,8 +18,10 @@ const config: CapacitorConfig = {
         'https://www.googleapis.com/auth/drive.file',
         'https://www.googleapis.com/auth/drive.appdata',
       ],
+      clientId: googleClientId,
+      androidClientId: googleClientId,
       serverClientId: googleClientId,
-      forceCodeForRefreshToken: false,
+      forceCodeForRefreshToken: true,
     },
   },
 };

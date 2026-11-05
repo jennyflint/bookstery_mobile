@@ -163,4 +163,42 @@ describe('GoogleAuthService', () => {
       'User is not authenticated with Google',
     );
   });
+
+  it('should report status code 10 and DEVELOPER_ERROR hint on signIn failure', async () => {
+    const errorWithCode = Object.assign(new Error('Something went wrong'), { code: '10' });
+    mockGoogleAuth.signIn.mockRejectedValueOnce(errorWithCode);
+
+    await expect(authService.signIn()).rejects.toThrow(
+      /Google Sign-In failed \(code 10\): Something went wrong.*DEVELOPER_ERROR/,
+    );
+  });
+
+  it('should report status code 12500 and SIGN_IN_FAILED hint on signIn failure', async () => {
+    const errorWithCode = Object.assign(new Error('Sign in failed'), { code: '12500' });
+    mockGoogleAuth.signIn.mockRejectedValueOnce(errorWithCode);
+
+    await expect(authService.signIn()).rejects.toThrow(
+      /Google Sign-In failed \(code 12500\): Sign in failed.*SIGN_IN_FAILED/,
+    );
+  });
+
+  it('should report status code 12501 and SIGN_IN_CANCELLED hint on cancellation', async () => {
+    const errorWithCode = Object.assign(new Error('User cancelled'), { code: '12501' });
+    mockGoogleAuth.signIn.mockRejectedValueOnce(errorWithCode);
+
+    await expect(authService.signIn()).rejects.toThrow(
+      /Google Sign-In failed \(code 12501\): User cancelled.*SIGN_IN_CANCELLED/,
+    );
+  });
+
+  it('should verify capacitor.config.ts sets all required GoogleAuth client IDs and forceCodeForRefreshToken', async () => {
+    const capacitorConfig = (await import('../../../capacitor.config')).default;
+    const googleAuth = capacitorConfig.plugins?.GoogleAuth;
+
+    expect(googleAuth).toBeDefined();
+    expect(googleAuth?.clientId).toBeDefined();
+    expect(googleAuth?.androidClientId).toBeDefined();
+    expect(googleAuth?.serverClientId).toBeDefined();
+    expect(googleAuth?.forceCodeForRefreshToken).toBe(true);
+  });
 });

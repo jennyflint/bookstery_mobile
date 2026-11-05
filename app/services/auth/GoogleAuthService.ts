@@ -128,8 +128,36 @@ export class GoogleAuthService {
       });
       return user;
     } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : String(err);
-      throw new Error(`Google Sign-In failed: ${message}`);
+      const errorObj = (typeof err === 'object' && err !== null ? err : {}) as {
+        message?: string;
+        code?: string | number;
+      };
+      const rawMessage =
+        err instanceof Error
+          ? err.message
+          : errorObj.message
+            ? String(errorObj.message)
+            : String(err);
+      const code =
+        errorObj.code !== undefined && errorObj.code !== null
+          ? String(errorObj.code)
+          : undefined;
+
+      let errorMessage = code
+        ? `Google Sign-In failed (code ${code}): ${rawMessage}`
+        : `Google Sign-In failed: ${rawMessage}`;
+
+      if (code === '10') {
+        errorMessage +=
+          ' (DEVELOPER_ERROR: verify Web Client ID in .env / strings.xml and SHA-1 fingerprint in Google Cloud Console)';
+      } else if (code === '12500') {
+        errorMessage +=
+          ' (SIGN_IN_FAILED: verify OAuth Consent Screen Test Users and SHA-1)';
+      } else if (code === '12501') {
+        errorMessage += ' (SIGN_IN_CANCELLED: user cancelled sign-in)';
+      }
+
+      throw new Error(errorMessage);
     }
   }
 

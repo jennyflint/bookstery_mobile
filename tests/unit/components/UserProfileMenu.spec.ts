@@ -54,4 +54,22 @@ describe('UserProfileMenu Component', () => {
 
     consoleSpy.mockRestore();
   });
+
+  it('handles user cancellation (code 12501) cleanly without displaying an error banner', async () => {
+    const errorWithCode = Object.assign(new Error('User cancelled sign-in'), { code: '12501' });
+    mockGoogleAuth.signIn.mockRejectedValueOnce(errorWithCode);
+    const infoSpy = vi.spyOn(console, 'info').mockImplementation(() => {});
+
+    const wrapper = mount(UserProfileMenu);
+    const signInBtn = wrapper.find('[data-testid="google-sign-in-btn"]');
+    await signInBtn.trigger('click');
+    await flushPromises();
+
+    const authStore = useAuthStore();
+    expect(authStore.isAuthenticated).toBe(false);
+    expect(infoSpy).toHaveBeenCalledWith('Google Sign-In cancelled by user');
+    expect(wrapper.find('[role="alert"]').exists()).toBe(false);
+
+    infoSpy.mockRestore();
+  });
 });

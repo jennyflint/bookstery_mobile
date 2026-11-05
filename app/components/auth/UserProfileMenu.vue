@@ -26,6 +26,10 @@ const handleSignIn = async () => {
     await signIn();
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : String(err);
+    if (message.includes('12501') || message.includes('SIGN_IN_CANCELLED')) {
+      console.info('Google Sign-In cancelled by user');
+      return;
+    }
     console.error('Sign-in error:', message);
     signInError.value = message;
   }
