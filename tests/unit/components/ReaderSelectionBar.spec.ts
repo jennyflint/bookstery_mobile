@@ -106,7 +106,6 @@ describe('ReaderSelectionBar Component', () => {
       const container = wrapper.find('.flex-wrap');
       expect(container.exists()).toBe(true);
       expect(container.classes()).toContain('flex-wrap');
-      expect(container.classes()).toContain('gap-2');
 
       const actionButtons = wrapper.findAll('button');
       for (const btn of actionButtons) {

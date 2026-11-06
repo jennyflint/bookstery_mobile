@@ -9,6 +9,7 @@ import { useAndroidBackButton, BACK_PRIORITY } from '../../composables/useAndroi
 import BookCard from './BookCard.vue';
 import BookActionMenu from './BookActionMenu.vue';
 import CollectionAssignModal from './CollectionAssignModal.vue';
+import BookDeleteConfirmModal from './BookDeleteConfirmModal.vue';
 import BookSortControl from './BookSortControl.vue';
 
 const emit = defineEmits<{
@@ -26,9 +27,15 @@ const selectedMenuBook = ref<BookRecord | null>(null);
 const isActionMenuOpen = ref(false);
 const selectedAssignBook = ref<BookRecord | null>(null);
 const isAssignModalOpen = ref(false);
+const pendingDeleteBook = ref<BookRecord | null>(null);
+const isDeleteConfirmOpen = ref(false);
 const { registerBackHandler } = useAndroidBackButton();
 
 registerBackHandler(() => {
+  if (isDeleteConfirmOpen.value) {
+    handleCloseDeleteConfirm();
+    return true;
+  }
   if (isActionMenuOpen.value) {
     handleCloseMenu();
     return true;
@@ -44,9 +51,27 @@ const setFormat = (format: 'all' | BookFormat): void => {
   libraryStore.setFormatFilter(format);
 };
 
-const handleDelete = async (id: string): Promise<void> => {
-  await libraryStore.removeBook(id);
+const handleDelete = (id: string): void => {
+  const book =
+    libraryStore.books.find((b) => b.id === id) ||
+    collectionStore.currentBooks.find((b) => b.id === id) ||
+    null;
+  pendingDeleteBook.value = book;
+  isDeleteConfirmOpen.value = true;
+};
+
+const handleCloseDeleteConfirm = (): void => {
+  isDeleteConfirmOpen.value = false;
+  pendingDeleteBook.value = null;
+};
+
+const handleConfirmDelete = async (bookId: string): Promise<void> => {
+  handleCloseDeleteConfirm();
+  await libraryStore.removeBook(bookId);
   await collectionStore.fetchCollections();
+  if (activeCollectionId.value !== 'all') {
+    await collectionStore.loadCollectionBooks(activeCollectionId.value);
+  }
 };
 
 const handleOpenMenu = (book: BookRecord): void => {
@@ -418,6 +443,13 @@ const unpinnedBooks = computed((): BookRecord[] => {
       :book="selectedAssignBook"
       @close="handleCloseAssignModal"
       @saved="handleCollectionsSaved"
+    />
+
+    <BookDeleteConfirmModal
+      :is-open="isDeleteConfirmOpen"
+      :book="pendingDeleteBook"
+      @close="handleCloseDeleteConfirm"
+      @confirm="handleConfirmDelete"
     />
   </div>
 </template>

@@ -158,7 +158,8 @@ if (typeof window !== 'undefined') {
     });
   }
 
-  (globalThis as unknown as { useI18n: () => { t: (k: string) => string } }).useI18n = () => ({
+  (globalThis as unknown as { useI18n: () => { t: (k: string) => string; locale: { value: string } } }).useI18n = () => ({
     t: (key: string) => key,
+    locale: { value: 'uk' },
   });
 }
