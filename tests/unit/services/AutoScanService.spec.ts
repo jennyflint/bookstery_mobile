@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import {
   AutoScanService,
+  DEFAULT_DOWNLOAD_DIR,
   deriveDisplayNameFromUri,
 } from '../../../app/services/scanner/AutoScanService';
 import * as NativeBridgeModule from '../../../app/services/NativeReaderBridge';
@@ -284,6 +285,63 @@ describe('AutoScanService', () => {
 
       expect(summary.scannedFilesCount).toBe(0);
       expect(readdirSpy).toHaveBeenCalled();
+    });
+
+    it('should define DEFAULT_DOWNLOAD_DIR as /storage/emulated/0/Download', () => {
+      expect(DEFAULT_DOWNLOAD_DIR).toBe('/storage/emulated/0/Download');
+    });
+
+    it('should automatically include DEFAULT_DOWNLOAD_DIR on native platform when not configured', async () => {
+      vi.spyOn(Capacitor, 'isNativePlatform').mockReturnValue(true);
+      mockDirectoryRepo.getActiveDirectories.mockResolvedValue([]);
+
+      const scanInternalSpy = vi
+        .spyOn(service as any, 'scanDirectoryInternal')
+        .mockResolvedValue((service as any).createEmptySummary());
+
+      await service.scanAllActiveDirectories();
+
+      expect(scanInternalSpy).toHaveBeenCalledTimes(1);
+      expect(scanInternalSpy).toHaveBeenCalledWith(DEFAULT_DOWNLOAD_DIR, true, undefined, 0);
+    });
+
+    it('should not duplicate DEFAULT_DOWNLOAD_DIR on native platform when already configured', async () => {
+      vi.spyOn(Capacitor, 'isNativePlatform').mockReturnValue(true);
+      mockDirectoryRepo.getActiveDirectories.mockResolvedValue([
+        {
+          id: 5,
+          uri: '/storage/emulated/0/Download/',
+          display_name: 'Downloads',
+          is_active: 1,
+          last_scanned_at: null,
+          created_at: 100,
+        },
+      ]);
+
+      const scanInternalSpy = vi
+        .spyOn(service as any, 'scanDirectoryInternal')
+        .mockResolvedValue((service as any).createEmptySummary());
+
+      await service.scanAllActiveDirectories();
+
+      expect(scanInternalSpy).toHaveBeenCalledTimes(1);
+      expect(scanInternalSpy).toHaveBeenCalledWith(
+        '/storage/emulated/0/Download/',
+        true,
+        undefined,
+        0,
+      );
+    });
+
+    it('should return empty summary on web platform when activeDirs is empty', async () => {
+      vi.spyOn(Capacitor, 'isNativePlatform').mockReturnValue(false);
+      mockDirectoryRepo.getActiveDirectories.mockResolvedValue([]);
+
+      const scanInternalSpy = vi.spyOn(service as any, 'scanDirectoryInternal');
+      const summary = await service.scanAllActiveDirectories();
+
+      expect(summary.scannedFilesCount).toBe(0);
+      expect(scanInternalSpy).not.toHaveBeenCalled();
     });
   });
 

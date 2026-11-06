@@ -1,4 +1,5 @@
 import { defineStore } from 'pinia';
+import { Capacitor } from '@capacitor/core';
 import { ScanDirectoryRepository } from '../services/database/ScanDirectoryRepository';
 import { AutoScanService } from '../services/scanner/AutoScanService';
 import { useLibraryStore } from './libraryStore';
@@ -20,6 +21,7 @@ export const useScannerStore = defineStore('scanner', {
     showNotification: false,
     isInitialized: false,
     permissionDenied: false,
+    lastScanCompletedAt: 0,
   }),
 
   getters: {
@@ -84,10 +86,28 @@ export const useScannerStore = defineStore('scanner', {
 
     async runStartupScan(): Promise<ScanResultSummary | null> {
       await this.init();
-      if (this.settings.auto_scan_on_startup === 0 || !this.hasActiveDirectories) {
+      if (this.settings.auto_scan_on_startup === 0) {
         return null;
       }
-      return this.executeScan(false);
+      if (this.isScanning) {
+        return null;
+      }
+      const now = Date.now();
+      if (this.lastScanCompletedAt > 0 && now - this.lastScanCompletedAt < 5000) {
+        return null;
+      }
+
+      const hasAccess = await AutoScanService.getInstance().ensureFilesystemPermissions(false);
+      if (!hasAccess) {
+        this.permissionDenied = true;
+        return null;
+      }
+      this.permissionDenied = false;
+
+      if (Capacitor.isNativePlatform() || this.hasActiveDirectories) {
+        return this.executeScan(false);
+      }
+      return null;
     },
 
     async runManualScan(): Promise<ScanResultSummary> {
@@ -150,6 +170,7 @@ export const useScannerStore = defineStore('scanner', {
       } finally {
         this.isScanning = false;
         this.currentCheckingFile = '';
+        this.lastScanCompletedAt = Date.now();
       }
     },
 

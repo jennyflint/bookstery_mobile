@@ -9,7 +9,9 @@ export default defineNuxtPlugin((nuxtApp: { hook: (name: string, cb: () => void)
       await scannerStore.init();
       const { setupLifecycleListener } = useAutoScan();
       await setupLifecycleListener();
-      await scannerStore.runStartupScan();
+      scannerStore.runStartupScan().catch((err: unknown) => {
+        console.warn('[auto-scan] Startup background scan error:', err);
+      });
     }, 150);
   });
 });

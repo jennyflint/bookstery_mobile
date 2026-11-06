@@ -7,7 +7,10 @@ import {
   toWebViewUrl,
 } from '../NativeReaderBridge';
 import { FileHashService, computeCanonicalBookId } from './FileHashService';
-import { ScanDirectoryRepository, normalizeDirectoryUri } from '../database/ScanDirectoryRepository';
+import {
+  ScanDirectoryRepository,
+  normalizeDirectoryUri,
+} from '../database/ScanDirectoryRepository';
 import { SqliteService } from '../database/SqliteService';
 import { BookRepository } from '../database/BookRepository';
 import { CoverGenerationQueueService } from '../covers/CoverGenerationQueueService';
@@ -33,6 +36,7 @@ const NATIVE_SCAN_EXTENSIONS = [
   '.djv',
 ];
 const SANDBOX_BOOK_PATH = /^books\/[0-9a-f]{8,}_(.+)$/i;
+export const DEFAULT_DOWNLOAD_DIR = '/storage/emulated/0/Download';
 
 export function deriveDisplayNameFromUri(uri: string): string {
   try {
@@ -249,12 +253,19 @@ export class AutoScanService {
         }
 
         if (isNativeReaderBridgeAvailable()) {
-          const permission = await NativeReaderBridge.checkStoragePermission().catch(() => ({ granted: false }));
+          const permission = await NativeReaderBridge.checkStoragePermission().catch(() => ({
+            granted: false,
+          }));
           if (permission.granted) {
-            const hasDownloadDir = files.some((f) => f.path.startsWith('/storage/emulated/0/Download'));
+            const hasDownloadDir = files.some((f) =>
+              f.path.startsWith('/storage/emulated/0/Download'),
+            );
             if (!hasDownloadDir) {
               try {
-                const downloadFiles = await this.crawlDirectoryNative('/storage/emulated/0/Download', true);
+                const downloadFiles = await this.crawlDirectoryNative(
+                  '/storage/emulated/0/Download',
+                  true,
+                );
                 if (downloadFiles && downloadFiles.length > 0) {
                   files.push(...downloadFiles);
                 }
@@ -284,8 +295,9 @@ export class AutoScanService {
         }
 
         const originalFile =
-          (book.file_size ? fileMapByNameAndSize.get(`${originalName}|${book.file_size}`) : undefined) ??
-          fileMapByName.get(originalName);
+          (book.file_size
+            ? fileMapByNameAndSize.get(`${originalName}|${book.file_size}`)
+            : undefined) ?? fileMapByName.get(originalName);
 
         if (originalFile) {
           const oldSandboxPath = book.file_path;
@@ -355,7 +367,28 @@ export class AutoScanService {
     onProgress?: (scannedFilesCount: number, currentFileName: string) => void,
   ): Promise<ScanResultSummary> {
     const settings = await this.directoryRepository.getSettings();
-    const activeDirs = await this.directoryRepository.getActiveDirectories();
+    let activeDirs = await this.directoryRepository.getActiveDirectories();
+
+    if (Capacitor.isNativePlatform()) {
+      const normalizedDefault = normalizeDirectoryUri(DEFAULT_DOWNLOAD_DIR);
+      const hasDownload = activeDirs.some(
+        (dir) => normalizeDirectoryUri(dir.uri) === normalizedDefault,
+      );
+      if (!hasDownload) {
+        activeDirs = [
+          ...activeDirs,
+          {
+            id: -1,
+            uri: DEFAULT_DOWNLOAD_DIR,
+            display_name: 'Downloads',
+            is_active: 1,
+            last_scanned_at: null,
+            created_at: 0,
+          },
+        ];
+      }
+    }
+
     if (activeDirs.length === 0) {
       return this.createEmptySummary();
     }
@@ -377,7 +410,9 @@ export class AutoScanService {
       combinedSummary.failedCount += dirSummary.failedCount;
       combinedSummary.newBookIds.push(...dirSummary.newBookIds);
 
-      await this.directoryRepository.updateLastScanned(dir.id, Date.now());
+      if (dir.id > 0) {
+        await this.directoryRepository.updateLastScanned(dir.id, Date.now());
+      }
       await this.yieldThread();
     }
 
@@ -637,7 +672,11 @@ export class AutoScanService {
     };
 
     await this.sqliteService.upsertBook(newBook);
-    await this.sqliteService.updateFilePathAndSize(newBook.id, newBook.file_path, newBook.file_size);
+    await this.sqliteService.updateFilePathAndSize(
+      newBook.id,
+      newBook.file_path,
+      newBook.file_size,
+    );
 
     existingById.set(newBook.id, newBook);
     nameMap.set(`${file.name.trim().toLowerCase()}|${file.size}`, newBook);
@@ -749,7 +788,9 @@ export class AutoScanService {
         : currentSubPath
       : basePath;
 
-    let readResult: { files: Array<{ name: string; type: string; size?: number; mtime?: number; uri?: string }> } | null = null;
+    let readResult: {
+      files: Array<{ name: string; type: string; size?: number; mtime?: number; uri?: string }>;
+    } | null = null;
     try {
       readResult = await Filesystem.readdir({
         path: targetPath,
@@ -933,11 +974,7 @@ export class AutoScanService {
       return { path: cleaned.replace(/^\/+/, '').slice(5), directory: Directory.Data };
     }
 
-    if (
-      lower === 'externalstorage' ||
-      lower === 'external_storage' ||
-      lower === 'external'
-    ) {
+    if (lower === 'externalstorage' || lower === 'external_storage' || lower === 'external') {
       return { path: '', directory: Directory.ExternalStorage };
     }
     if (lower.startsWith('externalstorage/')) {

@@ -314,3 +314,10 @@ npm run cap:sync
 ```path
 \\wsl$\Ubuntu\var\www\bookstery_mobile\android
 ```
+
+
+## Generate SHA for google oauth
+
+```bash
+cd android && ./gradlew processDebugResources
+```

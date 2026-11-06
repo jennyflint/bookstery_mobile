@@ -144,7 +144,9 @@
     "folderPathRequired": "Будь ласка, вкажіть коректний шлях до папки.",
     "foundNewBooksNotification": "Знайдено {count} нових книг у вашій бібліотеці",
     "viewNewBooks": "Переглянути книги",
-    "dismiss": "Закрити"
+    "dismiss": "Закрити",
+    "scanningTooltipTitle": "Пошук книг у фоні... ({count})",
+    "scanningTooltipPreparing": "Перевірка папки Downloads та сховища..."
   },
   "reader": {
     "loading": "Завантаження книги...",

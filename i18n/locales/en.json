@@ -144,7 +144,9 @@
     "folderPathRequired": "Please enter a valid folder path.",
     "foundNewBooksNotification": "Found {count} new books in your library",
     "viewNewBooks": "View Books",
-    "dismiss": "Dismiss"
+    "dismiss": "Dismiss",
+    "scanningTooltipTitle": "Scanning books in background... ({count})",
+    "scanningTooltipPreparing": "Checking Downloads and storage folders..."
   },
   "reader": {
     "loading": "Loading book...",
