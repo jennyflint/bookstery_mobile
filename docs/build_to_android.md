@@ -319,5 +319,5 @@ npm run cap:sync
 ## Generate SHA for google oauth
 
 ```bash
-cd android && ./gradlew processDebugResources
+./gradlew signingReport
 ```
