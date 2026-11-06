@@ -38,6 +38,33 @@ describe('ReaderHeader Component', () => {
     expect(wrapper.emitted('back')).toBeTruthy();
   });
 
+  it('should render book title in row below the header buttons', () => {
+    const readerStore = useReaderStore();
+    readerStore.setBook({
+      id: 'book-title-test',
+      title: 'A Very Interesting Novel',
+      author: 'Author',
+      format: 'epub',
+      file_path: 'book.epub',
+      cover_path: null,
+      locator: '1',
+      progress_percentage: 0,
+      total_items: 10,
+      last_read_at: 0,
+      updated_at: 0,
+    });
+
+    const wrapper = createWrapper();
+    const titleEl = wrapper.find('h2');
+    expect(titleEl.exists()).toBe(true);
+    expect(titleEl.text()).toBe('A Very Interesting Novel');
+    expect(titleEl.classes()).toContain('truncate');
+
+    // Header has flex-col with two child rows
+    const header = wrapper.find('header');
+    expect(header.classes()).toContain('flex-col');
+  });
+
   it('should not show reflow toggle for non-pdf books (e.g. epub)', () => {
     const readerStore = useReaderStore();
     readerStore.setBook({
