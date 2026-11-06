@@ -269,7 +269,7 @@ const handleDismiss = () => {
         the active native selection before the action runs; touchstart.stop keeps bar
         gestures away from reader gesture handlers.
       -->
-      <div class="mx-auto max-w-2xl flex flex-wrap items-center justify-center gap-2">
+      <div class="flex flex-wrap items-center justify-center">
         <!-- Color swatches -->
         <div class="flex items-center gap-2 px-2.5 py-1.5 rounded-xl bg-zinc-800/90 border border-zinc-700/60 shadow-inner">
           <button
