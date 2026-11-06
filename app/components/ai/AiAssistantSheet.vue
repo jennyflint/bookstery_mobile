@@ -86,14 +86,14 @@ const renderMarkdown = (text: string): string => {
     >
       <div
         v-if="aiStore.isSheetOpen"
-        class="fixed inset-x-0 bottom-0 z-50 mx-auto max-h-[85vh] w-full max-w-2xl overflow-hidden rounded-t-[2rem] border-t border-gray-200 bg-white shadow-2xl dark:border-zinc-800 dark:bg-zinc-900"
+        class="fixed inset-x-0 bottom-0 z-50 mx-auto flex max-h-[85vh] w-full max-w-2xl flex-col overflow-hidden rounded-t-[2rem] border-t border-gray-200 bg-white shadow-2xl dark:border-zinc-800 dark:bg-zinc-900"
         :style="{ paddingBottom: 'calc(1rem + env(safe-area-inset-bottom, 0px))' }"
       >
-        <div class="flex items-center justify-center pt-3 pb-1">
+        <div class="flex shrink-0 items-center justify-center pt-3 pb-1">
           <div class="h-1.5 w-12 rounded-full bg-zinc-400/50 dark:bg-zinc-600" />
         </div>
 
-        <div class="flex items-center justify-between border-b border-zinc-200/80 px-6 py-3 dark:border-zinc-800">
+        <div class="flex shrink-0 items-center justify-between border-b border-zinc-200/80 px-6 py-3 dark:border-zinc-800">
           <div class="flex items-center gap-2.5">
             <div class="flex h-7 w-7 items-center justify-center rounded-lg bg-[#C8E695] text-[#3E5725]">
               <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -137,7 +137,11 @@ const renderMarkdown = (text: string): string => {
           </div>
         </div>
 
-        <div class="max-h-[55vh] overflow-y-auto px-6 py-4">
+        <div
+          class="min-h-0 flex-1 overflow-y-auto overscroll-contain px-6 py-4 touch-pan-y"
+          :style="{ WebkitOverflowScrolling: 'touch' }"
+          @touchmove.stop
+        >
           <div v-if="aiStore.lastError" class="rounded-2xl bg-red-50 p-4 text-xs font-medium text-red-800 dark:bg-red-950/40 dark:text-red-300">
             <p class="font-bold">Error:</p>
             <p class="mt-1">{{ aiStore.lastError }}</p>
@@ -156,7 +160,7 @@ const renderMarkdown = (text: string): string => {
           </div>
         </div>
 
-        <div class="flex flex-wrap items-center justify-between gap-2 border-t border-zinc-200/80 px-6 py-3 dark:border-zinc-800">
+        <div class="flex shrink-0 flex-wrap items-center justify-between gap-2 border-t border-zinc-200/80 px-6 py-3 dark:border-zinc-800">
           <div class="flex items-center gap-2">
             <button
               type="button"

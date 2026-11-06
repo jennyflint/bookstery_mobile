@@ -238,4 +238,49 @@ describe('AiDictionaryModal', () => {
       expect.stringContaining('resilience — стійкість, життєстійкість'),
     );
   });
+
+  it('should have proper shrink-0 headers/footers and scrollable container with word wrapping', async () => {
+    const aiStore = useAiStore();
+    aiStore.isDictionaryModalOpen = true;
+    aiStore.isDictionaryLoading = false;
+    aiStore.dictionaryEntry = mockEntry;
+
+    const wrapper = mount(AiDictionaryModal, {
+      global: {
+        mocks: {
+          t: (k: string) => k,
+        },
+      },
+    });
+
+    await flushPromises();
+
+    // Header has shrink-0
+    const header = wrapper.find('header');
+    expect(header.classes()).toContain('shrink-0');
+
+    // Scrollable container
+    const contentArea = wrapper.find('.min-h-0.flex-1');
+    expect(contentArea.exists()).toBe(true);
+    expect(contentArea.classes()).toContain('overflow-y-auto');
+    expect(contentArea.classes()).toContain('overscroll-contain');
+    expect(contentArea.classes()).toContain('touch-pan-y');
+
+    // Text wrapping
+    const translationText = wrapper.find('.text-teal-900');
+    expect(translationText.classes()).toContain('break-words');
+    expect(translationText.classes()).toContain('whitespace-pre-wrap');
+
+    const contextualDef = wrapper.find('.text-gray-800');
+    expect(contextualDef.classes()).toContain('break-words');
+    expect(contextualDef.classes()).toContain('whitespace-pre-wrap');
+
+    const contextSentence = wrapper.find('.italic');
+    expect(contextSentence.classes()).toContain('break-words');
+    expect(contextSentence.classes()).toContain('whitespace-pre-wrap');
+
+    // Footer has shrink-0
+    const footer = wrapper.find('footer');
+    expect(footer.classes()).toContain('shrink-0');
+  });
 });

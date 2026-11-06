@@ -66,7 +66,7 @@ const handleCopyTranslation = async () => {
         class="fixed inset-x-4 top-1/2 z-50 mx-auto max-h-[85vh] w-full max-w-lg -translate-y-1/2 flex flex-col overflow-hidden rounded-3xl border border-gray-200 bg-white text-gray-900 shadow-2xl"
       >
         <!-- Modal Header -->
-        <header class="flex items-center justify-between border-b border-gray-200 px-6 py-4">
+        <header class="flex shrink-0 items-center justify-between border-b border-gray-200 px-6 py-4">
           <div class="flex items-center gap-2.5">
             <div class="flex h-8 w-8 items-center justify-center rounded-xl bg-teal-50 text-teal-700">
               <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -102,7 +102,11 @@ const handleCopyTranslation = async () => {
         </header>
 
         <!-- Content Area -->
-        <div class="flex-1 overflow-y-auto p-6 space-y-5 select-text">
+        <div
+          class="min-h-0 flex-1 overflow-y-auto overscroll-contain p-6 space-y-5 select-text touch-pan-y"
+          :style="{ WebkitOverflowScrolling: 'touch' }"
+          @touchmove.stop
+        >
           <!-- Loading State -->
           <div
             v-if="aiStore.isDictionaryLoading"
@@ -166,7 +170,7 @@ const handleCopyTranslation = async () => {
               <span class="text-[10px] font-bold uppercase tracking-wider text-teal-800">
                 {{ t('ai.translation') }}
               </span>
-              <p class="text-base font-bold text-teal-900">
+              <p class="text-base font-bold text-teal-900 break-words whitespace-pre-wrap">
                 {{ aiStore.dictionaryEntry.translation }}
               </p>
             </div>
@@ -176,7 +180,7 @@ const handleCopyTranslation = async () => {
               <span class="text-xs font-bold uppercase tracking-wider text-gray-500">
                 {{ t('ai.contextualMeaning') }}
               </span>
-              <p class="text-xs font-medium leading-relaxed text-gray-800">
+              <p class="text-xs font-medium leading-relaxed text-gray-800 break-words whitespace-pre-wrap">
                 {{ aiStore.dictionaryEntry.contextualDefinition }}
               </p>
             </div>
@@ -184,7 +188,7 @@ const handleCopyTranslation = async () => {
             <!-- Surrounding Sentence Context Reference -->
             <div
               v-if="aiStore.dictionaryEntry.contextSentence"
-              class="rounded-xl border border-gray-200 bg-gray-50 p-3 text-xs text-gray-600 italic"
+              class="rounded-xl border border-gray-200 bg-gray-50 p-3 text-xs text-gray-600 italic break-words whitespace-pre-wrap"
             >
               "{{ aiStore.dictionaryEntry.contextSentence }}"
             </div>
@@ -233,7 +237,7 @@ const handleCopyTranslation = async () => {
         <!-- Footer Actions -->
         <footer
           v-if="aiStore.dictionaryEntry && !aiStore.isDictionaryLoading"
-          class="flex items-center justify-between border-t border-gray-200 bg-gray-50 px-6 py-3.5"
+          class="flex shrink-0 items-center justify-between border-t border-gray-200 bg-gray-50 px-6 py-3.5"
         >
           <button
             type="button"

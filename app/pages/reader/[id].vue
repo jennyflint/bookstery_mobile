@@ -581,6 +581,7 @@ const isAnyModalOpen = computed<boolean>(() => {
     highlightStore.isNotesDrawerOpen ||
     Boolean(highlightStore.selectedHighlight) ||
     aiStore.isSheetOpen ||
+    aiStore.isDictionaryModalOpen ||
     aiStore.isSettingsModalOpen ||
     aiStore.isOnboardingModalOpen ||
     aiStore.showInactivityBanner ||

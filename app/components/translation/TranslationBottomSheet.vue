@@ -57,10 +57,10 @@ const handleSaveToDictionary = async () => {
     @click.self="emit('close')"
   >
     <div
-      class="animate-in slide-in-from-bottom w-full max-w-lg space-y-4 rounded-t-3xl border-t border-zinc-100 bg-white p-6 shadow-2xl duration-200"
+      class="animate-in slide-in-from-bottom flex max-h-[85vh] w-full max-w-lg flex-col rounded-t-3xl border-t border-zinc-100 bg-white p-6 shadow-2xl duration-200"
       :style="{ paddingBottom: 'calc(1.5rem + env(safe-area-inset-bottom, 0px))' }"
     >
-      <div class="flex items-center justify-between border-b border-zinc-100 pb-2">
+      <div class="flex shrink-0 items-center justify-between border-b border-zinc-100 pb-2">
         <div class="flex items-center gap-2">
           <span
             class="rounded bg-indigo-50 px-2 py-0.5 text-xs font-bold uppercase tracking-wider text-indigo-600"
@@ -91,15 +91,19 @@ const handleSaveToDictionary = async () => {
         </button>
       </div>
 
-      <div class="space-y-3">
-        <div class="rounded-2xl border border-zinc-100 bg-zinc-50 p-3">
+      <div
+        class="my-3 min-h-0 flex-1 space-y-3 overflow-y-auto overscroll-contain pr-1 touch-pan-y"
+        :style="{ WebkitOverflowScrolling: 'touch' }"
+        @touchmove.stop
+      >
+        <div class="max-h-36 overflow-y-auto overscroll-contain rounded-2xl border border-zinc-100 bg-zinc-50 p-3 touch-pan-y">
           <p class="mb-1 text-xs font-medium text-zinc-400">{{ t('translation.sourceText') }}</p>
-          <p class="select-text text-sm font-medium leading-relaxed text-zinc-800">
+          <p class="select-text text-sm font-medium leading-relaxed text-zinc-800 break-words whitespace-pre-wrap">
             {{ result.sourceText }}
           </p>
         </div>
 
-        <div class="rounded-2xl border border-indigo-100 bg-indigo-50 p-3">
+        <div class="max-h-56 overflow-y-auto overscroll-contain rounded-2xl border border-indigo-100 bg-indigo-50 p-3 touch-pan-y">
           <div class="mb-1 flex items-center justify-between">
             <p class="text-xs font-medium text-indigo-600">{{ t('translation.translatedText') }}</p>
             <button
@@ -110,13 +114,13 @@ const handleSaveToDictionary = async () => {
               {{ isCopied ? t('translation.copied') : t('translation.copy') }}
             </button>
           </div>
-          <p class="select-text text-base font-semibold leading-relaxed text-zinc-900">
+          <p class="select-text text-base font-semibold leading-relaxed text-zinc-900 break-words whitespace-pre-wrap">
             {{ result.translatedText || t('translation.translating') }}
           </p>
         </div>
       </div>
 
-      <div class="flex items-center gap-3 pt-2">
+      <div class="flex shrink-0 items-center gap-3 pt-2">
         <button
           type="button"
           data-testid="open-google-translate-intent"
