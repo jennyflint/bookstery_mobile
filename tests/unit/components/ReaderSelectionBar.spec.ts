@@ -232,6 +232,42 @@ describe('ReaderSelectionBar Component', () => {
 
       expect(wrapper.emitted('translate')).toBeTruthy();
       expect(wrapper.emitted('translate')?.[0]).toEqual(['Foreign language expression']);
+      // Selection should be dismissed after triggering translate
+      expect(readerStore.selection).toBeNull();
+    });
+
+    it('prioritizes readerStore.selection over stale highlightStore.activeSelection', async () => {
+      const readerStore = useReaderStore();
+      const highlightStore = useHighlightStore();
+
+      // Simulate a previous stale selection left in highlightStore
+      highlightStore.setActiveSelection({
+        text: 'Old stale paragraph text from previous operation',
+        locator: '1',
+        format: 'epub',
+        x: 0,
+        y: 0,
+      });
+
+      // User selects a single new word in the reader
+      readerStore.setSelection({
+        text: 'NovelWord',
+        x: 10,
+        y: 20,
+        width: 40,
+        height: 15,
+      });
+
+      const wrapper = mountBar();
+      await wrapper.vm.$nextTick();
+
+      const translateBtn = wrapper.find('[data-testid="translate-action-btn"]');
+      expect(translateBtn.exists()).toBe(true);
+      await translateBtn.trigger('click');
+
+      expect(wrapper.emitted('translate')?.[0]).toEqual(['NovelWord']);
+      expect(readerStore.selection).toBeNull();
+      expect(highlightStore.activeSelection).toBeNull();
     });
 
     it('should share text via Share plugin or navigator when Share is clicked', async () => {

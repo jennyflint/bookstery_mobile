@@ -44,10 +44,10 @@ const getSelectionText = (): string => {
   if (highlightStore.selectedHighlight) {
     return highlightStore.selectedHighlight.selected_text;
   }
-  if (highlightStore.activeSelection) {
-    return highlightStore.activeSelection.text;
+  if (readerStore.selection?.text) {
+    return readerStore.selection.text;
   }
-  return readerStore.selection?.text || '';
+  return highlightStore.activeSelection?.text || '';
 };
 
 const handleApplyHighlight = async (color: HighlightColor) => {
@@ -183,6 +183,7 @@ const handleTranslate = () => {
   const text = getSelectionText();
   if (text) {
     emit('translate', text);
+    handleDismiss();
   }
 };
 

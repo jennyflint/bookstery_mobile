@@ -198,7 +198,9 @@
     "copy": "Copy",
     "copied": "Copied to clipboard",
     "sourceText": "Source Text",
-    "translatedText": "Translation"
+    "translatedText": "Translation",
+    "translationFailed": "Failed to translate text. Please check your internet connection.",
+    "retry": "Retry"
   },
   "dictionary": {
     "title": "Saved Words & Phrases",

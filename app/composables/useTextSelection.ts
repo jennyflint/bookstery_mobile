@@ -185,21 +185,19 @@ export function useTextSelection() {
       endOffset: detail.endOffset,
     });
 
-    if (detail.locator || detail.blockId) {
-      highlightStore.setActiveSelection({
-        text,
-        locator: detail.locator || readerStore.locator || String(readerStore.currentPage),
-        format: (readerStore.currentBook?.format || 'epub') as BookFormat,
-        x: rect.x,
-        y: rect.y,
-        width: rect.width,
-        height: rect.height,
-        blockId: detail.blockId,
-        partType: detail.partType,
-        startOffset: detail.startOffset,
-        endOffset: detail.endOffset,
-      });
-    }
+    highlightStore.setActiveSelection({
+      text,
+      locator: detail.locator || readerStore.locator || String(readerStore.currentPage || 1),
+      format: (readerStore.currentBook?.format || 'epub') as BookFormat,
+      x: rect.x,
+      y: rect.y,
+      width: rect.width,
+      height: rect.height,
+      blockId: detail.blockId,
+      partType: detail.partType,
+      startOffset: detail.startOffset,
+      endOffset: detail.endOffset,
+    });
   };
 
   /**
@@ -272,6 +270,7 @@ export function useTextSelection() {
     cancelPendingDismiss();
     resetSelectionActivity();
     readerStore.clearTextSelection();
+    highlightStore.setActiveSelection(null);
 
     try {
       engineSelectionClearer?.();

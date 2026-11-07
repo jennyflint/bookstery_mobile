@@ -17,12 +17,152 @@ export class TranslationService {
     return TranslationService.instance;
   }
 
+  private splitIntoChunks(text: string, maxChunkLength: number = 450): string[] {
+    if (text.length <= maxChunkLength) {
+      return [text];
+    }
+
+    const sentences = text.split(/(?<=[.!?…])\s+/);
+    const chunks: string[] = [];
+    let currentChunk = '';
+
+    for (const sentence of sentences) {
+      if (sentence.length <= maxChunkLength) {
+        if (!currentChunk) {
+          currentChunk = sentence;
+        } else if (currentChunk.length + 1 + sentence.length <= maxChunkLength) {
+          currentChunk += ' ' + sentence;
+        } else {
+          chunks.push(currentChunk);
+          currentChunk = sentence;
+        }
+      } else {
+        if (currentChunk) {
+          chunks.push(currentChunk);
+          currentChunk = '';
+        }
+
+        const words = sentence.split(/\s+/);
+        for (const word of words) {
+          if (word.length > maxChunkLength) {
+            if (currentChunk) {
+              chunks.push(currentChunk);
+              currentChunk = '';
+            }
+            for (let i = 0; i < word.length; i += maxChunkLength) {
+              chunks.push(word.slice(i, i + maxChunkLength));
+            }
+          } else if (!currentChunk) {
+            currentChunk = word;
+          } else if (currentChunk.length + 1 + word.length <= maxChunkLength) {
+            currentChunk += ' ' + word;
+          } else {
+            chunks.push(currentChunk);
+            currentChunk = word;
+          }
+        }
+      }
+    }
+
+    if (currentChunk) {
+      chunks.push(currentChunk);
+    }
+
+    return chunks;
+  }
+
+  private async translateChunk(
+    chunk: string,
+    targetLang: string,
+    sourceLang: string,
+  ): Promise<{ translatedText: string; detectedSource: string }> {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 10000);
+
+    const baseUrl = `https://translate.googleapis.com/translate_a/single?client=gtx&sl=${sourceLang}&tl=${targetLang}&dt=t`;
+
+    try {
+      let response: Response;
+
+      if (chunk.length <= 350) {
+        try {
+          response = await fetch(`${baseUrl}&q=${encodeURIComponent(chunk)}`, {
+            signal: controller.signal,
+          });
+          if (!response.ok) {
+            throw new Error(`GET request failed: ${response.status}`);
+          }
+        } catch (err) {
+          if (controller.signal.aborted) {
+            throw err;
+          }
+          response = await fetch(baseUrl, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/x-www-form-urlencoded;charset=UTF-8',
+            },
+            body: `q=${encodeURIComponent(chunk)}`,
+            signal: controller.signal,
+          });
+        }
+      } else {
+        try {
+          response = await fetch(baseUrl, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/x-www-form-urlencoded;charset=UTF-8',
+            },
+            body: `q=${encodeURIComponent(chunk)}`,
+            signal: controller.signal,
+          });
+          if (!response.ok) {
+            throw new Error(`POST request failed: ${response.status}`);
+          }
+        } catch (err) {
+          if (controller.signal.aborted) {
+            throw err;
+          }
+          response = await fetch(`${baseUrl}&q=${encodeURIComponent(chunk)}`, {
+            signal: controller.signal,
+          });
+        }
+      }
+
+      if (!response.ok) {
+        throw new Error(`Translation API request failed with status: ${response.status}`);
+      }
+
+      const json = await response.json();
+      let translated = '';
+      let detectedSource = sourceLang;
+
+      if (Array.isArray(json) && Array.isArray(json[0])) {
+        for (const segment of json[0]) {
+          if (Array.isArray(segment) && typeof segment[0] === 'string') {
+            translated += segment[0];
+          }
+        }
+      }
+
+      if (Array.isArray(json) && typeof json[2] === 'string') {
+        detectedSource = json[2];
+      }
+
+      return {
+        translatedText: translated,
+        detectedSource,
+      };
+    } finally {
+      clearTimeout(timeoutId);
+    }
+  }
+
   async translateText(
     text: string,
     targetLang: string = 'uk',
     sourceLang: string = 'auto',
   ): Promise<TranslationResult> {
-    const trimmed = text.trim();
+    const trimmed = text.replace(/\s+/g, ' ').trim();
     if (!trimmed) {
       return {
         sourceText: '',
@@ -32,32 +172,23 @@ export class TranslationService {
       };
     }
 
-    const url = `https://translate.googleapis.com/translate_a/single?client=gtx&sl=${sourceLang}&tl=${targetLang}&dt=t&q=${encodeURIComponent(trimmed)}`;
-
-    const response = await fetch(url);
-    if (!response.ok) {
-      throw new Error(`Translation API request failed with status: ${response.status}`);
-    }
-
-    const json = await response.json();
-    let translated = '';
+    const chunks = this.splitIntoChunks(trimmed, 450);
+    const translatedSegments: string[] = [];
     let detectedSource = sourceLang;
 
-    if (Array.isArray(json) && Array.isArray(json[0])) {
-      for (const segment of json[0]) {
-        if (Array.isArray(segment) && typeof segment[0] === 'string') {
-          translated += segment[0];
-        }
+    for (const chunk of chunks) {
+      const result = await this.translateChunk(chunk, targetLang, sourceLang);
+      if (result.translatedText) {
+        translatedSegments.push(result.translatedText.trim());
       }
-    }
-
-    if (Array.isArray(json) && typeof json[2] === 'string') {
-      detectedSource = json[2];
+      if (result.detectedSource && result.detectedSource !== 'auto') {
+        detectedSource = result.detectedSource;
+      }
     }
 
     return {
       sourceText: trimmed,
-      translatedText: translated,
+      translatedText: translatedSegments.join(' '),
       sourceLang: detectedSource,
       targetLang,
     };

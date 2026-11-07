@@ -462,12 +462,32 @@ const handleCloseSettings = () => {
 };
 
 const handleTranslate = async (text: string) => {
+  dismissSelection();
+  const trimmed = text.trim();
+  if (!trimmed) return;
+
+  activeTranslationResult.value = {
+    sourceText: trimmed,
+    translatedText: '',
+    sourceLang: 'auto',
+    targetLang: 'uk',
+    error: false,
+  };
+  isTranslationOpen.value = true;
+
   try {
-    const res = await translationService.translateText(text, 'uk');
+    const res = await translationService.translateText(trimmed, 'uk');
     activeTranslationResult.value = res;
-    isTranslationOpen.value = true;
-    clearSelection();
-  } catch {}
+  } catch (err) {
+    console.error('[Reader] Translation failed:', err);
+    activeTranslationResult.value = {
+      sourceText: trimmed,
+      translatedText: t('translation.translationFailed'),
+      sourceLang: 'auto',
+      targetLang: 'uk',
+      error: true,
+    };
+  }
 };
 
 const handleCloseTranslation = () => {
@@ -759,6 +779,7 @@ defineExpose({
       :result="activeTranslationResult"
       :book-id="bookId"
       @close="handleCloseTranslation"
+      @retry="handleTranslate"
     />
 
     <HighlightNoteModal />

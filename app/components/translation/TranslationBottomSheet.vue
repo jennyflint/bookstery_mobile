@@ -12,6 +12,7 @@ const props = defineProps<{
 
 const emit = defineEmits<{
   (e: 'close'): void;
+  (e: 'retry', text: string): void;
 }>();
 
 const { t } = useI18n();
@@ -103,10 +104,19 @@ const handleSaveToDictionary = async () => {
           </p>
         </div>
 
-        <div class="max-h-56 overflow-y-auto overscroll-contain rounded-2xl border border-indigo-100 bg-indigo-50 p-3 touch-pan-y">
+        <div
+          class="max-h-56 overflow-y-auto overscroll-contain rounded-2xl border p-3 touch-pan-y"
+          :class="result.error ? 'border-rose-100 bg-rose-50' : 'border-indigo-100 bg-indigo-50'"
+        >
           <div class="mb-1 flex items-center justify-between">
-            <p class="text-xs font-medium text-indigo-600">{{ t('translation.translatedText') }}</p>
+            <p
+              class="text-xs font-medium"
+              :class="result.error ? 'text-rose-600' : 'text-indigo-600'"
+            >
+              {{ t('translation.translatedText') }}
+            </p>
             <button
+              v-if="!result.error && result.translatedText"
               type="button"
               class="text-xs font-semibold text-indigo-600 hover:text-indigo-800"
               @click="handleCopyTranslation"
@@ -114,7 +124,10 @@ const handleSaveToDictionary = async () => {
               {{ isCopied ? t('translation.copied') : t('translation.copy') }}
             </button>
           </div>
-          <p class="select-text text-base font-semibold leading-relaxed text-zinc-900 break-words whitespace-pre-wrap">
+          <p
+            class="select-text text-base leading-relaxed break-words whitespace-pre-wrap"
+            :class="result.error ? 'font-medium text-rose-700' : 'font-semibold text-zinc-900'"
+          >
             {{ result.translatedText || t('translation.translating') }}
           </p>
         </div>
@@ -144,8 +157,33 @@ const handleSaveToDictionary = async () => {
         </button>
 
         <button
+          v-if="result.error"
           type="button"
+          data-testid="translation-retry-button"
           class="flex flex-1 items-center justify-center gap-2 rounded-xl bg-indigo-600 px-4 py-3 text-xs font-semibold text-white shadow-md transition-all hover:bg-indigo-700 active:scale-95"
+          @click="emit('retry', result.sourceText)"
+        >
+          <svg
+            class="h-4 w-4"
+            fill="none"
+            viewBox="0 0 24 24"
+            stroke="currentColor"
+          >
+            <path
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              stroke-width="2"
+              d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
+            />
+          </svg>
+          <span>{{ t('translation.retry') }}</span>
+        </button>
+
+        <button
+          v-else
+          type="button"
+          :disabled="!result.translatedText"
+          class="flex flex-1 items-center justify-center gap-2 rounded-xl bg-indigo-600 px-4 py-3 text-xs font-semibold text-white shadow-md transition-all hover:bg-indigo-700 active:scale-95 disabled:pointer-events-none disabled:opacity-50"
           @click="handleSaveToDictionary"
         >
           <svg

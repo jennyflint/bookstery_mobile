@@ -225,4 +225,5 @@ export interface TranslationResult {
   translatedText: string;
   sourceLang: string;
   targetLang: string;
+  error?: boolean;
 }

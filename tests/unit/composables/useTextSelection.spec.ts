@@ -228,5 +228,56 @@ describe('Selection lifecycle', () => {
       expect(highlightStore.activeSelection).toBeNull();
       expect(highlightStore.selectedHighlight).toBeNull();
     });
+
+    it('clearSelection resets both readerStore.selection and highlightStore.activeSelection', () => {
+      const readerStore = useReaderStore();
+      const highlightStore = useHighlightStore();
+      const { clearSelection } = useTextSelection();
+
+      readerStore.setSelection({
+        text: 'Temporary selected word',
+        x: 0,
+        y: 0,
+        width: 10,
+        height: 10,
+      });
+      highlightStore.setActiveSelection({
+        text: 'Temporary selected word',
+        locator: '1',
+        format: 'epub',
+        x: 0,
+        y: 0,
+      });
+
+      expect(readerStore.selection).not.toBeNull();
+      expect(highlightStore.activeSelection).not.toBeNull();
+
+      clearSelection();
+
+      expect(readerStore.selection).toBeNull();
+      expect(highlightStore.activeSelection).toBeNull();
+    });
+
+    it('applyEngineSelection always updates highlightStore.activeSelection even without locator or blockId', () => {
+      const readerStore = useReaderStore();
+      const highlightStore = useHighlightStore();
+      const { applyEngineSelection } = useTextSelection();
+
+      highlightStore.setActiveSelection({
+        text: 'Previous old paragraph selection',
+        locator: '1',
+        format: 'epub',
+        x: 0,
+        y: 0,
+      });
+
+      applyEngineSelection({
+        text: 'New selected word in iframe',
+      });
+
+      expect(readerStore.selection?.text).toBe('New selected word in iframe');
+      expect(highlightStore.activeSelection?.text).toBe('New selected word in iframe');
+      expect(highlightStore.activeSelection?.locator).toBe('1');
+    });
   });
 });

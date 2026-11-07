@@ -84,4 +84,66 @@ describe('TranslationBottomSheet', () => {
     const actionRow = wrapper.find('.pt-2');
     expect(actionRow.classes()).toContain('shrink-0');
   });
+
+  it('should display loading placeholder when translatedText is empty', async () => {
+    const wrapper = mount(TranslationBottomSheet, {
+      props: {
+        isOpen: true,
+        result: {
+          sourceText: 'Some long paragraph waiting for translation',
+          translatedText: '',
+          sourceLang: 'auto',
+          targetLang: 'uk',
+        },
+      },
+      global: {
+        mocks: {
+          t: (k: string) => k,
+        },
+      },
+    });
+
+    await flushPromises();
+    const translatedBox = wrapper.find('.max-h-56');
+    expect(translatedBox.text()).toContain('translation.translating');
+  });
+
+  it('should display error state and emit retry when retry button is clicked', async () => {
+    const wrapper = mount(TranslationBottomSheet, {
+      props: {
+        isOpen: true,
+        result: {
+          sourceText: 'Text that failed to translate',
+          translatedText: 'translation.translationFailed',
+          sourceLang: 'auto',
+          targetLang: 'uk',
+          error: true,
+        },
+      },
+      global: {
+        mocks: {
+          t: (k: string) => k,
+        },
+      },
+    });
+
+    await flushPromises();
+
+    // Verify error styling is present
+    const translatedBox = wrapper.find('.max-h-56');
+    expect(translatedBox.classes()).toContain('bg-rose-50');
+    expect(translatedBox.classes()).toContain('border-rose-100');
+    expect(translatedBox.text()).toContain('translation.translationFailed');
+
+    // Verify Native Translate is still present
+    expect(wrapper.find('[data-testid="open-google-translate-intent"]').exists()).toBe(true);
+
+    // Verify Retry button exists and emits 'retry'
+    const retryBtn = wrapper.find('[data-testid="translation-retry-button"]');
+    expect(retryBtn.exists()).toBe(true);
+    await retryBtn.trigger('click');
+
+    expect(wrapper.emitted('retry')).toBeTruthy();
+    expect(wrapper.emitted('retry')?.[0]).toEqual(['Text that failed to translate']);
+  });
 });
